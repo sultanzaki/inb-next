@@ -34,10 +34,27 @@ const sb = createClient();
 // Monotonic counter used to ignore stale list-fetch responses.
 let requestSeq = 0;
 
-// Escape characters that are special inside a PostgREST .or() filter so raw
-// user input (backslash, %, _, comma, parentheses) cannot break the syntax.
+// Monotonic counter used to ignore stale spesifikasi fetches (openEdit race,
+// rapid product switches).
+let specSeq = 0;
+
+// Monotonic counter used to ignore stale openEdit resolutions (clicking
+// Edit(A) then Edit(B), or opening the new-form dialog, while A is in flight).
+let editSeq = 0;
+
+// Escape a raw search term for a PostgREST .or() ilike filter. Two escape
+// levels apply: PostgREST strips one backslash level inside double-quoted
+// values (" -> \" and \ -> \\), then Postgres LIKE consumes one more
+// (\ escapes % and _). The escaped term is placed inside double quotes in
+// the filter itself, because the PostgREST v12 grammar treats , and ) as
+// syntax only in bare values — a quoted value keeps them literal (a bare
+// value like "%a,b%" would truncate at the comma -> PGRST100 400).
 function escapeOr(value: string): string {
-  return value.replace(/[\\%_,()]/g, "\\$&");
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/%/g, "\\%")
+    .replace(/_/g, "\\_");
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -110,6 +127,12 @@ export default function InspeksiPage() {
   // to reset hasilValues without listing editingId in its dependencies.
   const editingIdRef = useRef<string | null>(null);
 
+  // Which product the current hasilValues belong to. Values are kept only
+  // while the selected product is unchanged; any product switch wipes them,
+  // because parameter names collide across products and stale values would
+  // be saved under the wrong product's parameters.
+  const valuesProductIdRef = useRef<string | null>(null);
+
   function setEditing(id: string | null) {
     editingIdRef.current = id;
     setEditingId(id);
@@ -123,9 +146,11 @@ export default function InspeksiPage() {
       .select("*, master_produk!inner(kode_produk, nama_produk)")
       .order("created_at", { ascending: false });
     if (search) {
+      // Quoted values (via escapeOr): commas/parens stay literal and the
+      // escaped %/_ reach Postgres LIKE as literals, not wildcards.
       const term = escapeOr(search);
       q = q.or(
-        `no_lot.ilike.%${term}%,master_produk.nama_produk.ilike.%${term}%`
+        `no_lot.ilike."%${term}%",master_produk.nama_produk.ilike."%${term}%"`
       );
     }
     const { data: raw, error } = await q;
@@ -156,6 +181,7 @@ export default function InspeksiPage() {
 
   // Pure loader: only fills spesifikasi state, never touches hasilValues.
   const fetchSpesifikasi = useCallback(async (id_produk: string) => {
+    const seq = ++specSeq;
     if (!id_produk) {
       setSpesifikasi([]);
       return;
@@ -165,6 +191,7 @@ export default function InspeksiPage() {
       .select("*")
       .eq("id_produk", id_produk)
       .order("urutan");
+    if (seq !== specSeq) return; // superseded by a newer fetch
     if (error) {
       setSpesifikasi([]);
       toast.error("Gagal memuat data. Coba lagi.");
@@ -187,9 +214,11 @@ export default function InspeksiPage() {
 
   useEffect(() => {
     fetchSpesifikasi(form.id_produk);
-    // Only clear hasil values for a fresh (non-edit) product selection;
-    // while editing, existing values must survive the spec (re)load.
-    if (!editingIdRef.current) {
+    // Keep hasil values only while they belong to the currently selected
+    // product. On any product change — fresh form or a product switch while
+    // editing — wipe them: parameter names collide across products, so
+    // retaining values would prefill/save them under the wrong parameters.
+    if (form.id_produk !== valuesProductIdRef.current) {
       setHasilValues({});
     }
   }, [form.id_produk, fetchSpesifikasi]);
@@ -208,7 +237,9 @@ export default function InspeksiPage() {
   }
 
   async function openEdit(item: any) {
+    const seq = ++editSeq;
     setEditing(item.id);
+    valuesProductIdRef.current = item.id_produk;
     setForm({
       id_produk: item.id_produk,
       no_lot: item.no_lot,
@@ -221,6 +252,10 @@ export default function InspeksiPage() {
     // Load spesifikasi first, THEN populate hasil values, so no code path
     // can wipe the values after they are set.
     await fetchSpesifikasi(item.id_produk);
+
+    // A newer Edit click (or a new-form dialog open) superseded this one;
+    // applying A's resolved values under B's form would corrupt row B on save.
+    if (seq !== editSeq) return;
 
     const vals: Record<string, string> = {};
     if (item.hasil_detail) {
@@ -333,7 +368,7 @@ export default function InspeksiPage() {
             Kelola data pengujian dan inspeksi produk.
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(v) => { setDialogOpen(v); if (!v) resetForm(); }}>
+        <Dialog open={dialogOpen} onOpenChange={(v) => { if (v) editSeq++; setDialogOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger render={<Button><Plus className="size-4" /> Input Uji Baru</Button>} />
           <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -433,12 +468,13 @@ export default function InspeksiPage() {
                             className="w-28 h-7 text-sm"
                             placeholder={sp.tipe_batas === "TEXT" ? "Nilai" : "0"}
                             value={val}
-                            onChange={(e) =>
+                            onChange={(e) => {
+                              valuesProductIdRef.current = form.id_produk;
                               setHasilValues({
                                 ...hasilValues,
                                 [sp.parameter_uji]: e.target.value,
-                              })
-                            }
+                              });
+                            }}
                           />
                           {res && (
                             <span
@@ -514,8 +550,17 @@ export default function InspeksiPage() {
             {loading && <TableSkeleton rows={5} cols={7} />}
             {!loading && loadError && (
               <TableRow>
-                <TableCell colSpan={7} className="px-4 py-8 text-center text-muted">
-                  Gagal memuat data. Coba lagi.
+                <TableCell colSpan={7} className="px-4 py-8">
+                  <div className="flex items-center justify-center gap-3 text-muted">
+                    Gagal memuat data.
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fetchData()}
+                    >
+                      Coba Lagi
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             )}
