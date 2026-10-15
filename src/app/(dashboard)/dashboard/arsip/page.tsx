@@ -6,6 +6,7 @@ import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
 import type { DokumenArsip, UserRole } from "@/lib/types";
 import { toast } from "sonner";
+import { uploadDokumenAction, deleteDokumenAction } from "@/lib/actions/arsip-actions";
 import { Search, Plus, Trash2, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -172,22 +173,24 @@ export default function DokumenPage() {
     setSaving(true);
 
     try {
-      const { error } = await sb.from("dokumen_arsip").insert({
+      // Mutasi lewat server action: sesi + peran dicek server-side.
+      const res = await uploadDokumenAction({
         judul_dokumen: form.judul_dokumen,
         kategori: form.kategori,
         tanggal_berlaku: form.tanggal_berlaku,
         masa_kadaluarsa: form.masa_kadaluarsa,
         link_drive: form.link_drive,
-        file_url: "",
       });
-      if (error) throw error;
-
+      if (!res.ok) {
+        toast.error(res.error ?? "Gagal menyimpan dokumen. Coba lagi.");
+        return;
+      }
       toast.success("Dokumen berhasil ditambahkan.");
       setDialogOpen(false);
       resetForm();
       fetchData();
     } catch {
-      toast.error("Gagal menyimpan dokumen. Periksa izin Anda dan coba lagi.");
+      toast.error("Gagal terhubung ke server. Coba lagi.");
     } finally {
       setSaving(false);
     }
@@ -195,12 +198,18 @@ export default function DokumenPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("Hapus dokumen ini?")) return;
-    const { error } = await sb.from("dokumen_arsip").delete().eq("id", id);
-    if (error) {
-      toast.error("Gagal menghapus dokumen. Periksa izin Anda dan coba lagi.");
-    } else {
+
+    // Server action: role check server-side.
+    try {
+      const res = await deleteDokumenAction(id);
+      if (!res.ok) {
+        toast.error(res.error ?? "Gagal menghapus dokumen. Coba lagi.");
+        return;
+      }
       toast.success("Dokumen dihapus.");
       fetchData();
+    } catch {
+      toast.error("Gagal terhubung ke server. Coba lagi.");
     }
   }
 
