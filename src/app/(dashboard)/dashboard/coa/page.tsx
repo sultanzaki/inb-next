@@ -201,46 +201,155 @@ export default function COAPage() {
   }
 
   function handlePrint(coa: any) {
-    // Open a print-friendly view
+    const snapshot = coa.hasil_uji_snapshot || {};
+    const items = snapshot.items || [];
     const w = window.open("", "_blank");
     if (!w) return;
-    w.document.write(`
-      <html><head><title>COA - ${coa.no_coa}</title>
-      <style>
-        body { font-family: system-ui, sans-serif; padding: 40px; max-width: 700px; margin: auto; }
-        h1 { font-size: 20px; margin-bottom: 4px; }
-        .meta { color: #555; font-size: 13px; margin-bottom: 24px; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th, td { text-align: left; padding: 8px 8px; border-bottom: 1px solid #ddd; }
-        th { background: #f1f5f9; font-weight: 600; }
-        .footer { margin-top: 40px; font-size: 12px; color: #888; border-top: 1px solid #ddd; padding-top: 16px; }
-        .ttd { margin-top: 32px; font-size: 13px; }
-      </style></head><body>
-      <h1>CERTIFICATE OF ANALYSIS</h1>
-      <div class="meta">
-        <p><strong>No COA:</strong> ${coa.no_coa}</p>
-        <p><strong>Produk:</strong> ${coa.master_produk?.nama_produk || ""}</p>
-        <p><strong>No Lot:</strong> ${coa.no_lot}</p>
-        <p><strong>Tanggal Rilis:</strong> ${coa.tanggal_rilis}</p>
-        <p><strong>Tanggal Expired:</strong> ${coa.tanggal_expired}</p>
-        ${coa.mfg_date ? `<p><strong>MFG Date:</strong> ${coa.mfg_date}</p>` : ""}
-      </div>
-      <table>
-        <tr><th>Parameter</th><th>Nilai</th><th>Status</th></tr>
-        ${(coa.hasil_uji_snapshot?.items || [])
-          .map(
-            (item: any) =>
-              `<tr><td>${item.p}</td><td>${item.val}</td><td>${item.st}</td></tr>`
-          )
-          .join("")}
-      </table>
-      <div class="ttd">
-        <p><strong>Tanda Tangan:</strong> ${coa.tanda_tangan_digital}</p>
-      </div>
-      <div class="footer">INBIONUSA — Quality Control System</div>
-      <script>window.print();<\/script>
-      </body></html>
-    `);
+    w.document.write(`<html><head><title>COA - ${coa.no_coa}</title>
+<style>
+  @page { margin: 12mm 15mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 11pt;
+    color: #111;
+    margin: 0;
+    padding: 0;
+  }
+  .coa-page {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  .coa-head {
+    text-align: center;
+    border-bottom: 2px solid #047857;
+    padding-bottom: 6mm;
+    margin-bottom: 6mm;
+  }
+  .coa-head h1 {
+    font-size: 18pt;
+    font-weight: bold;
+    color: #064e3b;
+    margin: 0 0 2mm;
+  }
+  .coa-head p {
+    font-size: 10pt;
+    color: #555;
+    margin: 0;
+  }
+  .coa-title {
+    font-size: 14pt;
+    font-weight: bold;
+    text-align: center;
+    margin: 4mm 0 6mm;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+  }
+  .coa-rule {
+    border: none;
+    border-top: 1px solid #ccc;
+    margin: 4mm 0;
+  }
+  .coa-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2mm 8mm;
+    font-size: 10.5pt;
+    margin-bottom: 6mm;
+  }
+  .coa-meta strong {
+    display: inline-block;
+    min-width: 50mm;
+  }
+  .coa-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10.5pt;
+    margin-bottom: 6mm;
+  }
+  .coa-tbl th {
+    background: #047857;
+    color: #fff;
+    font-weight: 600;
+    text-align: left;
+    padding: 3mm 4mm;
+    font-size: 10pt;
+  }
+  .coa-tbl th:nth-child(3) { width: 19%; text-align: center; }
+  .coa-tbl td {
+    padding: 2.5mm 4mm;
+    border-bottom: 1px solid #ddd;
+  }
+  .coa-tbl td:nth-child(3) { text-align: center; }
+  .coa-tbl tr:last-child td { border-bottom: none; }
+  .coa-spacer { flex: 1; }
+  .coa-foot {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9.5pt;
+    padding-top: 8mm;
+    border-top: 1px solid #ccc;
+    margin-top: auto;
+  }
+  .coa-foot .ttd { text-align: right; }
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .coa-page { page-break-after: always; }
+    .coa-page:last-child { page-break-after: auto; }
+    .coa-head { page-break-after: avoid; }
+    .coa-title, .coa-rule, .coa-meta { page-break-after: avoid; }
+    .coa-tbl thead { display: table-header-group; }
+  }
+</style></head><body>
+<div class="coa-page">
+  <div class="coa-head">
+    <h1>INBIONUSA</h1>
+    <p>Quality Control System</p>
+  </div>
+  <div class="coa-title">Certificate of Analysis</div>
+  <hr class="coa-rule" />
+  <div class="coa-meta">
+    <div><strong>Nomor COA:</strong> ${coa.no_coa}</div>
+    <div><strong>Tanggal Rilis:</strong> ${coa.tanggal_rilis}</div>
+    <div><strong>Nama Produk:</strong> ${coa.master_produk?.nama_produk || ""}</div>
+    <div><strong>Tanggal Expired:</strong> ${coa.tanggal_expired}</div>
+    <div><strong>Nomor Lot:</strong> ${coa.no_lot}</div>
+    <div><strong>MFG Date:</strong> ${coa.mfg_date || "-"}</div>
+    <div><strong>Tanggal Sampling:</strong> ${snapshot.ts || "-"}</div>
+    <div><strong>Tanggal Uji:</strong> ${snapshot.tu || "-"}</div>
+  </div>
+  <table class="coa-tbl">
+    <thead>
+      <tr>
+        <th>Parameter Uji</th>
+        <th>Spesifikasi</th>
+        <th>Hasil Uji</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${items.map((item: any) => {
+        const spec = [item.mn || "-", item.mx || "-"].filter(Boolean).join(" – ");
+        const specText = item.t === "TEXT" ? "Teks" : item.t === "MIN" ? "> " + item.mn : item.t === "MAX" ? "< " + item.mx : (item.mn || "-") + " — " + (item.mx || "-");
+        return `<tr><td>${item.p}</td><td>${specText}</td><td>${item.val || "-"}</td><td>${item.st === "PASS" ? "✓ PASS" : "✗ FAIL"}</td></tr>`;
+      }).join("")}
+    </tbody>
+  </table>
+  <div class="coa-spacer"></div>
+  <div class="coa-foot">
+    <div class="info">
+      INBIONUSA — Quality Control System<br/>
+      Dokumen ini terverifikasi secara digital
+    </div>
+    <div class="ttd">
+      <strong>Tanda Tangan Digital</strong><br/>
+      ${coa.tanda_tangan_digital || "Terverifikasi Digital"}
+    </div>
+  </div>
+</div>
+<script>window.print();<\/script>
+</body></html>`);
     w.document.close();
   }
 

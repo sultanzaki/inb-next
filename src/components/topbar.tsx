@@ -1,10 +1,18 @@
 "use client";
 
 import { useTransition } from "react";
-import { LogOut } from "lucide-react";
+import {
+  LayoutDashboard,
+  Package,
+  ClipboardList,
+  FileText,
+  FolderArchive,
+  LogOut,
+} from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { logoutAction } from "@/app/login/actions";
 import { useUser } from "@/app/(dashboard)/user-context";
-import { useSidebar } from "@/components/sidebar-context";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -14,35 +22,62 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
-interface TopbarProps {
-  title: string;
-}
+const navItems = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard/produk", label: "Produk", icon: Package },
+  { href: "/dashboard/inspeksi", label: "Inspeksi", icon: ClipboardList },
+  { href: "/dashboard/coa", label: "COA", icon: FileText },
+  { href: "/dashboard/arsip", label: "Arsip", icon: FolderArchive },
+];
 
-export function Topbar({ title }: TopbarProps) {
+export function Topbar() {
   const { user } = useUser();
-  const { collapsed, sidebarWidth, collapsedWidth } = useSidebar();
+  const pathname = usePathname();
   const [isPending, startTransition] = useTransition();
 
   const avatarLetter = user?.nama_lengkap?.charAt(0).toUpperCase() ?? "?";
 
   return (
-    <header
-      className="fixed top-0 right-0 h-[58px] bg-white border-b flex items-center justify-between px-6 z-10 transition-all duration-300 ease-in-out"
-      style={{
-        left: collapsed ? collapsedWidth : sidebarWidth,
-        borderColor: "#e5e9ef",
-      }}
-    >
-      {/* Left: page title */}
-      <h1 className="text-sm font-semibold">{title}</h1>
+    <header className="fixed top-0 left-0 right-0 h-[58px] bg-white border-b z-10 flex items-center justify-between px-6">
+      {/* Left: logo + brand */}
+      <div className="flex items-center gap-3">
+        <img
+          src="https://lh3.googleusercontent.com/d/1cTPhZUSGNhnud4LJyyuaA8Hc_ulDem-6"
+          alt="INBIONUSA"
+          className="h-8 w-auto"
+        />
+        <span className="text-lg font-bold" style={{ color: "#047857" }}>
+          INBIONUSA
+        </span>
+      </div>
+
+      {/* Center: nav links */}
+      <nav className="flex items-center gap-1">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const isActive =
+            pathname === item.href || pathname.startsWith(item.href + "/");
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm transition-colors ${
+                isActive
+                  ? "bg-emerald-50 text-emerald-700 font-semibold"
+                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
 
       {/* Right: avatar dropdown */}
       <DropdownMenu>
         <DropdownMenuTrigger className="cursor-pointer outline-none">
-          <div
-            className="flex items-center justify-center w-9 h-9 rounded-full text-sm font-semibold select-none"
-            style={{ background: "#047857", color: "#ffffff" }}
-          >
+          <div className="flex items-center justify-center w-9 h-9 rounded-full bg-emerald-600 text-white text-sm font-semibold select-none">
             {avatarLetter}
           </div>
         </DropdownMenuTrigger>

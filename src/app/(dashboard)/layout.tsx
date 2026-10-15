@@ -1,7 +1,7 @@
 import { getSessionUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { SidebarProvider } from "@/components/sidebar-context";
-import { DashboardShell } from "@/components/dashboard-shell";
+import { UserContextProvider } from "./user-context";
+import { Topbar } from "@/components/topbar";
 
 export const instant = false;
 
@@ -17,8 +17,13 @@ export default async function DashboardLayout({
   }
 
   return (
-    <SidebarProvider>
-      <DashboardShell>{children}</DashboardShell>
-    </SidebarProvider>
+    <UserContextProvider user={user}>
+      <div className="min-h-screen bg-[var(--canvas)]">
+        <Topbar />
+        <main className="pt-[58px] p-6 max-w-7xl mx-auto">
+          {children}
+        </main>
+      </div>
+    </UserContextProvider>
   );
 }
