@@ -103,20 +103,18 @@ export async function getSessionUser(): Promise<User | null> {
 
   const admin = createAdminClient();
 
-  // Housekeeping opportunistic: buang sesi kedaluwarsa.
-  await admin
-    .from('sessions')
-    .delete()
-    .lt('expires_at', new Date().toISOString());
-
+  // NB: tanpa `new Date()` di sini — fungsi ini jalan di render path layout,
+  // dan Cache Components menolak nilai unstable (new Date) saat prerender.
+  // Expired sessions disaring lewat Postgres ('now' dievaluasi DB), purge
+  // periodik dilakukan lewat purgeExpiredSessions() dari login action.
   const { data: session, error: sessionError } = await admin
     .from('sessions')
     .select('user_id, expires_at')
     .eq('token', token)
+    .gt('expires_at', 'now')
     .single();
 
   if (sessionError || !session) return null;
-  if (new Date(session.expires_at) < new Date()) return null;
 
   const { data: user, error: userError } = await admin
     .from('users')
@@ -157,6 +155,20 @@ export async function requireUser(): Promise<{ user: User } | null> {
   const user = await getSessionUser();
   if (!user) return null;
   return { user };
+}
+
+/**
+ * Housekeeping sesi kedaluwarsa — dipanggil dari login action (bukan dari
+ * render path: `new Date()` di sana ditolak Cache Components saat prerender;
+ * `.lt('expires_at', 'now')` dievaluasi Postgres, bukan JS).
+ */
+export async function purgeExpiredSessions(): Promise<void> {
+  try {
+    const admin = createAdminClient();
+    await admin.from('sessions').delete().lt('expires_at', 'now');
+  } catch {
+    // housekeeping saja — jangan ganggu alur utama
+  }
 }
 
 export async function logAudit(userName: string, aksi: string, referensi: string = ''): Promise<void> {
