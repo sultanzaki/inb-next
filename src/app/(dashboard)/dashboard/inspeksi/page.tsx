@@ -135,39 +135,83 @@ export default function InspeksiPage() {
   const [hasilValues, setHasilValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
+  // Pagination: list queries are bounded with .range(); count:"exact" returns
+  // the filtered row total (ignoring the range window) in the same request, so
+  // "Muat lagi" knows how many rows are left without a second query.
+  const [pageSize] = useState(50);
+  const [offset, setOffset] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+
   // Which product the current hasilValues belong to. Values are kept only
   // while the selected product is unchanged; any product switch wipes them,
   // because parameter names collide across products and stale values would
   // be saved under the wrong product's parameters.
   const valuesProductIdRef = useRef<string | null>(null);
 
-  const fetchData = useCallback(async () => {
-    const seq = ++requestSeq;
-    setLoading(true);
-    let q = sb
-      .from("hasil_uji")
-      .select("*, master_produk!inner(kode_produk, nama_produk)")
-      .order("created_at", { ascending: false });
-    if (search) {
-      // Quoted values (via escapeOr): commas/parens stay literal and the
-      // escaped %/_ reach Postgres LIKE as literals, not wildcards.
-      const term = escapeOr(search);
-      q = q.or(
-        `no_lot.ilike."%${term}%",master_produk.nama_produk.ilike."%${term}%"`
-      );
-    }
-    const { data: raw, error } = await q;
-    if (seq !== requestSeq) return; // superseded by a newer request
-    if (error) {
-      setLoadError(true);
-      setData([]);
-      toast.error("Gagal memuat data. Coba lagi.");
-    } else {
-      setLoadError(false);
-      setData((raw as HasilUjiRow[]) ?? []);
-    }
-    setLoading(false);
-  }, [search]);
+  // Bounded query runner shared by the fresh fetch and load-more.
+  // append=false swaps the accumulated list (mount, search, retry, after a
+  // mutation); append=true fetches the page starting at `start` and appends.
+  const runQuery = useCallback(
+    async (start: number, append: boolean) => {
+      const seq = ++requestSeq;
+      if (append) setLoadingMore(true);
+      else setLoading(true);
+      let q = sb
+        .from("hasil_uji")
+        .select("*, master_produk!inner(kode_produk, nama_produk)", {
+          count: "exact",
+        })
+        .order("created_at", { ascending: false })
+        .range(start, start + pageSize - 1);
+      if (search) {
+        // Quoted values (via escapeOr): commas/parens stay literal and the
+        // escaped %/_ reach Postgres LIKE as literals, not wildcards.
+        const term = escapeOr(search);
+        q = q.or(
+          `no_lot.ilike."%${term}%",master_produk.nama_produk.ilike."%${term}%"`
+        );
+      }
+      const { data: raw, count, error } = await q;
+      if (seq !== requestSeq) {
+        // Superseded by a newer request: release the loading flag this
+        // request owned (the newer one manages its own).
+        if (append) setLoadingMore(false);
+        return;
+      }
+      if (error) {
+        // A failed load-more keeps the accumulated rows and leaves the offset
+        // unchanged, so retrying "Muat lagi" re-requests the same page.
+        if (!append) {
+          setLoadError(true);
+          setData([]);
+          setTotalCount(0);
+        }
+        toast.error("Gagal memuat data. Coba lagi.");
+      } else {
+        const rows = (raw as HasilUjiRow[]) ?? [];
+        setLoadError(false);
+        setData((prev) => (append ? [...prev, ...rows] : rows));
+        setTotalCount(count ?? 0);
+        if (append) setOffset(start + rows.length);
+      }
+      if (append) setLoadingMore(false);
+      else setLoading(false);
+    },
+    [search, pageSize]
+  );
+
+  // Fresh fetch: page 0 replaces any accumulated rows and resets the offset
+  // (also fires when the debounced search changes).
+  const fetchData = useCallback(() => {
+    setOffset(0);
+    return runQuery(0, false);
+  }, [runQuery]);
+
+  // Load-more: append the next page to the accumulated rows.
+  const loadMore = useCallback(() => {
+    return runQuery(offset, true);
+  }, [runQuery, offset]);
 
   const fetchProduk = useCallback(async () => {
     const { data, error } = await sb
@@ -631,6 +675,27 @@ export default function InspeksiPage() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination: load-more + counter */}
+      {!loading && !loadError && data.length > 0 && (
+        <div className="space-y-2">
+          {data.length < totalCount && (
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={loadingMore}
+              onClick={() => loadMore()}
+            >
+              {loadingMore
+                ? "Memuat…"
+                : `Muat lagi (${totalCount - data.length} tersisa)`}
+            </Button>
+          )}
+          <p className="text-xs text-muted text-center">
+            Menampilkan {data.length} dari {totalCount} data
+          </p>
+        </div>
+      )}
 
       {/* Detail dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>

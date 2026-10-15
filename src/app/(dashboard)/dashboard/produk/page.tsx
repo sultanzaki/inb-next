@@ -108,30 +108,75 @@ export default function ProdukPage() {
   const [spesifikasi, setSpesifikasi] = useState<SpesifikasiForm[]>([]);
   const [saving, setSaving] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    const seq = ++requestSeq;
-    setLoading(true);
-    let q = sb.from("master_produk").select("*").order("nama_produk");
-    if (search) {
-      // Quoted values (via escapeOrTerm): commas/parens stay literal and the
-      // escaped %/_ reach Postgres LIKE as literals, not wildcards.
-      const term = escapeOrTerm(search);
-      q = q.or(
-        `nama_produk.ilike."%${term}%",kode_produk.ilike."%${term}%"`
-      );
-    }
-    const { data, error } = await q;
-    if (seq !== requestSeq) return; // superseded by a newer request
-    if (error) {
-      setLoadError(true);
-      setProdukList([]);
-      toast.error("Gagal memuat data. Coba lagi.");
-    } else {
-      setLoadError(false);
-      setProdukList((data as MasterProduk[]) ?? []);
-    }
-    setLoading(false);
-  }, [search]);
+  // Pagination: list queries are bounded with .range(); count:"exact" returns
+  // the filtered row total (ignoring the range window) in the same request, so
+  // "Muat lagi" knows how many rows are left without a second query.
+  const [pageSize] = useState(50);
+  const [offset, setOffset] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Bounded query runner shared by the fresh fetch and load-more.
+  // append=false swaps the accumulated list (mount, search, retry, after a
+  // mutation); append=true fetches the page starting at `start` and appends.
+  const runQuery = useCallback(
+    async (start: number, append: boolean) => {
+      const seq = ++requestSeq;
+      if (append) setLoadingMore(true);
+      else setLoading(true);
+      let q = sb
+        .from("master_produk")
+        .select("*", { count: "exact" })
+        .order("nama_produk")
+        .range(start, start + pageSize - 1);
+      if (search) {
+        // Quoted values (via escapeOrTerm): commas/parens stay literal and the
+        // escaped %/_ reach Postgres LIKE as literals, not wildcards.
+        const term = escapeOrTerm(search);
+        q = q.or(
+          `nama_produk.ilike."%${term}%",kode_produk.ilike."%${term}%"`
+        );
+      }
+      const { data, count, error } = await q;
+      if (seq !== requestSeq) {
+        // Superseded by a newer request: release the loading flag this
+        // request owned (the newer one manages its own).
+        if (append) setLoadingMore(false);
+        return;
+      }
+      if (error) {
+        // A failed load-more keeps the accumulated rows and leaves the offset
+        // unchanged, so retrying "Muat lagi" re-requests the same page.
+        if (!append) {
+          setLoadError(true);
+          setProdukList([]);
+          setTotalCount(0);
+        }
+        toast.error("Gagal memuat data. Coba lagi.");
+      } else {
+        const rows = (data as MasterProduk[]) ?? [];
+        setLoadError(false);
+        setProdukList((prev) => (append ? [...prev, ...rows] : rows));
+        setTotalCount(count ?? 0);
+        if (append) setOffset(start + rows.length);
+      }
+      if (append) setLoadingMore(false);
+      else setLoading(false);
+    },
+    [search, pageSize]
+  );
+
+  // Fresh fetch: page 0 replaces any accumulated rows and resets the offset
+  // (also fires when the debounced search changes).
+  const fetchData = useCallback(() => {
+    setOffset(0);
+    return runQuery(0, false);
+  }, [runQuery]);
+
+  // Load-more: append the next page to the accumulated rows.
+  const loadMore = useCallback(() => {
+    return runQuery(offset, true);
+  }, [runQuery, offset]);
 
   useEffect(() => {
     fetchData();
@@ -533,6 +578,27 @@ export default function ProdukPage() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination: load-more + counter */}
+      {!loading && !loadError && produkList.length > 0 && (
+        <div className="space-y-2">
+          {produkList.length < totalCount && (
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={loadingMore}
+              onClick={() => loadMore()}
+            >
+              {loadingMore
+                ? "Memuat…"
+                : `Muat lagi (${totalCount - produkList.length} tersisa)`}
+            </Button>
+          )}
+          <p className="text-xs text-muted text-center">
+            Menampilkan {produkList.length} dari {totalCount} data
+          </p>
+        </div>
+      )}
     </div>
   );
 }

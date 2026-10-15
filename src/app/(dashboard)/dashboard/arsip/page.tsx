@@ -121,28 +121,73 @@ export default function DokumenPage() {
   const [form, setForm] = useState<DocForm>(emptyForm);
   const [saving, setSaving] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    const seq = ++requestSeq;
-    setLoading(true);
-    let q = sb.from("dokumen_arsip").select("*").order("created_at", { ascending: false });
-    if (search) {
-      const term = escapeOr(search);
-      q = q.or(
-        `judul_dokumen.ilike."%${term}%",kategori.ilike."%${term}%"`
-      );
-    }
-    const { data, error } = await q;
-    if (seq !== requestSeq) return; // superseded by a newer request
-    if (error) {
-      setDokumenList([]);
-      setLoadError(true);
-      toast.error("Gagal memuat data. Coba lagi.");
-    } else {
-      setDokumenList((data as DokumenArsip[]) ?? []);
-      setLoadError(false);
-    }
-    setLoading(false);
-  }, [search]);
+  // Pagination: list queries are bounded with .range(); count:"exact" returns
+  // the filtered row total (ignoring the range window) in the same request, so
+  // "Muat lagi" knows how many rows are left without a second query.
+  const [pageSize] = useState(50);
+  const [offset, setOffset] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Bounded query runner shared by the fresh fetch and load-more.
+  // append=false swaps the accumulated list (mount, search, retry, after a
+  // mutation); append=true fetches the page starting at `start` and appends.
+  const runQuery = useCallback(
+    async (start: number, append: boolean) => {
+      const seq = ++requestSeq;
+      if (append) setLoadingMore(true);
+      else setLoading(true);
+      let q = sb
+        .from("dokumen_arsip")
+        .select("*", { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(start, start + pageSize - 1);
+      if (search) {
+        const term = escapeOr(search);
+        q = q.or(
+          `judul_dokumen.ilike."%${term}%",kategori.ilike."%${term}%"`
+        );
+      }
+      const { data, count, error } = await q;
+      if (seq !== requestSeq) {
+        // Superseded by a newer request: release the loading flag this
+        // request owned (the newer one manages its own).
+        if (append) setLoadingMore(false);
+        return;
+      }
+      if (error) {
+        // A failed load-more keeps the accumulated rows and leaves the offset
+        // unchanged, so retrying "Muat lagi" re-requests the same page.
+        if (!append) {
+          setLoadError(true);
+          setDokumenList([]);
+          setTotalCount(0);
+        }
+        toast.error("Gagal memuat data. Coba lagi.");
+      } else {
+        const rows = (data as DokumenArsip[]) ?? [];
+        setLoadError(false);
+        setDokumenList((prev) => (append ? [...prev, ...rows] : rows));
+        setTotalCount(count ?? 0);
+        if (append) setOffset(start + rows.length);
+      }
+      if (append) setLoadingMore(false);
+      else setLoading(false);
+    },
+    [search, pageSize]
+  );
+
+  // Fresh fetch: page 0 replaces any accumulated rows and resets the offset
+  // (also fires when the debounced search changes).
+  const fetchData = useCallback(() => {
+    setOffset(0);
+    return runQuery(0, false);
+  }, [runQuery]);
+
+  // Load-more: append the next page to the accumulated rows.
+  const loadMore = useCallback(() => {
+    return runQuery(offset, true);
+  }, [runQuery, offset]);
 
   useEffect(() => {
     fetchData();
@@ -436,6 +481,27 @@ export default function DokumenPage() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination: load-more + counter */}
+      {!loading && !loadError && dokumenList.length > 0 && (
+        <div className="space-y-2">
+          {dokumenList.length < totalCount && (
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={loadingMore}
+              onClick={() => loadMore()}
+            >
+              {loadingMore
+                ? "Memuat…"
+                : `Muat lagi (${totalCount - dokumenList.length} tersisa)`}
+            </Button>
+          )}
+          <p className="text-xs text-muted text-center">
+            Menampilkan {dokumenList.length} dari {totalCount} data
+          </p>
+        </div>
+      )}
     </div>
   );
 }

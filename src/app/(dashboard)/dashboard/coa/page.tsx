@@ -97,37 +97,91 @@ export default function COAPage() {
   const [form, setForm] = useState<COAForm>(emptyForm);
   const [saving, setSaving] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    const seq = ++requestSeq;
-    setLoading(true);
-    let q = sb
-      .from("coa")
-      .select("*, master_produk!inner(kode_produk, nama_produk)")
-      .order("created_at", { ascending: false });
-    if (search) {
-      // Quoted values (via escapeOr): commas/parens stay literal and the
-      // escaped %/_ reach Postgres LIKE as literals, not wildcards.
-      const term = escapeOr(search);
-      q = q.or(
-        `no_coa.ilike."%${term}%",master_produk.nama_produk.ilike."%${term}%"`
-      );
-    }
-    const { data: raw, error } = await q;
-    if (seq !== requestSeq) return; // superseded by a newer request
-    if (error) {
-      setCoaList([]);
-      setLoadError(true);
-      toast.error("Gagal memuat data. Coba lagi.");
-    } else {
-      setLoadError(false);
-      setCoaList((raw as CoaRow[]) ?? []);
-    }
-    setLoading(false);
-  }, [search]);
+  // Pagination: list queries are bounded with .range(); count:"exact" returns
+  // the filtered row total (ignoring the range window) in the same request, so
+  // "Muat lagi" knows how many rows are left without a second query.
+  const [pageSize] = useState(50);
+  const [offset, setOffset] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Bounded query runner shared by the fresh fetch and load-more.
+  // append=false swaps the accumulated list (mount, search, retry, after a
+  // mutation); append=true fetches the page starting at `start` and appends.
+  const runQuery = useCallback(
+    async (start: number, append: boolean) => {
+      const seq = ++requestSeq;
+      if (append) setLoadingMore(true);
+      else setLoading(true);
+      let q = sb
+        .from("coa")
+        .select("*, master_produk!inner(kode_produk, nama_produk)", {
+          count: "exact",
+        })
+        .order("created_at", { ascending: false })
+        .range(start, start + pageSize - 1);
+      if (search) {
+        // Quoted values (via escapeOr): commas/parens stay literal and the
+        // escaped %/_ reach Postgres LIKE as literals, not wildcards.
+        const term = escapeOr(search);
+        q = q.or(
+          `no_coa.ilike."%${term}%",master_produk.nama_produk.ilike."%${term}%"`
+        );
+      }
+      const { data: raw, count, error } = await q;
+      if (seq !== requestSeq) {
+        // Superseded by a newer request: release the loading flag this
+        // request owned (the newer one manages its own).
+        if (append) setLoadingMore(false);
+        return;
+      }
+      if (error) {
+        // A failed load-more keeps the accumulated rows and leaves the offset
+        // unchanged, so retrying "Muat lagi" re-requests the same page.
+        if (!append) {
+          setLoadError(true);
+          setCoaList([]);
+          setTotalCount(0);
+        }
+        toast.error("Gagal memuat data. Coba lagi.");
+      } else {
+        const rows = (raw as CoaRow[]) ?? [];
+        setLoadError(false);
+        setCoaList((prev) => (append ? [...prev, ...rows] : rows));
+        setTotalCount(count ?? 0);
+        if (append) setOffset(start + rows.length);
+      }
+      if (append) setLoadingMore(false);
+      else setLoading(false);
+    },
+    [search, pageSize]
+  );
+
+  // Fresh fetch: page 0 replaces any accumulated rows and resets the offset
+  // (also fires when the debounced search changes).
+  const fetchData = useCallback(() => {
+    setOffset(0);
+    return runQuery(0, false);
+  }, [runQuery]);
+
+  // Load-more: append the next page to the accumulated rows.
+  const loadMore = useCallback(() => {
+    return runQuery(offset, true);
+  }, [runQuery, offset]);
 
   const fetchAvailableHasil = useCallback(async () => {
-    // Get all hasil_uji with PASS status that don't have COA yet
-    const { data: coaIds } = await sb.from("coa").select("id_produk, no_lot");
+    // Get PASS hasil_uji rows that don't have a COA yet. Both queries select
+    // only the columns the diff/option list actually needs (id_produk, no_lot
+    // for the dedupe keys; id, hasil_detail + the joined product name for the
+    // picker/preview) and are capped at .limit(500). That cap is safe because
+    // COA issuance is manual and low-volume: the set of ever-issued COAs — and
+    // the PASS rows a new COA can be issued from — stays far below 500 in
+    // practice; the limit only guarantees these queries can never degrade
+    // into unbounded full-table fetches.
+    const { data: coaIds } = await sb
+      .from("coa")
+      .select("id_produk, no_lot")
+      .limit(500);
     const coaKeys = (coaIds ?? []) as Pick<COA, "id_produk" | "no_lot">[];
     const existing = new Set(
       coaKeys.map((c) => `${c.id_produk}::${c.no_lot}`)
@@ -135,11 +189,17 @@ export default function COAPage() {
 
     const { data: hasil } = await sb
       .from("hasil_uji")
-      .select("*, master_produk!inner(kode_produk, nama_produk)")
+      .select(
+        "id, no_lot, id_produk, hasil_detail, master_produk!inner(kode_produk, nama_produk)"
+      )
       .eq("status", "PASS")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(500);
 
-    const hasilRows = (hasil ?? []) as HasilUjiRow[];
+    // Untyped client: PostgREST returns the !inner embed as a single object,
+    // but supabase-js's default (schema-less) select parsing assumes an
+    // array, hence the double cast.
+    const hasilRows = (hasil ?? []) as unknown as HasilUjiRow[];
     const filtered = hasilRows.filter(
       (h) => !existing.has(`${h.id_produk}::${h.no_lot}`)
     );
@@ -733,6 +793,27 @@ export default function COAPage() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination: load-more + counter */}
+      {!loading && !loadError && coaList.length > 0 && (
+        <div className="space-y-2">
+          {coaList.length < totalCount && (
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={loadingMore}
+              onClick={() => loadMore()}
+            >
+              {loadingMore
+                ? "Memuat…"
+                : `Muat lagi (${totalCount - coaList.length} tersisa)`}
+            </Button>
+          )}
+          <p className="text-xs text-muted text-center">
+            Menampilkan {coaList.length} dari {totalCount} data
+          </p>
+        </div>
+      )}
 
       {/* Detail dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
