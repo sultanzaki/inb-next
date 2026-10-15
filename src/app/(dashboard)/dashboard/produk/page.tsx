@@ -12,6 +12,7 @@ import {
   Plus,
   Pencil,
   Trash2,
+  PackageSearch,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,19 +79,16 @@ const emptyForm: ProdukForm = {
   tipe_kemasan: "",
 };
 
+// Status is always a dot-chip: emerald tint for Halal, danger tint otherwise.
 function statusHalalBadge(val: string) {
-  if (val === "Halal")
-    return (
-      <Badge variant="outline" className="bg-success-bg text-success-dark border-success-bg">
-        {val}
-      </Badge>
-    );
-  return (
-    <Badge variant="outline" className="bg-danger-bg text-danger-dark border-danger-bg">
-      {val}
-    </Badge>
-  );
+  if (val === "Halal") return <Badge>Halal</Badge>;
+  return <Badge variant="destructive">Non-Halal</Badge>;
 }
+
+// Native select styled to match the Input kit (hairline border, 36px, 6px
+// radius); focus border + ring come from the global input/select rule.
+const selectClass =
+  "h-9 w-full rounded-md border border-input bg-surface px-2.5 text-sm transition-colors duration-150 outline-none";
 
 export default function ProdukPage() {
   const { user } = useUser();
@@ -315,11 +313,12 @@ export default function ProdukPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Page header: micro-label + title left, primary action right */}
+      <div className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold">Master Produk</h1>
-          <p className="text-sm text-muted mt-1">
+          <p className="micro-label">MASTER DATA</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Master Produk</h1>
+          <p className="mt-1 text-[13px] text-muted">
             Kelola daftar produk dan spesifikasi pengujian.
           </p>
         </div>
@@ -327,168 +326,171 @@ export default function ProdukPage() {
           {canCreate && (
             <DialogTrigger render={<Button><Plus className="size-4" /> Produk Baru</Button>} />
           )}
-          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>
+
+          <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+            <DialogHeader className="gap-1 border-b border-border-soft px-6 py-4 pr-14">
+              <p className="micro-label">MASTER DATA</p>
+              <DialogTitle className="text-2xl font-semibold tracking-tight">
                 {editingId ? "Edit Produk" : "Tambah Produk Baru"}
               </DialogTitle>
             </DialogHeader>
 
-            <div className="space-y-4">
-              {/* Produk fields */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-medium">Kode Produk *</label>
-                  <Input
-                    value={form.kode_produk}
-                    onChange={(e) => setForm({ ...form, kode_produk: e.target.value })}
-                    placeholder="PRD-001"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium">Nama Produk *</label>
-                  <Input
-                    value={form.nama_produk}
-                    onChange={(e) => setForm({ ...form, nama_produk: e.target.value })}
-                    placeholder="Nama produk"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium">Kategori</label>
-                  <select
-                    className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                    value={form.kategori}
-                    onChange={(e) => setForm({ ...form, kategori: e.target.value })}
-                  >
-                    <option value="">Pilih…</option>
-                    {kategoriList.map((k) => (
-                      <option key={k} value={k}>{k}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium">Satuan</label>
-                  <select
-                    className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                    value={form.satuan}
-                    onChange={(e) => setForm({ ...form, satuan: e.target.value })}
-                  >
-                    <option value="">Pilih…</option>
-                    {satuanList.map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium">Status Halal</label>
-                  <select
-                    className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                    value={form.status_halal}
-                    onChange={(e) => setForm({ ...form, status_halal: e.target.value })}
-                  >
-                    <option value="Halal">Halal</option>
-                    <option value="Non-Halal">Non-Halal</option>
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium">Tipe Kemasan</label>
-                  <select
-                    className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                    value={form.tipe_kemasan}
-                    onChange={(e) => setForm({ ...form, tipe_kemasan: e.target.value })}
-                  >
-                    <option value="">Pilih…</option>
-                    {kemasanList.map((k) => (
-                      <option key={k} value={k}>{k}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Spesifikasi section */}
-              <div className="border-t border-border pt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted">
-                    Spesifikasi Pengujian
-                  </span>
-                  <Button variant="outline" size="sm" onClick={addSpesifikasiRow}>
-                    <Plus className="size-3" /> Tambah Parameter
-                  </Button>
-                </div>
-
-                {spesifikasi.length === 0 && (
-                  <p className="text-xs text-muted py-2">
-                    Belum ada parameter. Klik &ldquo;Tambah Parameter&rdquo; untuk menambahkan.
-                  </p>
-                )}
-
-                <div className="space-y-2">
-                  {spesifikasi.map((sp, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-start gap-2 p-3 rounded-lg border border-border bg-surface-alt"
+            {/* Scrollable body; the footer stays pinned below it. */}
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              <div className="space-y-6">
+                {/* Produk fields: two-column grid */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium">Kode Produk *</label>
+                    <Input
+                      value={form.kode_produk}
+                      onChange={(e) => setForm({ ...form, kode_produk: e.target.value })}
+                      placeholder="PRD-001"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium">Nama Produk *</label>
+                    <Input
+                      value={form.nama_produk}
+                      onChange={(e) => setForm({ ...form, nama_produk: e.target.value })}
+                      placeholder="Nama produk"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium">Kategori</label>
+                    <select
+                      className={selectClass}
+                      value={form.kategori}
+                      onChange={(e) => setForm({ ...form, kategori: e.target.value })}
                     >
-                      <div className="flex-1 grid grid-cols-6 gap-2">
-                        <div className="col-span-2 space-y-1">
-                          <label className="text-[10px] font-medium text-muted">Parameter</label>
-                          <Input
-                            value={sp.parameter_uji}
-                            onChange={(e) => updateSpesifikasi(idx, "parameter_uji", e.target.value)}
-                            placeholder="Parameter"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-medium text-muted">Tipe</label>
-                          <select
-                            className="flex h-8 w-full rounded-lg border border-input bg-white px-2 text-xs shadow-sm transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                            value={sp.tipe_batas}
-                            onChange={(e) => updateSpesifikasi(idx, "tipe_batas", e.target.value)}
-                          >
-                            <option value="RANGE">RANGE</option>
-                            <option value="MIN">MIN</option>
-                            <option value="MAX">MAX</option>
-                            <option value="TEXT">TEXT</option>
-                          </select>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-medium text-muted">Min</label>
-                          <Input
-                            value={sp.nilai_min}
-                            onChange={(e) => updateSpesifikasi(idx, "nilai_min", e.target.value)}
-                            placeholder="Min"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-medium text-muted">Maks</label>
-                          <Input
-                            value={sp.nilai_maks}
-                            onChange={(e) => updateSpesifikasi(idx, "nilai_maks", e.target.value)}
-                            placeholder="Maks"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-medium text-muted">Satuan</label>
-                          <Input
-                            value={sp.satuan}
-                            onChange={(e) => updateSpesifikasi(idx, "satuan", e.target.value)}
-                            placeholder="Satuan"
-                          />
-                        </div>
-                      </div>
-                      <button
-                        className="mt-5 p-1 rounded hover:bg-danger-bg text-danger"
-                        onClick={() => removeSpesifikasi(idx)}
-                        title="Hapus"
+                      <option value="">Pilih…</option>
+                      {kategoriList.map((k) => (
+                        <option key={k} value={k}>{k}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium">Satuan</label>
+                    <select
+                      className={selectClass}
+                      value={form.satuan}
+                      onChange={(e) => setForm({ ...form, satuan: e.target.value })}
+                    >
+                      <option value="">Pilih…</option>
+                      {satuanList.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium">Status Halal</label>
+                    <select
+                      className={selectClass}
+                      value={form.status_halal}
+                      onChange={(e) => setForm({ ...form, status_halal: e.target.value })}
+                    >
+                      <option value="Halal">Halal</option>
+                      <option value="Non-Halal">Non-Halal</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium">Tipe Kemasan</label>
+                    <select
+                      className={selectClass}
+                      value={form.tipe_kemasan}
+                      onChange={(e) => setForm({ ...form, tipe_kemasan: e.target.value })}
+                    >
+                      <option value="">Pilih…</option>
+                      {kemasanList.map((k) => (
+                        <option key={k} value={k}>{k}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Spesifikasi section */}
+                <div className="border-t border-border pt-5">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <span className="micro-label">Spesifikasi Pengujian</span>
+                    <Button variant="outline" size="sm" onClick={addSpesifikasiRow}>
+                      <Plus className="size-3.5" /> Tambah Parameter
+                    </Button>
+                  </div>
+
+                  {spesifikasi.length === 0 && (
+                    <p className="text-[13px] text-muted">
+                      Belum ada parameter. Klik &ldquo;Tambah Parameter&rdquo; untuk menambahkan.
+                    </p>
+                  )}
+
+                  <div className="space-y-2">
+                    {spesifikasi.map((sp, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-start gap-3 rounded-md border border-border bg-surface-alt p-3"
                       >
-                        <Trash2 className="size-3.5" />
-                      </button>
-                    </div>
-                  ))}
+                        <div className="grid flex-1 grid-cols-6 gap-2">
+                          <div className="col-span-2 space-y-1">
+                            <label className="text-[10px] font-medium text-muted">Parameter</label>
+                            <Input
+                              value={sp.parameter_uji}
+                              onChange={(e) => updateSpesifikasi(idx, "parameter_uji", e.target.value)}
+                              placeholder="Parameter"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-medium text-muted">Tipe</label>
+                            <select
+                              className="h-8 w-full rounded-md border border-input bg-surface px-2 text-xs transition-colors duration-150 outline-none"
+                              value={sp.tipe_batas}
+                              onChange={(e) => updateSpesifikasi(idx, "tipe_batas", e.target.value)}
+                            >
+                              <option value="RANGE">RANGE</option>
+                              <option value="MIN">MIN</option>
+                              <option value="MAX">MAX</option>
+                              <option value="TEXT">TEXT</option>
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-medium text-muted">Min</label>
+                            <Input
+                              value={sp.nilai_min}
+                              onChange={(e) => updateSpesifikasi(idx, "nilai_min", e.target.value)}
+                              placeholder="Min"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-medium text-muted">Maks</label>
+                            <Input
+                              value={sp.nilai_maks}
+                              onChange={(e) => updateSpesifikasi(idx, "nilai_maks", e.target.value)}
+                              placeholder="Maks"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-medium text-muted">Satuan</label>
+                            <Input
+                              value={sp.satuan}
+                              onChange={(e) => updateSpesifikasi(idx, "satuan", e.target.value)}
+                              placeholder="Satuan"
+                            />
+                          </div>
+                        </div>
+                        <button
+                          className="mt-5 rounded-md p-1 text-danger outline-none transition-colors duration-150 hover:bg-danger-bg focus-visible:ring-2 focus-visible:ring-danger/20"
+                          onClick={() => removeSpesifikasi(idx)}
+                          title="Hapus"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="m-0 flex-row items-center justify-between gap-2 rounded-b-lg px-6 py-4 sm:justify-between">
               <DialogClose render={<Button variant="outline">Batal</Button>} />
               <Button onClick={handleSave} disabled={saving}>
                 {saving ? "Menyimpan…" : editingId ? "Simpan" : "Tambah"}
@@ -498,36 +500,42 @@ export default function ProdukPage() {
         </Dialog>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-xs">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted pointer-events-none" />
-        <Input
-          placeholder="Cari produk…"
-          value={searchInput}
-          onChange={(e) => onSearchChange(e.target.value)}
-          className="pl-9"
-        />
+      {/* Toolbar: search left, result meta right */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="relative w-60 max-w-full">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-faint" />
+          <Input
+            placeholder="Cari produk…"
+            value={searchInput}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+        <p className="shrink-0 text-[13px] text-muted">
+          <span className="font-data text-text">{produkList.length}</span> dari{" "}
+          <span className="font-data text-text">{totalCount}</span> data
+        </p>
       </div>
 
-      {/* Table */}
-      <div className="rounded-xl bg-surface shadow-card-sm overflow-hidden">
+      {/* Table card: hairline border, radius 8, header micro-labels on surface-alt */}
+      <div className="overflow-hidden rounded-lg border border-border bg-surface">
         <Table>
           <TableHeader>
-            <TableRow className="bg-surface-alt">
-              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Produk</TableHead>
-              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Kategori</TableHead>
-              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Satuan</TableHead>
-              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Halal</TableHead>
-              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Kemasan</TableHead>
-              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Aksi</TableHead>
+            <TableRow className="hover:bg-surface-alt">
+              <TableHead className="pl-4">Produk</TableHead>
+              <TableHead>Kategori</TableHead>
+              <TableHead>Satuan</TableHead>
+              <TableHead>Halal</TableHead>
+              <TableHead>Kemasan</TableHead>
+              <TableHead className="pr-4">Aksi</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading && <TableSkeleton rows={5} cols={6} />}
             {!loading && loadError && (
               <TableRow>
-                <TableCell colSpan={6} className="px-4 py-8">
-                  <div className="flex items-center justify-center gap-3 text-muted">
+                <TableCell colSpan={6} className="px-4 py-12">
+                  <div className="flex items-center justify-center gap-3 text-[13px] text-muted">
                     Gagal memuat data.
                     <Button
                       variant="outline"
@@ -541,27 +549,43 @@ export default function ProdukPage() {
               </TableRow>
             )}
             {!loading && !loadError && produkList.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6} className="px-4 py-8 text-center text-muted">
-                  Tidak ada produk.
+              <TableRow className="hover:bg-surface">
+                <TableCell colSpan={6} className="px-4 py-12">
+                  <div className="flex flex-col items-center gap-4 text-center">
+                    <div className="flex size-10 items-center justify-center rounded-full border border-border text-faint">
+                      <PackageSearch className="size-4" />
+                    </div>
+                    <p className="micro-label">
+                      {search ? "TIDAK ADA HASIL" : "TIDAK ADA PRODUK"}
+                    </p>
+                    {!search && canCreate && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDialogOpen(true)}
+                      >
+                        <Plus className="size-3.5" /> Produk Baru
+                      </Button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             )}
             {produkList.map((p) => (
-              <TableRow key={p.id} className="border-b border-border last:border-0 hover:bg-chip-bg/40">
-                <TableCell className="px-4 py-3">
+              <TableRow key={p.id}>
+                <TableCell className="pl-4">
                   <div className="font-medium">{p.nama_produk}</div>
-                  <div className="text-xs text-muted">{p.kode_produk}</div>
+                  <div className="font-data text-xs text-muted">{p.kode_produk}</div>
                 </TableCell>
-                <TableCell className="px-4 py-3 text-muted">{p.kategori}</TableCell>
-                <TableCell className="px-4 py-3">{p.satuan}</TableCell>
-                <TableCell className="px-4 py-3">{statusHalalBadge(p.status_halal)}</TableCell>
-                <TableCell className="px-4 py-3 text-muted">{p.tipe_kemasan}</TableCell>
-                <TableCell className="px-4 py-3">
+                <TableCell className="text-muted">{p.kategori}</TableCell>
+                <TableCell>{p.satuan}</TableCell>
+                <TableCell>{statusHalalBadge(p.status_halal)}</TableCell>
+                <TableCell className="text-muted">{p.tipe_kemasan}</TableCell>
+                <TableCell className="pr-4">
                   <div className="flex items-center gap-1">
                     {canUpdate && (
                       <button
-                        className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
+                        className="rounded-md p-1.5 text-muted outline-none transition-colors duration-150 hover:bg-surface-alt hover:text-text focus-visible:ring-2 focus-visible:ring-primary/30"
                         onClick={() => openEdit(p)}
                         title="Edit"
                       >
@@ -570,7 +594,7 @@ export default function ProdukPage() {
                     )}
                     {canDelete && (
                       <button
-                        className="p-1.5 rounded hover:bg-danger-bg text-danger"
+                        className="rounded-md p-1.5 text-danger outline-none transition-colors duration-150 hover:bg-danger-bg focus-visible:ring-2 focus-visible:ring-danger/20"
                         onClick={() => handleDelete(p.id)}
                         title="Hapus"
                       >
@@ -585,9 +609,9 @@ export default function ProdukPage() {
         </Table>
       </div>
 
-      {/* Pagination: load-more + counter */}
+      {/* Pagination: load-more + counter (logic unchanged, restyled) */}
       {!loading && !loadError && produkList.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {produkList.length < totalCount && (
             <Button
               variant="outline"
@@ -600,8 +624,9 @@ export default function ProdukPage() {
                 : `Muat lagi (${totalCount - produkList.length} tersisa)`}
             </Button>
           )}
-          <p className="text-xs text-muted text-center">
-            Menampilkan {produkList.length} dari {totalCount} data
+          <p className="text-center text-[13px] text-muted">
+            Menampilkan <span className="font-data text-text">{produkList.length}</span> dari{" "}
+            <span className="font-data text-text">{totalCount}</span> data
           </p>
         </div>
       )}
