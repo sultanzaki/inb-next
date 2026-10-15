@@ -1,3 +1,5 @@
+"use client";
+
 import { LoginForm } from './login-form';
 
 export default function LoginPage() {
@@ -20,8 +22,11 @@ export default function LoginPage() {
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 fill-mode-both">
             <div className="w-[66px] h-[66px] rounded-xl bg-white/10 border border-white/14 flex items-center justify-center">
               <img
-                src="https://lh3.googleusercontent.com/d/1cTPhZUSGNhnud4LJyyuaA8Hc_ulDem-6"
+                src="/logo.png"
                 alt="INBIONUSA"
+                width={46}
+                height={46}
+                onError={(e) => { e.currentTarget.style.display = "none"; }}
                 className="max-h-[46px] max-w-[46px] object-contain"
               />
             </div>
