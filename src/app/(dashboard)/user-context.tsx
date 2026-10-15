@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { createContext, useContext, useMemo } from "react";
 import type { User } from "@/lib/types";
 
 interface UserCtx {
@@ -16,8 +16,10 @@ export function UserContextProvider({
   user: User;
   children: React.ReactNode;
 }) {
+  const value = useMemo(() => ({ user }), [user]);
+
   return (
-    <UserContext.Provider value={{ user }}>{children}</UserContext.Provider>
+    <UserContext.Provider value={value}>{children}</UserContext.Provider>
   );
 }
 
