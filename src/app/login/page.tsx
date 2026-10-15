@@ -1,65 +1,59 @@
-"use client";
-
+import type { Metadata } from 'next';
+import { FileCheck, History, ShieldCheck } from 'lucide-react';
 import { LoginForm } from './login-form';
+
+export const metadata: Metadata = {
+  title: 'Masuk — INBIONUSA',
+  description: 'Masuk ke Sistem Manajemen Mutu INBIONUSA.',
+};
+
+// Specimen grid: 1px lines in --color-primary-ink (#022c22) at 8% opacity,
+// 24px cells — inline SVG data URI, no asset files.
+const GRID_PATTERN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cpath d='M0 .5H24M.5 0V24' fill='none' stroke='%23022c22' stroke-opacity='.08'/%3E%3C/svg%3E")`;
+
+const BRAND_FACTS = [
+  { icon: ShieldCheck, label: 'Kontrol Kualitas Terpusat' },
+  { icon: FileCheck, label: 'Terbitkan COA digital' },
+  { icon: History, label: 'Audit trail lengkap' },
+];
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex">
-      {/* Brand Panel */}
-      <aside className="hidden lg:flex lg:w-[45%] relative overflow-hidden bg-[#064e3b] flex-col px-[52px] py-[56px] text-white">
-        <div
-          className="absolute inset-0 pointer-events-none animate-in fade-in duration-[2000ms]"
-          style={{
-            backgroundImage: `
-              radial-gradient(circle at 20% 10%, rgba(52,211,153,0.25), transparent 42%),
-              radial-gradient(circle at 85% 85%, rgba(2,132,199,0.22), transparent 45%)
-            `,
-          }}
-        />
-        <div className="absolute -bottom-[140px] -right-[140px] w-[380px] h-[380px] rounded-full border border-white/10 pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col h-full">
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 fill-mode-both">
-            <div className="w-[66px] h-[66px] rounded-xl bg-white/10 border border-white/14 flex items-center justify-center">
-              <img
-                src="/logo.png"
-                alt="INBIONUSA"
-                width={46}
-                height={46}
-                onError={(e) => { e.currentTarget.style.display = "none"; }}
-                className="max-h-[46px] max-w-[46px] object-contain"
-              />
-            </div>
-          </div>
-          <h1 className="animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150 fill-mode-both text-[34px] font-extrabold leading-tight mt-6">
-            INBIONUSA
-          </h1>
-          <p className="animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300 fill-mode-both text-[15px] text-white/70 mt-2 max-w-[340px] leading-relaxed">
-            Quality Control System — Kelola mutu produk, inspeksi, dan sertifikasi dengan presisi.
+    <div className="flex min-h-screen">
+      {/* Brand panel — deep emerald with specimen grid */}
+      <aside
+        className="relative hidden flex-col px-12 py-12 text-white lg:flex lg:w-[42%]"
+        style={{
+          backgroundColor: '#064e3b',
+          backgroundImage: `${GRID_PATTERN}, linear-gradient(180deg, #064e3b 0%, #022c22 100%)`,
+        }}
+      >
+        <div>
+          <p className="text-xl font-semibold tracking-tight">INBIONUSA</p>
+          <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/60">
+            QC System
           </p>
-          <div className="mt-auto">
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 delay-500 fill-mode-both text-[11px] text-white/38 tracking-wider">
-              &copy; 2024 INBIONUSA &middot; Quality Control System v5.0
-            </div>
-          </div>
+          <p className="mt-8 max-w-[280px] text-[15px] leading-relaxed text-white/85">
+            Sistem Manajemen Mutu
+          </p>
         </div>
+
+        <ul className="mt-auto divide-y divide-white/12">
+          {BRAND_FACTS.map(({ icon: Icon, label }) => (
+            <li
+              key={label}
+              className="flex items-center gap-3 py-3 text-[13px] text-white/80"
+            >
+              <Icon className="size-4 shrink-0 text-white/70" aria-hidden="true" />
+              {label}
+            </li>
+          ))}
+        </ul>
       </aside>
 
-      {/* Form Panel */}
-      <main className="flex-1 flex items-center justify-center bg-white">
-        <div className="animate-in fade-in duration-800 delay-200 fill-mode-both w-full max-w-[400px] px-8">
-          <div className="text-center mb-10">
-            <div className="lg:hidden w-14 h-14 rounded-xl bg-[#047857] flex items-center justify-center mx-auto mb-4">
-              <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <h2 className="text-xl font-bold">Selamat Datang</h2>
-            <p className="text-sm text-muted-foreground mt-1">Masuk ke Quality Control System</p>
-          </div>
-
-          <LoginForm />
-        </div>
+      {/* Form panel — floats on white, no card */}
+      <main className="flex flex-1 items-center justify-center bg-surface px-6 py-12">
+        <LoginForm />
       </main>
     </div>
   );
