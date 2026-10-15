@@ -112,6 +112,7 @@ export const ROLE_ALLOW: Record<string, UserRole[]> = {
   delete_uji: ['admin qc', 'administrator inbionusa'],
   delete_coa: ['admin qc', 'administrator inbionusa'],
   delete_doc: ['admin qc', 'administrator inbionusa'],
+  create_doc: ['admin qc', 'administrator inbionusa'],
   update_coa: ['admin qc', 'administrator inbionusa', 'qc supervisor'],
   issue_coa: ['admin qc', 'administrator inbionusa', 'qc supervisor'],
 };

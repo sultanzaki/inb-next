@@ -217,11 +217,11 @@ export default function DokumenPage() {
 
   const role: UserRole = (user?.role as UserRole) ?? "viewer";
   const canDelete = canAction(role, "delete_doc");
-  // No dedicated create key exists in ROLE_ALLOW; dokumen_arsip writes are
-  // limited to the same privileged set as delete_doc ('admin qc',
-  // 'administrator inbionusa'). Hide the upload trigger for other roles,
-  // whose insert would only fail server-side with a raw RLS error.
-  const canUpload = canAction(role, "delete_doc");
+  // dokumen_arsip writes are gated by create_doc, limited to the same
+  // privileged set as delete_doc ('admin qc', 'administrator inbionusa').
+  // Hide the upload trigger for other roles, whose insert would only fail
+  // server-side with a raw RLS error.
+  const canUpload = canAction(role, "create_doc");
 
   return (
     <div className="space-y-6">

@@ -30,6 +30,16 @@ import {
   AlertCircle,
 } from "lucide-react";
 
+// Local calendar date as YYYY-MM-DD. Built from the local getters with
+// padStart — NOT toISOString(), which yields the UTC date and disagrees with
+// arsip's local-date partition during 00:00–06:59 WIB (UTC+7).
+function localTodayStr(): string {
+  const now = new Date();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${m}-${d}`;
+}
+
 const statCards = [
   {
     key: "total_produk",
@@ -254,7 +264,7 @@ export default function DashboardPage() {
   const fetchData = useCallback(async () => {
     const sb = createClient();
     setLoading(true);
-    const today = new Date().toISOString().split("T")[0];
+    const today = localTodayStr();
 
     try {
       const [

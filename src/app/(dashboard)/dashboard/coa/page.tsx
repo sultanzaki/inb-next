@@ -79,11 +79,15 @@ function escapeOr(value: string): string {
 // same number and collide on the unique constraint.
 async function nextNoCOA(): Promise<string> {
   const year = new Date().getFullYear();
-  const { data } = await sb
+  const { data, error } = await sb
     .from("coa")
     .select("no_coa")
     .order("no_coa", { ascending: false })
     .limit(1);
+  // A failed max-lookup must not fall through to seq 0001: that would burn
+  // insert retries against the real max with a misleading "No COA sudah
+  // digunakan" toast — surface the real error to the caller's catch instead.
+  if (error) throw error;
   const last = (data as { no_coa: string }[] | null)?.[0]?.no_coa ?? "";
   const m = last.match(/(\d+)$/);
   const seq = (m ? parseInt(m[1], 10) : 0) + 1;
@@ -538,13 +542,24 @@ export default function COAPage() {
                         // Prefill from the server-side max, not the
                         // (search-filtered) client list length.
                         if (val && !form.no_coa) {
-                          nextNoCOA().then((no) => {
-                            setForm((prev) =>
-                              prev.id_hasil === val && !prev.no_coa
-                                ? { ...prev, no_coa: no }
-                                : prev
-                            );
-                          });
+                          nextNoCOA()
+                            .then((no) => {
+                              setForm((prev) =>
+                                prev.id_hasil === val && !prev.no_coa
+                                  ? { ...prev, no_coa: no }
+                                  : prev
+                              );
+                            })
+                            .catch((err) => {
+                              // Prefill is best-effort: leaving the field
+                              // empty is fine (save regenerates the number
+                              // from the server-side max). Warn only — no
+                              // toast-spam on a background prefill.
+                              console.warn(
+                                "Prefill No COA gagal:",
+                                err?.message || err
+                              );
+                            });
                         }
                       }}
                     >
