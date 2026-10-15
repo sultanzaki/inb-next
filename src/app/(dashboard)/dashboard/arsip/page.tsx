@@ -56,19 +56,24 @@ function localTodayStr(): string {
   return `${now.getFullYear()}-${m}-${d}`;
 }
 
-// Escape a raw search term for a PostgREST .or() ilike filter. Two escape
-// levels apply: PostgREST strips one backslash level inside double-quoted
-// values (" -> \" and \ -> \\), then Postgres LIKE consumes one more
-// (\ escapes % and _). The escaped term is placed inside double quotes in
-// the filter itself, because the PostgREST v12 grammar treats , and ) as
-// syntax only in bare values — a quoted value keeps them literal (a bare
-// value like "%a,b%" would truncate at the comma -> PGRST100 400).
+// Escape a raw search term for a PostgREST .or() ilike filter. The PostgREST
+// v12 quoted-value parser strips ONE backslash from EVERY "\X" pair
+// unconditionally, and Postgres LIKE then consumes one more level, so each
+// special character ships with two spare backslashes:
+//   \ -> \\\\  (parser: \\\\ -> \\ ; LIKE: \\ -> literal \)
+//   " -> \"    (parser: \" -> " ; keeps the quoted value intact)
+//   % -> \\\%  (parser: \\\% -> \% ; LIKE: \% -> literal %)
+//   _ -> \\_   (parser: \\_ -> \_ ; LIKE: \_ -> literal _)
+// The escaped term is placed inside double quotes in the filter itself: the
+// grammar treats , and ) as syntax only in bare values, while a quoted value
+// keeps them literal (a bare value like "%a,b%" would truncate at the comma
+// -> PGRST100 400).
 function escapeOr(value: string): string {
   return value
-    .replace(/\\/g, "\\\\")
+    .replace(/\\/g, "\\\\\\\\")
     .replace(/"/g, '\\"')
-    .replace(/%/g, "\\%")
-    .replace(/_/g, "\\_");
+    .replace(/%/g, "\\\\\\%")
+    .replace(/_/g, "\\\\_");
 }
 
 interface DocForm {

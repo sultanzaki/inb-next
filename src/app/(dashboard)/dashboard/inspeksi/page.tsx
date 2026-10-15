@@ -42,19 +42,24 @@ let specSeq = 0;
 // Edit(A) then Edit(B), or opening the new-form dialog, while A is in flight).
 let editSeq = 0;
 
-// Escape a raw search term for a PostgREST .or() ilike filter. Two escape
-// levels apply: PostgREST strips one backslash level inside double-quoted
-// values (" -> \" and \ -> \\), then Postgres LIKE consumes one more
-// (\ escapes % and _). The escaped term is placed inside double quotes in
-// the filter itself, because the PostgREST v12 grammar treats , and ) as
-// syntax only in bare values — a quoted value keeps them literal (a bare
-// value like "%a,b%" would truncate at the comma -> PGRST100 400).
+// Escape a raw search term for a PostgREST .or() ilike filter. The PostgREST
+// v12 quoted-value parser strips ONE backslash from EVERY "\X" pair
+// unconditionally, and Postgres LIKE then consumes one more level, so each
+// special character ships with two spare backslashes:
+//   \ -> \\\\  (parser: \\\\ -> \\ ; LIKE: \\ -> literal \)
+//   " -> \"    (parser: \" -> " ; keeps the quoted value intact)
+//   % -> \\\%  (parser: \\\% -> \% ; LIKE: \% -> literal %)
+//   _ -> \\_   (parser: \\_ -> \_ ; LIKE: \_ -> literal _)
+// The escaped term is placed inside double quotes in the filter itself: the
+// grammar treats , and ) as syntax only in bare values, while a quoted value
+// keeps them literal (a bare value like "%a,b%" would truncate at the comma
+// -> PGRST100 400).
 function escapeOr(value: string): string {
   return value
-    .replace(/\\/g, "\\\\")
+    .replace(/\\/g, "\\\\\\\\")
     .replace(/"/g, '\\"')
-    .replace(/%/g, "\\%")
-    .replace(/_/g, "\\_");
+    .replace(/%/g, "\\\\\\%")
+    .replace(/_/g, "\\\\_");
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -123,20 +128,11 @@ export default function InspeksiPage() {
   const [hasilValues, setHasilValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
-  // Ref mirror of editingId so the [form.id_produk] effect can decide whether
-  // to reset hasilValues without listing editingId in its dependencies.
-  const editingIdRef = useRef<string | null>(null);
-
   // Which product the current hasilValues belong to. Values are kept only
   // while the selected product is unchanged; any product switch wipes them,
   // because parameter names collide across products and stale values would
   // be saved under the wrong product's parameters.
   const valuesProductIdRef = useRef<string | null>(null);
-
-  function setEditing(id: string | null) {
-    editingIdRef.current = id;
-    setEditingId(id);
-  }
 
   const fetchData = useCallback(async () => {
     const seq = ++requestSeq;
@@ -233,12 +229,12 @@ export default function InspeksiPage() {
     setForm(emptyForm);
     setSpesifikasi([]);
     setHasilValues({});
-    setEditing(null);
+    setEditingId(null);
   }
 
   async function openEdit(item: any) {
     const seq = ++editSeq;
-    setEditing(item.id);
+    setEditingId(item.id);
     valuesProductIdRef.current = item.id_produk;
     setForm({
       id_produk: item.id_produk,
