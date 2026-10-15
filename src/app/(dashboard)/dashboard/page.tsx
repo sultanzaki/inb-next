@@ -277,13 +277,25 @@ export default function DashboardPage() {
   const [loadError, setLoadError] = useState(false);
   const [failedKeys, setFailedKeys] = useState<string[]>([]);
   const [greeting, setGreeting] = useState("");
+  const [todayLabel, setTodayLabel] = useState("");
 
   useEffect(() => {
-    const h = new Date().getHours();
+    const now = new Date();
+    const h = now.getHours();
     if (h < 12) setGreeting("Selamat Pagi");
     else if (h < 15) setGreeting("Selamat Siang");
     else if (h < 18) setGreeting("Selamat Sore");
     else setGreeting("Selamat Malam");
+    // Date label computed inside the effect: `new Date()` during render is an
+    // unstable value and fails Cache Components prerender validation.
+    setTodayLabel(
+      new Intl.DateTimeFormat("id-ID", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }).format(now)
+    );
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -426,14 +438,7 @@ export default function DashboardPage() {
           {greeting ? (
             <>
               <p className="text-sm font-medium">{greeting}</p>
-              <p className="mt-1 text-[13px] text-muted">
-                {new Intl.DateTimeFormat("id-ID", {
-                  weekday: "long",
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                }).format(new Date())}
-              </p>
+              <p className="mt-1 text-[13px] text-muted">{todayLabel}</p>
             </>
           ) : (
             <div
