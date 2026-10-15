@@ -86,22 +86,33 @@ export function Topbar() {
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-[58px] bg-surface border-b border-border z-10 flex items-center justify-between px-4 md:px-6">
-      {/* Left: logo + brand */}
-      <div className="flex items-center gap-3 min-w-0">
+    <header className="fixed top-0 left-0 right-0 z-10 flex h-[52px] items-center bg-surface border-b border-border px-4 md:px-6">
+      {/* Left: logo + stacked brand lockup */}
+      <div className="flex shrink-0 items-center gap-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/logo.png"
           alt="INBIONUSA"
-          width={28}
-          height={28}
+          width={24}
+          height={24}
           onError={hideLogo}
-          className="h-7 w-7 object-contain"
+          className="h-6 w-6 rounded-[4px] object-contain"
         />
-        <span className="text-primary font-bold text-base">INBIONUSA</span>
+        <div className="flex flex-col leading-none">
+          <span className="text-[15px] font-semibold tracking-tight text-primary">
+            INBIONUSA
+          </span>
+          <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+            QC System
+          </span>
+        </div>
       </div>
 
-      {/* Center: nav links (md+) */}
-      <nav className="hidden md:flex items-center gap-1">
+      {/* Center-left: nav links (md+) */}
+      <nav
+        aria-label="Navigasi utama"
+        className="ml-8 hidden h-full items-stretch gap-1 md:flex"
+      >
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive =
@@ -110,29 +121,36 @@ export function Topbar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+              aria-current={isActive ? "page" : undefined}
+              className={`relative flex h-full items-center gap-1.5 px-3 text-[13px] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/30 ${
                 isActive
-                  ? "bg-primary-soft text-primary-dark font-semibold"
-                  : "text-muted hover:text-text hover:bg-chip-bg"
+                  ? "font-medium text-primary"
+                  : "text-muted hover:text-foreground"
               }`}
             >
-              <Icon className="w-4 h-4" />
+              <Icon className="h-4 w-4" />
               {item.label}
+              {isActive && (
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-x-0 bottom-0 h-[2px] rounded-t bg-primary"
+                />
+              )}
             </Link>
           );
         })}
       </nav>
 
       {/* Right: hamburger (mobile) + avatar */}
-      <div className="flex items-center gap-2">
+      <div className="ml-auto flex items-center gap-2">
         <button
           type="button"
           onClick={() => setSheetOpen(true)}
           aria-label="Buka menu navigasi"
           aria-expanded={sheetOpen}
-          className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg text-muted hover:text-text hover:bg-chip-bg transition-colors cursor-pointer"
+          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-[6px] text-muted transition-colors duration-150 hover:bg-chip-bg hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 md:hidden"
         >
-          <Menu className="w-5 h-5" />
+          <Menu className="h-5 w-5" />
         </button>
 
         {/* Avatar with custom popover */}
@@ -140,7 +158,7 @@ export function Topbar() {
           <button
             ref={btnRef}
             onClick={() => setMenuOpen((v) => !v)}
-            className="flex items-center justify-center w-9 h-9 rounded-full bg-primary text-white text-sm font-bold select-none cursor-pointer hover:opacity-90 transition-opacity"
+            className="flex h-9 w-9 cursor-pointer select-none items-center justify-center rounded-full bg-primary text-sm font-bold text-white transition-opacity duration-150 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             aria-haspopup="true"
             aria-expanded={menuOpen}
           >
@@ -150,30 +168,30 @@ export function Topbar() {
           {menuOpen && (
             <div
               ref={menuRef}
-              className="menu-pop absolute right-0 top-full mt-2 w-56 rounded-xl bg-surface border border-border shadow-card py-2 z-20"
+              className="menu-pop absolute right-0 top-full mt-2 w-56 rounded-[8px] border border-border bg-surface py-2 z-20"
             >
               {/* User info */}
               <div className="px-4 py-2">
                 <p className="text-sm font-semibold text-text">
                   {user?.nama_lengkap}
                 </p>
-                <p className="text-xs text-muted mt-0.5 capitalize">
+                <p className="mt-0.5 text-xs capitalize text-muted">
                   {user?.role}
                 </p>
               </div>
 
-              <div className="h-px bg-border mx-2 my-1" />
+              <div className="mx-2 my-1 h-px bg-border" />
 
               {/* Logout */}
               <button
                 onClick={handleLogout}
                 disabled={loggingOut}
-                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-muted hover:text-text hover:bg-chip-bg transition-colors disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:text-muted disabled:hover:bg-transparent"
+                className="flex w-full items-center gap-2 px-4 py-2 text-sm text-muted transition-colors duration-150 hover:bg-chip-bg hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent disabled:hover:text-muted"
               >
                 {loggingOut ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <LogOut className="w-4 h-4" />
+                  <LogOut className="h-4 w-4" />
                 )}
                 Logout
               </button>
@@ -194,12 +212,12 @@ export function Topbar() {
                 width={24}
                 height={24}
                 onError={hideLogo}
-                className="h-6 w-6 object-contain"
+                className="h-6 w-6 rounded-[4px] object-contain"
               />
               INBIONUSA
             </SheetTitle>
           </SheetHeader>
-          <nav className="flex flex-col gap-1 px-3 -mt-2">
+          <nav aria-label="Navigasi utama" className="-mt-2 flex flex-col gap-1 px-3">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive =
@@ -209,13 +227,14 @@ export function Topbar() {
                   key={item.href}
                   href={item.href}
                   onClick={() => setSheetOpen(false)}
-                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                  aria-current={isActive ? "page" : undefined}
+                  className={`flex min-h-[48px] items-center gap-2.5 rounded-[6px] px-3 text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/30 ${
                     isActive
-                      ? "bg-primary-soft text-primary-dark font-semibold"
-                      : "text-muted hover:text-text hover:bg-chip-bg"
+                      ? "bg-primary-soft font-semibold text-primary-dark"
+                      : "text-muted hover:bg-chip-bg hover:text-foreground"
                   }`}
                 >
-                  <Icon className="w-4 h-4" />
+                  <Icon className="h-4 w-4" />
                   {item.label}
                 </Link>
               );
