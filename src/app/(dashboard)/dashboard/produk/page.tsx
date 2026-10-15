@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
@@ -32,6 +32,26 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { TableSkeleton } from "@/components/table-skeleton";
+import { escapeOrTerm } from "@/lib/filter-utils";
+
+// Module-level browser client: a single instance instead of one per render.
+const sb = createClient();
+
+// Monotonic counter used to ignore stale list-fetch responses.
+let requestSeq = 0;
+
+function friendlyDbError(
+  err: { message?: string; code?: string } | null | undefined
+): string {
+  const msg: string = err?.message ?? "";
+  const code: string = err?.code ?? "";
+  if (code === "23503" || /foreign key/i.test(msg))
+    return "Gagal menghapus: produk masih dipakai oleh data lain.";
+  if (code === "42501" || /row-level security|permission denied/i.test(msg))
+    return "Gagal menghapus: Anda tidak memiliki izin untuk aksi ini.";
+  return "Gagal menghapus produk. Coba lagi.";
+}
 
 const kategoriList = [
   "Bahan Baku",
@@ -85,11 +105,14 @@ function statusHalalBadge(val: string) {
 
 export default function ProdukPage() {
   const { user } = useUser();
-  const sb = createClient();
 
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [produkList, setProdukList] = useState<MasterProduk[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ProdukForm>(emptyForm);
@@ -97,21 +120,46 @@ export default function ProdukPage() {
   const [saving, setSaving] = useState(false);
 
   const fetchData = useCallback(async () => {
+    const seq = ++requestSeq;
     setLoading(true);
     let q = sb.from("master_produk").select("*").order("nama_produk");
     if (search) {
+      // Quoted values (via escapeOrTerm): commas/parens stay literal and the
+      // escaped %/_ reach Postgres LIKE as literals, not wildcards.
+      const term = escapeOrTerm(search);
       q = q.or(
-        `nama_produk.ilike.%${search}%,kode_produk.ilike.%${search}%`
+        `nama_produk.ilike."%${term}%",kode_produk.ilike."%${term}%"`
       );
     }
-    const { data } = await q;
-    setProdukList((data as MasterProduk[]) ?? []);
+    const { data, error } = await q;
+    if (seq !== requestSeq) return; // superseded by a newer request
+    if (error) {
+      setLoadError(true);
+      setProdukList([]);
+      toast.error("Gagal memuat data. Coba lagi.");
+    } else {
+      setLoadError(false);
+      setProdukList((data as MasterProduk[]) ?? []);
+    }
     setLoading(false);
   }, [search]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Clear the pending debounce timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, []);
+
+  function onSearchChange(value: string) {
+    setSearchInput(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setSearch(value), 300);
+  }
 
   function resetForm() {
     setForm(emptyForm);
@@ -120,6 +168,18 @@ export default function ProdukPage() {
   }
 
   async function openEdit(produk: MasterProduk) {
+    // Load spesifikasi first: if it fails, don't open the edit dialog at all
+    // (saving from a dialog with an empty spec list would wipe real rows).
+    const { data: sp, error: spErr } = await sb
+      .from("spesifikasi")
+      .select("*")
+      .eq("id_produk", produk.id)
+      .order("urutan");
+    if (spErr) {
+      toast.error("Gagal memuat data. Coba lagi.");
+      return;
+    }
+
     setForm({
       kode_produk: produk.kode_produk,
       nama_produk: produk.nama_produk,
@@ -130,11 +190,6 @@ export default function ProdukPage() {
     });
     setEditingId(produk.id);
 
-    const { data: sp } = await sb
-      .from("spesifikasi")
-      .select("*")
-      .eq("id_produk", produk.id)
-      .order("urutan");
     setSpesifikasi(
       (sp ?? []).map((s: any) => ({
         parameter_uji: s.parameter_uji,
@@ -196,8 +251,20 @@ export default function ProdukPage() {
           .eq("id", editingId);
         if (e1) throw e1;
 
-        // delete old spesifikasi, re-insert
-        await sb.from("spesifikasi").delete().eq("id_produk", editingId);
+        // Reversible spec save: snapshot the existing rows BEFORE deleting, so
+        // a failed insert can restore the old set instead of losing it forever.
+        const { data: oldSpecs, error: snapErr } = await sb
+          .from("spesifikasi")
+          .select("*")
+          .eq("id_produk", editingId);
+        if (snapErr) throw snapErr;
+
+        const { error: delErr } = await sb
+          .from("spesifikasi")
+          .delete()
+          .eq("id_produk", editingId);
+        if (delErr) throw delErr;
+
         if (spesifikasi.length > 0) {
           const { error: e2 } = await sb.from("spesifikasi").insert(
             spesifikasi.map((s, i) => ({
@@ -206,7 +273,22 @@ export default function ProdukPage() {
               urutan: i,
             }))
           );
-          if (e2) throw e2;
+          if (e2) {
+            // Rollback: restore the snapshot rows (best effort).
+            const snap = oldSpecs ?? [];
+            if (snap.length > 0) {
+              const { error: rbErr } = await sb
+                .from("spesifikasi")
+                .insert(snap);
+              if (rbErr) {
+                console.error("Gagal memulihkan spesifikasi lama:", rbErr);
+              }
+            }
+            toast.error(
+              "Gagal menyimpan spesifikasi. Spesifikasi lama telah dipulihkan."
+            );
+            return;
+          }
         }
         toast.success("Produk berhasil diperbarui.");
       } else {
@@ -250,13 +332,31 @@ export default function ProdukPage() {
   async function handleDelete(id: string) {
     if (!confirm("Hapus produk ini? Semua spesifikasi juga akan dihapus.")) return;
 
+    // Pre-check COA references: deleting the product would leave orphan COA
+    // rows that vanish from the COA list while the dashboard still counts them.
+    const { count: coaCount, error: coaErr } = await sb
+      .from("coa")
+      .select("id", { count: "exact", head: true })
+      .eq("id_produk", id);
+    if (coaErr) {
+      toast.error("Gagal memuat data. Coba lagi.");
+      return;
+    }
+    if ((coaCount ?? 0) > 0) {
+      toast.error("Produk masih punya COA. Hapus COA-nya dulu.");
+      return;
+    }
+
     // Check no hasil_uji references this product
-    const { data: existingUji } = await sb
+    const { data: existingUji, error: ujiErr } = await sb
       .from("hasil_uji")
       .select("id")
       .eq("id_produk", id)
       .limit(1);
-
+    if (ujiErr) {
+      toast.error("Gagal memuat data. Coba lagi.");
+      return;
+    }
     if (existingUji && existingUji.length > 0) {
       toast.error("Produk tidak dapat dihapus karena masih memiliki hasil uji.");
       return;
@@ -264,7 +364,7 @@ export default function ProdukPage() {
 
     const { error } = await sb.from("master_produk").delete().eq("id", id);
     if (error) {
-      toast.error(error.message);
+      toast.error(friendlyDbError(error));
     } else {
       toast.success("Produk dihapus.");
       fetchData();
@@ -462,8 +562,8 @@ export default function ProdukPage() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted pointer-events-none" />
         <Input
           placeholder="Cari produk…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => onSearchChange(e.target.value)}
           className="pl-9"
         />
       </div>
@@ -482,14 +582,24 @@ export default function ProdukPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading && (
+            {loading && <TableSkeleton rows={5} cols={6} />}
+            {!loading && loadError && (
               <TableRow>
-                <TableCell colSpan={6} className="px-4 py-8 text-center text-muted">
-                  Memuat…
+                <TableCell colSpan={6} className="px-4 py-8">
+                  <div className="flex items-center justify-center gap-3 text-muted">
+                    Gagal memuat data.
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fetchData()}
+                    >
+                      Coba Lagi
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             )}
-            {!loading && produkList.length === 0 && (
+            {!loading && !loadError && produkList.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="px-4 py-8 text-center text-muted">
                   Tidak ada produk.
