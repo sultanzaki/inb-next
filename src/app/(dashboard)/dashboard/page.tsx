@@ -133,7 +133,10 @@ function DonutChart({
             stroke="var(--color-border)"
             strokeWidth="10"
           />
-          {passRate > 0 && (
+          {/* Arcs render only when BOTH lot_pass and lot_fail succeeded:
+              on a partial failure the surviving side would otherwise fill
+              the whole ring at a fake 100% (leave the neutral ring only). */}
+          {!failed && passRate > 0 && (
             <circle
               cx="50"
               cy="50"
@@ -147,7 +150,7 @@ function DonutChart({
               className="transition-all duration-700 ease-out"
             />
           )}
-          {failRate > 0 && (
+          {!failed && failRate > 0 && (
             <circle
               cx="50"
               cy="50"
@@ -390,7 +393,7 @@ export default function DashboardPage() {
           <h1 className="text-xl font-bold">{greeting}</h1>
         ) : (
           <div
-            className="h-8 w-48 rounded-md bg-muted/50 animate-pulse"
+            className="h-7 w-48 rounded-md bg-muted/50 animate-pulse"
             aria-hidden="true"
           />
         )}
