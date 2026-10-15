@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
@@ -26,6 +26,8 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+import { TableSkeleton } from "@/components/table-skeleton";
+import { escapeHtml } from "@/lib/format";
 
 interface COAForm {
   id_hasil: string;
@@ -45,10 +47,41 @@ const emptyForm: COAForm = {
   tanda_tangan: "Terverifikasi Digital",
 };
 
-function generateNoCOA(prevCount: number): string {
+// Module-level browser client: a single instance instead of one per render.
+const sb = createClient();
+
+// Monotonic counter used to ignore stale list-fetch responses.
+let requestSeq = 0;
+
+// Two escaping levels apply: PostgREST strips one backslash level inside
+// double-quoted values (" -> \" and \ -> \\), then Postgres LIKE consumes one
+// more (\ escapes % and _). The escaped term is placed inside double quotes
+// in the filter itself, because the PostgREST v12 grammar treats , and ) as
+// syntax only in bare values — a quoted value keeps them literal (a bare
+// value like "%a,b%" would truncate at the comma -> PGRST100 400).
+function escapeOr(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/%/g, "\\%")
+    .replace(/_/g, "\\_");
+}
+
+// Next COA number derived from SERVER data, not the client list: the rendered
+// list is search-filtered, so its length says nothing about the real
+// sequence, and two concurrent issuers counting client-side would pick the
+// same number and collide on the unique constraint.
+async function nextNoCOA(): Promise<string> {
   const year = new Date().getFullYear();
-  const seq = (prevCount + 1).toString().padStart(4, "0");
-  return `COA/IBN/${year}/${seq}`;
+  const { data } = await sb
+    .from("coa")
+    .select("no_coa")
+    .order("no_coa", { ascending: false })
+    .limit(1);
+  const last = (data as { no_coa: string }[] | null)?.[0]?.no_coa ?? "";
+  const m = last.match(/(\d+)$/);
+  const seq = (m ? parseInt(m[1], 10) : 0) + 1;
+  return `COA/IBN/${year}/${seq.toString().padStart(4, "0")}`;
 }
 
 async function logAudit(
@@ -71,12 +104,15 @@ async function logAudit(
 
 export default function COAPage() {
   const { user } = useUser();
-  const sb = createClient();
 
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [coaList, setCoaList] = useState<any[]>([]);
   const [availableHasil, setAvailableHasil] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailItem, setDetailItem] = useState<any>(null);
@@ -85,18 +121,30 @@ export default function COAPage() {
   const [saving, setSaving] = useState(false);
 
   const fetchData = useCallback(async () => {
+    const seq = ++requestSeq;
     setLoading(true);
     let q = sb
       .from("coa")
       .select("*, master_produk!inner(kode_produk, nama_produk)")
       .order("created_at", { ascending: false });
     if (search) {
+      // Quoted values (via escapeOr): commas/parens stay literal and the
+      // escaped %/_ reach Postgres LIKE as literals, not wildcards.
+      const term = escapeOr(search);
       q = q.or(
-        `no_coa.ilike.%${search}%,master_produk.nama_produk.ilike.%${search}%`
+        `no_coa.ilike."%${term}%",master_produk.nama_produk.ilike."%${term}%"`
       );
     }
-    const { data } = await q;
-    setCoaList((data as any[]) ?? []);
+    const { data: raw, error } = await q;
+    if (seq !== requestSeq) return; // superseded by a newer request
+    if (error) {
+      setCoaList([]);
+      setLoadError(true);
+      toast.error("Gagal memuat data. Coba lagi.");
+    } else {
+      setLoadError(false);
+      setCoaList((raw as any[]) ?? []);
+    }
     setLoading(false);
   }, [search]);
 
@@ -124,6 +172,19 @@ export default function COAPage() {
     fetchAvailableHasil();
   }, [fetchData, fetchAvailableHasil]);
 
+  // Clear the pending debounce timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, []);
+
+  function onSearchChange(value: string) {
+    setSearchInput(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setSearch(value), 300);
+  }
+
   function resetForm() {
     setForm(emptyForm);
     setEditingId(null);
@@ -136,7 +197,7 @@ export default function COAPage() {
       tanggal_rilis: coa.tanggal_rilis,
       tanggal_expired: coa.tanggal_expired,
       mfg_date: coa.mfg_date ?? "",
-      tanda_tangan: coa.tanda_tangan_digital,
+      tanda_tangan: coa.tanda_tangan_digital ?? "",
     });
     setEditingId(coa.id);
     setDialogOpen(true);
@@ -150,7 +211,6 @@ export default function COAPage() {
       }
       setSaving(true);
       try {
-        const before = coaList.find((c: any) => c.id === editingId);
         const { error } = await sb
           .from("coa")
           .update({
@@ -164,7 +224,7 @@ export default function COAPage() {
         if (error) throw error;
 
         toast.success("COA diperbarui.");
-        logAudit(sb, user?.nama_lengkap || user?.username || "system", `update_coa: ${form.no_coa}`, editingId);
+        await logAudit(sb, user?.nama_lengkap || user?.username || "system", `update_coa: ${form.no_coa}`, editingId);
 
         setDialogOpen(false);
         resetForm();
@@ -190,9 +250,6 @@ export default function COAPage() {
       );
       if (!selected) throw new Error("Hasil uji tidak ditemukan.");
 
-      // Auto-generate COA number if empty
-      const no_coa = form.no_coa || generateNoCOA(coaList.length);
-
       const snapshot = {
         produk: selected.master_produk?.nama_produk || "",
         ts: selected.tgl_sampling,
@@ -200,27 +257,46 @@ export default function COAPage() {
         items: selected.hasil_detail ?? [],
       };
 
-      const { error } = await sb.from("coa").insert({
-        no_coa,
-        id_produk: selected.id_produk,
-        no_lot: selected.no_lot,
-        tanggal_rilis: form.tanggal_rilis,
-        tanggal_expired: form.tanggal_expired,
-        hasil_uji_snapshot: snapshot,
-        tanda_tangan_digital: form.tanda_tangan,
-        mfg_date: form.mfg_date,
-      });
-      if (error) throw error;
+      // Collision-safe numbering: the number comes from the server-side max
+      // (not the search-filtered client list), and a 23505 unique violation —
+      // a concurrent issuer won the race for that number — is retried with a
+      // freshly generated one. A user-typed number is never regenerated: its
+      // collision is a duplicate of the user's own choosing, so it surfaces
+      // as an error instead.
+      const userNo = form.no_coa;
+      let no_coa = userNo || (await nextNoCOA());
+      for (let attempt = 1; ; attempt++) {
+        const { error } = await sb.from("coa").insert({
+          no_coa,
+          id_produk: selected.id_produk,
+          no_lot: selected.no_lot,
+          tanggal_rilis: form.tanggal_rilis,
+          tanggal_expired: form.tanggal_expired,
+          hasil_uji_snapshot: snapshot,
+          tanda_tangan_digital: form.tanda_tangan,
+          mfg_date: form.mfg_date,
+        });
+        if (!error) break;
+        if (error.code === "23505" && !userNo && attempt < 3) {
+          no_coa = await nextNoCOA();
+          continue;
+        }
+        throw error;
+      }
 
       toast.success("COA berhasil diterbitkan.");
-      logAudit(sb, user?.nama_lengkap || user?.username || "system", `terbit_coa: ${no_coa}`, `hasil_uji:${selected.id}`);
+      await logAudit(sb, user?.nama_lengkap || user?.username || "system", `terbit_coa: ${no_coa}`, `hasil_uji:${selected.id}`);
 
       setDialogOpen(false);
       resetForm();
       fetchData();
       fetchAvailableHasil();
     } catch (err: any) {
-      toast.error(err.message || "Gagal menerbitkan COA.");
+      toast.error(
+        err?.code === "23505"
+          ? "No COA sudah digunakan. Gunakan nomor lain."
+          : err.message || "Gagal menerbitkan COA."
+      );
     } finally {
       setSaving(false);
     }
@@ -234,7 +310,7 @@ export default function COAPage() {
       toast.error(error.message);
     } else {
       toast.success("COA dihapus.");
-      logAudit(sb, user?.nama_lengkap || user?.username || "system", `delete_coa: ${target?.no_coa || id}`, id);
+      await logAudit(sb, user?.nama_lengkap || user?.username || "system", `delete_coa: ${target?.no_coa || id}`, id);
       fetchData();
       fetchAvailableHasil();
     }
@@ -245,7 +321,7 @@ export default function COAPage() {
     const items = snapshot.items || [];
     const w = window.open("", "_blank");
     if (!w) return;
-    w.document.write(`<html><head><title>COA - ${coa.no_coa}</title>
+    w.document.write(`<html><head><title>COA - ${escapeHtml(coa.no_coa)}</title>
 <style>
   @page { margin: 12mm 15mm; }
   * { box-sizing: border-box; }
@@ -350,14 +426,14 @@ export default function COAPage() {
   <div class="coa-title">Certificate of Analysis</div>
   <hr class="coa-rule" />
   <div class="coa-meta">
-    <div><strong>Nomor COA:</strong> ${coa.no_coa}</div>
-    <div><strong>Tanggal Rilis:</strong> ${coa.tanggal_rilis}</div>
-    <div><strong>Nama Produk:</strong> ${coa.master_produk?.nama_produk || ""}</div>
-    <div><strong>Tanggal Expired:</strong> ${coa.tanggal_expired}</div>
-    <div><strong>Nomor Lot:</strong> ${coa.no_lot}</div>
-    <div><strong>MFG Date:</strong> ${coa.mfg_date || "-"}</div>
-    <div><strong>Tanggal Sampling:</strong> ${snapshot.ts || "-"}</div>
-    <div><strong>Tanggal Uji:</strong> ${snapshot.tu || "-"}</div>
+    <div><strong>Nomor COA:</strong> ${escapeHtml(coa.no_coa)}</div>
+    <div><strong>Tanggal Rilis:</strong> ${escapeHtml(coa.tanggal_rilis)}</div>
+    <div><strong>Nama Produk:</strong> ${escapeHtml(coa.master_produk?.nama_produk || "")}</div>
+    <div><strong>Tanggal Expired:</strong> ${escapeHtml(coa.tanggal_expired)}</div>
+    <div><strong>Nomor Lot:</strong> ${escapeHtml(coa.no_lot)}</div>
+    <div><strong>MFG Date:</strong> ${escapeHtml(coa.mfg_date || "-")}</div>
+    <div><strong>Tanggal Sampling:</strong> ${escapeHtml(snapshot.ts || "-")}</div>
+    <div><strong>Tanggal Uji:</strong> ${escapeHtml(snapshot.tu || "-")}</div>
   </div>
   <table class="coa-tbl">
     <thead>
@@ -371,7 +447,7 @@ export default function COAPage() {
     <tbody>
       ${items.map((item: any) => {
         const specText = item.t === "TEXT" ? "Teks" : item.t === "MIN" ? "> " + item.mn : item.t === "MAX" ? "< " + item.mx : (item.mn || "-") + " — " + (item.mx || "-");
-        return `<tr><td>${item.p}</td><td>${specText}</td><td>${item.val || "-"}</td><td>${item.st === "PASS" ? "✓ PASS" : "✗ FAIL"}</td></tr>`;
+        return `<tr><td>${escapeHtml(item.p)}</td><td>${escapeHtml(specText)}</td><td>${escapeHtml(item.val || "-")}</td><td>${item.st === "PASS" ? "✓ PASS" : "✗ FAIL"}</td></tr>`;
       }).join("")}
     </tbody>
   </table>
@@ -383,7 +459,7 @@ export default function COAPage() {
     </div>
     <div class="ttd">
       <strong>Tanda Tangan Digital</strong><br/>
-      ${coa.tanda_tangan_digital || "Terverifikasi Digital"}
+      ${escapeHtml(coa.tanda_tangan_digital || "Terverifikasi Digital")}
     </div>
   </div>
 </div>
@@ -400,6 +476,10 @@ export default function COAPage() {
   const role: UserRole = (user?.role as UserRole) ?? "viewer";
   const canDelete = canAction(role, "delete_coa");
   const canIssue = canAction(role, "issue_coa");
+  const canEdit = canAction(role, "update_coa");
+  // The dialog exists in the tree for every role (so Edit never dead-ends);
+  // without a write role every input in it renders disabled (read-only mode).
+  const canWrite = canIssue || canEdit;
 
   // Determine selected hasil details for the preview
   const selectedHasil = availableHasil.find(
@@ -416,15 +496,16 @@ export default function COAPage() {
             Terbitkan dan kelola COA produk.
           </p>
         </div>
-        {canIssue && (
-          <Dialog
-            open={dialogOpen}
-            onOpenChange={(v) => {
-              setDialogOpen(v);
-              if (!v) resetForm();
-            }}
-          >
+        <Dialog
+          open={dialogOpen}
+          onOpenChange={(v) => {
+            setDialogOpen(v);
+            if (!v) resetForm();
+          }}
+        >
+          {canIssue && (
             <DialogTrigger render={<Button><Plus className="size-4" /> Terbitkan COA</Button>} />
+          )}
             <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
@@ -441,16 +522,23 @@ export default function COAPage() {
                     <select
                       className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                       value={form.id_hasil}
+                      disabled={!canWrite}
                       onChange={(e) => {
                         const val = e.target.value;
-                        setForm({ ...form, id_hasil: val });
-                        // Auto-generate COA number when a hasil is selected
+                        // One functional update; the async prefill below is
+                        // guarded so a stale resolution never overwrites a
+                        // newer selection or a manually typed number.
+                        setForm((prev) => ({ ...prev, id_hasil: val }));
+                        // Prefill from the server-side max, not the
+                        // (search-filtered) client list length.
                         if (val && !form.no_coa) {
-                          setForm((prev) => ({
-                            ...prev,
-                            id_hasil: val,
-                            no_coa: generateNoCOA(coaList.length),
-                          }));
+                          nextNoCOA().then((no) => {
+                            setForm((prev) =>
+                              prev.id_hasil === val && !prev.no_coa
+                                ? { ...prev, no_coa: no }
+                                : prev
+                            );
+                          });
                         }
                       }}
                     >
@@ -475,8 +563,9 @@ export default function COAPage() {
                     <label className="text-xs font-medium">No COA</label>
                     <Input
                       value={form.no_coa}
+                      disabled={!canWrite}
                       onChange={(e) =>
-                        setForm({ ...form, no_coa: e.target.value })
+                        setForm((prev) => ({ ...prev, no_coa: e.target.value }))
                       }
                       placeholder="Otomatis jika dikosongkan"
                     />
@@ -486,8 +575,9 @@ export default function COAPage() {
                     <Input
                       type="date"
                       value={form.tanggal_rilis}
+                      disabled={!canWrite}
                       onChange={(e) =>
-                        setForm({ ...form, tanggal_rilis: e.target.value })
+                        setForm((prev) => ({ ...prev, tanggal_rilis: e.target.value }))
                       }
                     />
                   </div>
@@ -496,8 +586,9 @@ export default function COAPage() {
                     <Input
                       type="date"
                       value={form.tanggal_expired}
+                      disabled={!canWrite}
                       onChange={(e) =>
-                        setForm({ ...form, tanggal_expired: e.target.value })
+                        setForm((prev) => ({ ...prev, tanggal_expired: e.target.value }))
                       }
                     />
                   </div>
@@ -506,8 +597,9 @@ export default function COAPage() {
                     <Input
                       type="date"
                       value={form.mfg_date}
+                      disabled={!canWrite}
                       onChange={(e) =>
-                        setForm({ ...form, mfg_date: e.target.value })
+                        setForm((prev) => ({ ...prev, mfg_date: e.target.value }))
                       }
                     />
                   </div>
@@ -517,8 +609,9 @@ export default function COAPage() {
                   <label className="text-xs font-medium">Tanda Tangan Digital</label>
                   <Input
                     value={form.tanda_tangan}
+                    disabled={!canWrite}
                     onChange={(e) =>
-                      setForm({ ...form, tanda_tangan: e.target.value })
+                      setForm((prev) => ({ ...prev, tanda_tangan: e.target.value }))
                     }
                     placeholder="Terverifikasi Digital"
                   />
@@ -557,17 +650,18 @@ export default function COAPage() {
 
               <DialogFooter>
                 <DialogClose render={<Button variant="outline">Batal</Button>} />
-                <Button onClick={handleSave} disabled={saving}>
-                  {saving
-                    ? "Menyimpan…"
-                    : editingId
-                    ? "Simpan"
-                    : "Terbitkan"}
-                </Button>
+                {canWrite && (
+                  <Button onClick={handleSave} disabled={saving}>
+                    {saving
+                      ? "Menyimpan…"
+                      : editingId
+                      ? "Simpan"
+                      : "Terbitkan"}
+                  </Button>
+                )}
               </DialogFooter>
             </DialogContent>
-          </Dialog>
-        )}
+        </Dialog>
       </div>
 
       {/* Search */}
@@ -575,8 +669,8 @@ export default function COAPage() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted pointer-events-none" />
         <Input
           placeholder="Cari COA atau produk…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => onSearchChange(e.target.value)}
           className="pl-9"
         />
       </div>
@@ -595,14 +689,24 @@ export default function COAPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading && (
+            {loading && <TableSkeleton rows={5} cols={6} />}
+            {!loading && loadError && (
               <TableRow>
-                <TableCell colSpan={6} className="px-4 py-8 text-center text-muted">
-                  Memuat…
+                <TableCell colSpan={6} className="px-4 py-8">
+                  <div className="flex items-center justify-center gap-3 text-muted">
+                    Gagal memuat data.
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fetchData()}
+                    >
+                      Coba Lagi
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             )}
-            {!loading && coaList.length === 0 && (
+            {!loading && !loadError && coaList.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="px-4 py-8 text-center text-muted">
                   Belum ada COA.
@@ -636,13 +740,15 @@ export default function COAPage() {
                     >
                       <Eye className="size-3.5" />
                     </button>
-                    <button
-                      className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
-                      onClick={() => openEdit(coa)}
-                      title="Edit"
-                    >
-                      <Pencil className="size-3.5" />
-                    </button>
+                    {canEdit && (
+                      <button
+                        className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
+                        onClick={() => openEdit(coa)}
+                        title="Edit"
+                      >
+                        <Pencil className="size-3.5" />
+                      </button>
+                    )}
                     <button
                       className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
                       onClick={() => handlePrint(coa)}
