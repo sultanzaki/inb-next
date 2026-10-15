@@ -1,11 +1,17 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
-import type { UserRole } from "@/lib/types";
+import type { CoaRow, COA, HasilUjiItem, HasilUjiRow, UserRole } from "@/lib/types";
 import { toast } from "sonner";
+import {
+  issueCoaAction,
+  updateCoaAction,
+  deleteCoaAction,
+  getNextNoCOAAction,
+} from "@/lib/actions/coa-actions";
 import { Search, Plus, Pencil, Trash2, Printer, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +32,8 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+import { TableSkeleton } from "@/components/table-skeleton";
+import { escapeHtml } from "@/lib/format";
 
 interface COAForm {
   id_hasil: string;
@@ -45,76 +53,155 @@ const emptyForm: COAForm = {
   tanda_tangan: "Terverifikasi Digital",
 };
 
-function generateNoCOA(prevCount: number): string {
-  const year = new Date().getFullYear();
-  const seq = (prevCount + 1).toString().padStart(4, "0");
-  return `COA/IBN/${year}/${seq}`;
-}
+// Module-level browser client: a single instance instead of one per render.
+const sb = createClient();
 
-async function logAudit(
-  sb: ReturnType<typeof createClient>,
-  user_name: string,
-  aksi: string,
-  referensi: string
-) {
-  try {
-    await sb.from("audit_log").insert({
-      waktu: new Date().toISOString(),
-      user_name,
-      aksi,
-      referensi,
-    });
-  } catch {
-    // silent — audit failure should not block the user
-  }
+// Monotonic counter used to ignore stale list-fetch responses.
+let requestSeq = 0;
+
+// Escape a raw search term for a PostgREST .or() ilike filter. The PostgREST
+// v12 quoted-value parser strips ONE backslash from EVERY "\X" pair
+// unconditionally, and Postgres LIKE then consumes one more level, so each
+// special character ships with two spare backslashes:
+//   \ -> \\\\  (parser: \\\\ -> \\ ; LIKE: \\ -> literal \)
+//   " -> \"    (parser: \" -> " ; keeps the quoted value intact)
+//   % -> \\\%  (parser: \\\% -> \% ; LIKE: \% -> literal %)
+//   _ -> \\_   (parser: \\_ -> \_ ; LIKE: \_ -> literal _)
+// The escaped term is placed inside double quotes in the filter itself: the
+// grammar treats , and ) as syntax only in bare values, while a quoted value
+// keeps them literal (a bare value like "%a,b%" would truncate at the comma
+// -> PGRST100 400).
+function escapeOr(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/%/g, "\\\\\\%")
+    .replace(/_/g, "\\\\_");
 }
 
 export default function COAPage() {
   const { user } = useUser();
-  const sb = createClient();
 
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [coaList, setCoaList] = useState<any[]>([]);
-  const [availableHasil, setAvailableHasil] = useState<any[]>([]);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [coaList, setCoaList] = useState<CoaRow[]>([]);
+  const [availableHasil, setAvailableHasil] = useState<HasilUjiRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [detailItem, setDetailItem] = useState<any>(null);
+  const [detailItem, setDetailItem] = useState<CoaRow | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<COAForm>(emptyForm);
   const [saving, setSaving] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    let q = sb
-      .from("coa")
-      .select("*, master_produk!inner(kode_produk, nama_produk)")
-      .order("created_at", { ascending: false });
-    if (search) {
-      q = q.or(
-        `no_coa.ilike.%${search}%,master_produk.nama_produk.ilike.%${search}%`
-      );
-    }
-    const { data } = await q;
-    setCoaList((data as any[]) ?? []);
-    setLoading(false);
-  }, [search]);
+  // Pagination: list queries are bounded with .range(); count:"exact" returns
+  // the filtered row total (ignoring the range window) in the same request, so
+  // "Muat lagi" knows how many rows are left without a second query.
+  const [pageSize] = useState(50);
+  const [offset, setOffset] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Bounded query runner shared by the fresh fetch and load-more.
+  // append=false swaps the accumulated list (mount, search, retry, after a
+  // mutation); append=true fetches the page starting at `start` and appends.
+  const runQuery = useCallback(
+    async (start: number, append: boolean) => {
+      const seq = ++requestSeq;
+      if (append) setLoadingMore(true);
+      else setLoading(true);
+      let q = sb
+        .from("coa")
+        .select("*, master_produk!inner(kode_produk, nama_produk)", {
+          count: "exact",
+        })
+        .order("created_at", { ascending: false })
+        .range(start, start + pageSize - 1);
+      if (search) {
+        // Quoted values (via escapeOr): commas/parens stay literal and the
+        // escaped %/_ reach Postgres LIKE as literals, not wildcards.
+        const term = escapeOr(search);
+        q = q.or(
+          `no_coa.ilike."%${term}%",master_produk.nama_produk.ilike."%${term}%"`
+        );
+      }
+      const { data: raw, count, error } = await q;
+      if (seq !== requestSeq) {
+        // Superseded by a newer request: release the loading flag this
+        // request owned (the newer one manages its own).
+        if (append) setLoadingMore(false);
+        return;
+      }
+      if (error) {
+        // A failed load-more keeps the accumulated rows and leaves the offset
+        // unchanged, so retrying "Muat lagi" re-requests the same page.
+        if (!append) {
+          setLoadError(true);
+          setCoaList([]);
+          setTotalCount(0);
+        }
+        toast.error("Gagal memuat data. Coba lagi.");
+      } else {
+        const rows = (raw as CoaRow[]) ?? [];
+        setLoadError(false);
+        setCoaList((prev) => (append ? [...prev, ...rows] : rows));
+        setTotalCount(count ?? 0);
+        if (append) setOffset(start + rows.length);
+      }
+      if (append) setLoadingMore(false);
+      else setLoading(false);
+    },
+    [search, pageSize]
+  );
+
+  // Fresh fetch: page 0 replaces any accumulated rows and resets the offset
+  // (also fires when the debounced search changes).
+  const fetchData = useCallback(() => {
+    setOffset(0);
+    return runQuery(0, false);
+  }, [runQuery]);
+
+  // Load-more: append the next page to the accumulated rows.
+  const loadMore = useCallback(() => {
+    return runQuery(offset, true);
+  }, [runQuery, offset]);
 
   const fetchAvailableHasil = useCallback(async () => {
-    // Get all hasil_uji with PASS status that don't have COA yet
-    const { data: coaIds } = await sb.from("coa").select("id_produk, no_lot");
+    // Get PASS hasil_uji rows that don't have a COA yet. Both queries select
+    // only the columns the diff/option list actually needs (id_produk, no_lot
+    // for the dedupe keys; id, hasil_detail + the joined product name for the
+    // picker/preview) and are capped at .limit(500). That cap is safe because
+    // COA issuance is manual and low-volume: the set of ever-issued COAs — and
+    // the PASS rows a new COA can be issued from — stays far below 500 in
+    // practice; the limit only guarantees these queries can never degrade
+    // into unbounded full-table fetches.
+    const { data: coaIds } = await sb
+      .from("coa")
+      .select("id_produk, no_lot")
+      .limit(500);
+    const coaKeys = (coaIds ?? []) as Pick<COA, "id_produk" | "no_lot">[];
     const existing = new Set(
-      (coaIds ?? []).map((c: any) => `${c.id_produk}::${c.no_lot}`)
+      coaKeys.map((c) => `${c.id_produk}::${c.no_lot}`)
     );
 
     const { data: hasil } = await sb
       .from("hasil_uji")
-      .select("*, master_produk!inner(kode_produk, nama_produk)")
+      .select(
+        "id, no_lot, id_produk, hasil_detail, master_produk!inner(kode_produk, nama_produk)"
+      )
       .eq("status", "PASS")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(500);
 
-    const filtered = (hasil ?? []).filter(
-      (h: any) => !existing.has(`${h.id_produk}::${h.no_lot}`)
+    // Untyped client: PostgREST returns the !inner embed as a single object,
+    // but supabase-js's default (schema-less) select parsing assumes an
+    // array, hence the double cast.
+    const hasilRows = (hasil ?? []) as unknown as HasilUjiRow[];
+    const filtered = hasilRows.filter(
+      (h) => !existing.has(`${h.id_produk}::${h.no_lot}`)
     );
     setAvailableHasil(filtered);
   }, []);
@@ -124,19 +211,32 @@ export default function COAPage() {
     fetchAvailableHasil();
   }, [fetchData, fetchAvailableHasil]);
 
+  // Clear the pending debounce timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, []);
+
+  function onSearchChange(value: string) {
+    setSearchInput(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setSearch(value), 300);
+  }
+
   function resetForm() {
     setForm(emptyForm);
     setEditingId(null);
   }
 
-  async function openEdit(coa: any) {
+  async function openEdit(coa: CoaRow) {
     setForm({
       id_hasil: "",
       no_coa: coa.no_coa,
       tanggal_rilis: coa.tanggal_rilis,
       tanggal_expired: coa.tanggal_expired,
       mfg_date: coa.mfg_date ?? "",
-      tanda_tangan: coa.tanda_tangan_digital,
+      tanda_tangan: coa.tanda_tangan_digital ?? "",
     });
     setEditingId(coa.id);
     setDialogOpen(true);
@@ -150,27 +250,25 @@ export default function COAPage() {
       }
       setSaving(true);
       try {
-        const before = coaList.find((c: any) => c.id === editingId);
-        const { error } = await sb
-          .from("coa")
-          .update({
-            no_coa: form.no_coa,
-            tanggal_rilis: form.tanggal_rilis,
-            tanggal_expired: form.tanggal_expired,
-            mfg_date: form.mfg_date,
-            tanda_tangan_digital: form.tanda_tangan,
-          })
-          .eq("id", editingId);
-        if (error) throw error;
-
+        // Mutasi lewat server action: sesi + peran dicek server-side.
+        const res = await updateCoaAction({
+          id: editingId,
+          no_coa: form.no_coa,
+          tanggal_rilis: form.tanggal_rilis,
+          tanggal_expired: form.tanggal_expired,
+          mfg_date: form.mfg_date,
+          tanda_tangan: form.tanda_tangan,
+        });
+        if (!res.ok) {
+          toast.error(res.error ?? "Gagal menyimpan COA. Coba lagi.");
+          return;
+        }
         toast.success("COA diperbarui.");
-        logAudit(sb, user?.nama_lengkap || user?.username || "system", `update_coa: ${form.no_coa}`, editingId);
-
         setDialogOpen(false);
         resetForm();
         fetchData();
-      } catch (err: any) {
-        toast.error(err.message || "Gagal menyimpan.");
+      } catch {
+        toast.error("Gagal terhubung ke server. Coba lagi.");
       } finally {
         setSaving(false);
       }
@@ -183,44 +281,28 @@ export default function COAPage() {
       return;
     }
     setSaving(true);
-
     try {
-      const selected = availableHasil.find(
-        (h: any) => h.id === form.id_hasil
-      );
-      if (!selected) throw new Error("Hasil uji tidak ditemukan.");
-
-      // Auto-generate COA number if empty
-      const no_coa = form.no_coa || generateNoCOA(coaList.length);
-
-      const snapshot = {
-        produk: selected.master_produk?.nama_produk || "",
-        ts: selected.tgl_sampling,
-        tu: selected.tgl_uji,
-        items: selected.hasil_detail ?? [],
-      };
-
-      const { error } = await sb.from("coa").insert({
-        no_coa,
-        id_produk: selected.id_produk,
-        no_lot: selected.no_lot,
+      // Server action: nomor otomatis + snapshot + foreign key diturunkan
+      // dari baris hasil uji DI SERVER; 23505 race di-retry di sana.
+      const res = await issueCoaAction({
+        id_hasil: form.id_hasil,
+        no_coa: form.no_coa,
         tanggal_rilis: form.tanggal_rilis,
         tanggal_expired: form.tanggal_expired,
-        hasil_uji_snapshot: snapshot,
-        tanda_tangan_digital: form.tanda_tangan,
         mfg_date: form.mfg_date,
+        tanda_tangan: form.tanda_tangan,
       });
-      if (error) throw error;
-
+      if (!res.ok) {
+        toast.error(res.error ?? "Gagal menerbitkan COA.");
+        return;
+      }
       toast.success("COA berhasil diterbitkan.");
-      logAudit(sb, user?.nama_lengkap || user?.username || "system", `terbit_coa: ${no_coa}`, `hasil_uji:${selected.id}`);
-
       setDialogOpen(false);
       resetForm();
       fetchData();
       fetchAvailableHasil();
-    } catch (err: any) {
-      toast.error(err.message || "Gagal menerbitkan COA.");
+    } catch {
+      toast.error("Gagal terhubung ke server. Coba lagi.");
     } finally {
       setSaving(false);
     }
@@ -228,24 +310,28 @@ export default function COAPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("Hapus COA ini?")) return;
-    const target = coaList.find((c: any) => c.id === id);
-    const { error } = await sb.from("coa").delete().eq("id", id);
-    if (error) {
-      toast.error(error.message);
-    } else {
+
+    // Server action: role check server-side.
+    try {
+      const res = await deleteCoaAction(id);
+      if (!res.ok) {
+        toast.error(res.error ?? "Gagal menghapus COA. Coba lagi.");
+        return;
+      }
       toast.success("COA dihapus.");
-      logAudit(sb, user?.nama_lengkap || user?.username || "system", `delete_coa: ${target?.no_coa || id}`, id);
       fetchData();
       fetchAvailableHasil();
+    } catch {
+      toast.error("Gagal terhubung ke server. Coba lagi.");
     }
   }
 
-  function handlePrint(coa: any) {
-    const snapshot = coa.hasil_uji_snapshot || {};
-    const items = snapshot.items || [];
+  function handlePrint(coa: CoaRow) {
+    const snapshot = coa.hasil_uji_snapshot;
+    const items: HasilUjiItem[] = snapshot.items ?? [];
     const w = window.open("", "_blank");
     if (!w) return;
-    w.document.write(`<html><head><title>COA - ${coa.no_coa}</title>
+    w.document.write(`<html><head><title>COA - ${escapeHtml(coa.no_coa)}</title>
 <style>
   @page { margin: 12mm 15mm; }
   * { box-sizing: border-box; }
@@ -350,14 +436,14 @@ export default function COAPage() {
   <div class="coa-title">Certificate of Analysis</div>
   <hr class="coa-rule" />
   <div class="coa-meta">
-    <div><strong>Nomor COA:</strong> ${coa.no_coa}</div>
-    <div><strong>Tanggal Rilis:</strong> ${coa.tanggal_rilis}</div>
-    <div><strong>Nama Produk:</strong> ${coa.master_produk?.nama_produk || ""}</div>
-    <div><strong>Tanggal Expired:</strong> ${coa.tanggal_expired}</div>
-    <div><strong>Nomor Lot:</strong> ${coa.no_lot}</div>
-    <div><strong>MFG Date:</strong> ${coa.mfg_date || "-"}</div>
-    <div><strong>Tanggal Sampling:</strong> ${snapshot.ts || "-"}</div>
-    <div><strong>Tanggal Uji:</strong> ${snapshot.tu || "-"}</div>
+    <div><strong>Nomor COA:</strong> ${escapeHtml(coa.no_coa)}</div>
+    <div><strong>Tanggal Rilis:</strong> ${escapeHtml(coa.tanggal_rilis)}</div>
+    <div><strong>Nama Produk:</strong> ${escapeHtml(coa.master_produk?.nama_produk || "")}</div>
+    <div><strong>Tanggal Expired:</strong> ${escapeHtml(coa.tanggal_expired)}</div>
+    <div><strong>Nomor Lot:</strong> ${escapeHtml(coa.no_lot)}</div>
+    <div><strong>MFG Date:</strong> ${escapeHtml(coa.mfg_date || "-")}</div>
+    <div><strong>Tanggal Sampling:</strong> ${escapeHtml(snapshot.ts || "-")}</div>
+    <div><strong>Tanggal Uji:</strong> ${escapeHtml(snapshot.tu || "-")}</div>
   </div>
   <table class="coa-tbl">
     <thead>
@@ -369,9 +455,9 @@ export default function COAPage() {
       </tr>
     </thead>
     <tbody>
-      ${items.map((item: any) => {
+      ${items.map((item) => {
         const specText = item.t === "TEXT" ? "Teks" : item.t === "MIN" ? "> " + item.mn : item.t === "MAX" ? "< " + item.mx : (item.mn || "-") + " — " + (item.mx || "-");
-        return `<tr><td>${item.p}</td><td>${specText}</td><td>${item.val || "-"}</td><td>${item.st === "PASS" ? "✓ PASS" : "✗ FAIL"}</td></tr>`;
+        return `<tr><td>${escapeHtml(item.p)}</td><td>${escapeHtml(specText)}</td><td>${escapeHtml(item.val || "-")}</td><td>${item.st === "PASS" ? "✓ PASS" : "✗ FAIL"}</td></tr>`;
       }).join("")}
     </tbody>
   </table>
@@ -383,7 +469,7 @@ export default function COAPage() {
     </div>
     <div class="ttd">
       <strong>Tanda Tangan Digital</strong><br/>
-      ${coa.tanda_tangan_digital || "Terverifikasi Digital"}
+      ${escapeHtml(coa.tanda_tangan_digital || "Terverifikasi Digital")}
     </div>
   </div>
 </div>
@@ -392,7 +478,7 @@ export default function COAPage() {
     w.document.close();
   }
 
-  function openDetail(coa: any) {
+  function openDetail(coa: CoaRow) {
     setDetailItem(coa);
     setDetailOpen(true);
   }
@@ -400,10 +486,14 @@ export default function COAPage() {
   const role: UserRole = (user?.role as UserRole) ?? "viewer";
   const canDelete = canAction(role, "delete_coa");
   const canIssue = canAction(role, "issue_coa");
+  const canEdit = canAction(role, "update_coa");
+  // The dialog exists in the tree for every role (so Edit never dead-ends);
+  // without a write role every input in it renders disabled (read-only mode).
+  const canWrite = canIssue || canEdit;
 
   // Determine selected hasil details for the preview
   const selectedHasil = availableHasil.find(
-    (h: any) => h.id === form.id_hasil
+    (h) => h.id === form.id_hasil
   );
 
   return (
@@ -416,15 +506,16 @@ export default function COAPage() {
             Terbitkan dan kelola COA produk.
           </p>
         </div>
-        {canIssue && (
-          <Dialog
-            open={dialogOpen}
-            onOpenChange={(v) => {
-              setDialogOpen(v);
-              if (!v) resetForm();
-            }}
-          >
+        <Dialog
+          open={dialogOpen}
+          onOpenChange={(v) => {
+            setDialogOpen(v);
+            if (!v) resetForm();
+          }}
+        >
+          {canIssue && (
             <DialogTrigger render={<Button><Plus className="size-4" /> Terbitkan COA</Button>} />
+          )}
             <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
@@ -441,21 +532,39 @@ export default function COAPage() {
                     <select
                       className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                       value={form.id_hasil}
+                      disabled={!canWrite}
                       onChange={(e) => {
                         const val = e.target.value;
-                        setForm({ ...form, id_hasil: val });
-                        // Auto-generate COA number when a hasil is selected
+                        // One functional update; the async prefill below is
+                        // guarded so a stale resolution never overwrites a
+                        // newer selection or a manually typed number.
+                        setForm((prev) => ({ ...prev, id_hasil: val }));
+                        // Prefill from the server-side max, not the
+                        // (search-filtered) client list length.
                         if (val && !form.no_coa) {
-                          setForm((prev) => ({
-                            ...prev,
-                            id_hasil: val,
-                            no_coa: generateNoCOA(coaList.length),
-                          }));
+                          getNextNoCOAAction()
+                            .then((no: string) => {
+                              setForm((prev) =>
+                                prev.id_hasil === val && !prev.no_coa
+                                  ? { ...prev, no_coa: no }
+                                  : prev
+                              );
+                            })
+                            .catch((err: unknown) => {
+                              // Prefill is best-effort: leaving the field
+                              // empty is fine (save regenerates the number
+                              // from the server-side max). Warn only — no
+                              // toast-spam on a background prefill.
+                              console.warn(
+                                "Prefill No COA gagal:",
+                                err instanceof Error ? err.message : err
+                              );
+                            });
                         }
                       }}
                     >
                       <option value="">Pilih hasil uji…</option>
-                      {availableHasil.map((h: any) => (
+                      {availableHasil.map((h) => (
                         <option key={h.id} value={h.id}>
                           {h.no_lot} —{" "}
                           {h.master_produk?.nama_produk || ""}
@@ -475,8 +584,9 @@ export default function COAPage() {
                     <label className="text-xs font-medium">No COA</label>
                     <Input
                       value={form.no_coa}
+                      disabled={!canWrite}
                       onChange={(e) =>
-                        setForm({ ...form, no_coa: e.target.value })
+                        setForm((prev) => ({ ...prev, no_coa: e.target.value }))
                       }
                       placeholder="Otomatis jika dikosongkan"
                     />
@@ -486,8 +596,9 @@ export default function COAPage() {
                     <Input
                       type="date"
                       value={form.tanggal_rilis}
+                      disabled={!canWrite}
                       onChange={(e) =>
-                        setForm({ ...form, tanggal_rilis: e.target.value })
+                        setForm((prev) => ({ ...prev, tanggal_rilis: e.target.value }))
                       }
                     />
                   </div>
@@ -496,8 +607,9 @@ export default function COAPage() {
                     <Input
                       type="date"
                       value={form.tanggal_expired}
+                      disabled={!canWrite}
                       onChange={(e) =>
-                        setForm({ ...form, tanggal_expired: e.target.value })
+                        setForm((prev) => ({ ...prev, tanggal_expired: e.target.value }))
                       }
                     />
                   </div>
@@ -506,8 +618,9 @@ export default function COAPage() {
                     <Input
                       type="date"
                       value={form.mfg_date}
+                      disabled={!canWrite}
                       onChange={(e) =>
-                        setForm({ ...form, mfg_date: e.target.value })
+                        setForm((prev) => ({ ...prev, mfg_date: e.target.value }))
                       }
                     />
                   </div>
@@ -517,8 +630,9 @@ export default function COAPage() {
                   <label className="text-xs font-medium">Tanda Tangan Digital</label>
                   <Input
                     value={form.tanda_tangan}
+                    disabled={!canWrite}
                     onChange={(e) =>
-                      setForm({ ...form, tanda_tangan: e.target.value })
+                      setForm((prev) => ({ ...prev, tanda_tangan: e.target.value }))
                     }
                     placeholder="Terverifikasi Digital"
                   />
@@ -539,7 +653,7 @@ export default function COAPage() {
                       </thead>
                       <tbody>
                         {(selectedHasil.hasil_detail ?? []).map(
-                          (item: any, i: number) => (
+                          (item, i: number) => (
                             <tr key={i} className="border-b border-border last:border-0">
                               <td className="py-1">{item.p}</td>
                               <td className="py-1">{item.val}</td>
@@ -557,17 +671,18 @@ export default function COAPage() {
 
               <DialogFooter>
                 <DialogClose render={<Button variant="outline">Batal</Button>} />
-                <Button onClick={handleSave} disabled={saving}>
-                  {saving
-                    ? "Menyimpan…"
-                    : editingId
-                    ? "Simpan"
-                    : "Terbitkan"}
-                </Button>
+                {canWrite && (
+                  <Button onClick={handleSave} disabled={saving}>
+                    {saving
+                      ? "Menyimpan…"
+                      : editingId
+                      ? "Simpan"
+                      : "Terbitkan"}
+                  </Button>
+                )}
               </DialogFooter>
             </DialogContent>
-          </Dialog>
-        )}
+        </Dialog>
       </div>
 
       {/* Search */}
@@ -575,8 +690,8 @@ export default function COAPage() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted pointer-events-none" />
         <Input
           placeholder="Cari COA atau produk…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => onSearchChange(e.target.value)}
           className="pl-9"
         />
       </div>
@@ -595,14 +710,24 @@ export default function COAPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading && (
+            {loading && <TableSkeleton rows={5} cols={6} />}
+            {!loading && loadError && (
               <TableRow>
-                <TableCell colSpan={6} className="px-4 py-8 text-center text-muted">
-                  Memuat…
+                <TableCell colSpan={6} className="px-4 py-8">
+                  <div className="flex items-center justify-center gap-3 text-muted">
+                    Gagal memuat data.
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fetchData()}
+                    >
+                      Coba Lagi
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             )}
-            {!loading && coaList.length === 0 && (
+            {!loading && !loadError && coaList.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="px-4 py-8 text-center text-muted">
                   Belum ada COA.
@@ -636,13 +761,15 @@ export default function COAPage() {
                     >
                       <Eye className="size-3.5" />
                     </button>
-                    <button
-                      className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
-                      onClick={() => openEdit(coa)}
-                      title="Edit"
-                    >
-                      <Pencil className="size-3.5" />
-                    </button>
+                    {canEdit && (
+                      <button
+                        className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
+                        onClick={() => openEdit(coa)}
+                        title="Edit"
+                      >
+                        <Pencil className="size-3.5" />
+                      </button>
+                    )}
                     <button
                       className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
                       onClick={() => handlePrint(coa)}
@@ -666,6 +793,27 @@ export default function COAPage() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination: load-more + counter */}
+      {!loading && !loadError && coaList.length > 0 && (
+        <div className="space-y-2">
+          {coaList.length < totalCount && (
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={loadingMore}
+              onClick={() => loadMore()}
+            >
+              {loadingMore
+                ? "Memuat…"
+                : `Muat lagi (${totalCount - coaList.length} tersisa)`}
+            </Button>
+          )}
+          <p className="text-xs text-muted text-center">
+            Menampilkan {coaList.length} dari {totalCount} data
+          </p>
+        </div>
+      )}
 
       {/* Detail dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
@@ -726,7 +874,7 @@ export default function COAPage() {
                     </thead>
                     <tbody>
                       {detailItem.hasil_uji_snapshot.items.map(
-                        (item: any, i: number) => (
+                        (item, i: number) => (
                           <tr key={i} className="border-b border-border last:border-0">
                             <td className="py-1">{item.p}</td>
                             <td className="py-1">{item.val}</td>

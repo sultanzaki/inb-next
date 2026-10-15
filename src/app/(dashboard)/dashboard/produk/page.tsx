@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
-import type { MasterProduk, UserRole } from "@/lib/types";
+import type { MasterProduk, SpesifikasiItem, UserRole } from "@/lib/types";
 import { toast } from "sonner";
+import { saveProdukAction, deleteProdukAction } from "@/lib/actions/produk-actions";
 import {
   Search,
   Plus,
@@ -32,6 +33,14 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { TableSkeleton } from "@/components/table-skeleton";
+import { escapeOrTerm } from "@/lib/filter-utils";
+
+// Module-level browser client: a single instance instead of one per render.
+const sb = createClient();
+
+// Monotonic counter used to ignore stale list-fetch responses.
+let requestSeq = 0;
 
 const kategoriList = [
   "Bahan Baku",
@@ -85,33 +94,106 @@ function statusHalalBadge(val: string) {
 
 export default function ProdukPage() {
   const { user } = useUser();
-  const sb = createClient();
 
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [produkList, setProdukList] = useState<MasterProduk[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ProdukForm>(emptyForm);
   const [spesifikasi, setSpesifikasi] = useState<SpesifikasiForm[]>([]);
   const [saving, setSaving] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    let q = sb.from("master_produk").select("*").order("nama_produk");
-    if (search) {
-      q = q.or(
-        `nama_produk.ilike.%${search}%,kode_produk.ilike.%${search}%`
-      );
-    }
-    const { data } = await q;
-    setProdukList((data as MasterProduk[]) ?? []);
-    setLoading(false);
-  }, [search]);
+  // Pagination: list queries are bounded with .range(); count:"exact" returns
+  // the filtered row total (ignoring the range window) in the same request, so
+  // "Muat lagi" knows how many rows are left without a second query.
+  const [pageSize] = useState(50);
+  const [offset, setOffset] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Bounded query runner shared by the fresh fetch and load-more.
+  // append=false swaps the accumulated list (mount, search, retry, after a
+  // mutation); append=true fetches the page starting at `start` and appends.
+  const runQuery = useCallback(
+    async (start: number, append: boolean) => {
+      const seq = ++requestSeq;
+      if (append) setLoadingMore(true);
+      else setLoading(true);
+      let q = sb
+        .from("master_produk")
+        .select("*", { count: "exact" })
+        .order("nama_produk")
+        .range(start, start + pageSize - 1);
+      if (search) {
+        // Quoted values (via escapeOrTerm): commas/parens stay literal and the
+        // escaped %/_ reach Postgres LIKE as literals, not wildcards.
+        const term = escapeOrTerm(search);
+        q = q.or(
+          `nama_produk.ilike."%${term}%",kode_produk.ilike."%${term}%"`
+        );
+      }
+      const { data, count, error } = await q;
+      if (seq !== requestSeq) {
+        // Superseded by a newer request: release the loading flag this
+        // request owned (the newer one manages its own).
+        if (append) setLoadingMore(false);
+        return;
+      }
+      if (error) {
+        // A failed load-more keeps the accumulated rows and leaves the offset
+        // unchanged, so retrying "Muat lagi" re-requests the same page.
+        if (!append) {
+          setLoadError(true);
+          setProdukList([]);
+          setTotalCount(0);
+        }
+        toast.error("Gagal memuat data. Coba lagi.");
+      } else {
+        const rows = (data as MasterProduk[]) ?? [];
+        setLoadError(false);
+        setProdukList((prev) => (append ? [...prev, ...rows] : rows));
+        setTotalCount(count ?? 0);
+        if (append) setOffset(start + rows.length);
+      }
+      if (append) setLoadingMore(false);
+      else setLoading(false);
+    },
+    [search, pageSize]
+  );
+
+  // Fresh fetch: page 0 replaces any accumulated rows and resets the offset
+  // (also fires when the debounced search changes).
+  const fetchData = useCallback(() => {
+    setOffset(0);
+    return runQuery(0, false);
+  }, [runQuery]);
+
+  // Load-more: append the next page to the accumulated rows.
+  const loadMore = useCallback(() => {
+    return runQuery(offset, true);
+  }, [runQuery, offset]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Clear the pending debounce timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, []);
+
+  function onSearchChange(value: string) {
+    setSearchInput(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setSearch(value), 300);
+  }
 
   function resetForm() {
     setForm(emptyForm);
@@ -120,6 +202,18 @@ export default function ProdukPage() {
   }
 
   async function openEdit(produk: MasterProduk) {
+    // Load spesifikasi first: if it fails, don't open the edit dialog at all
+    // (saving from a dialog with an empty spec list would wipe real rows).
+    const { data: sp, error: spErr } = await sb
+      .from("spesifikasi")
+      .select("*")
+      .eq("id_produk", produk.id)
+      .order("urutan");
+    if (spErr) {
+      toast.error("Gagal memuat data. Coba lagi.");
+      return;
+    }
+
     setForm({
       kode_produk: produk.kode_produk,
       nama_produk: produk.nama_produk,
@@ -130,13 +224,8 @@ export default function ProdukPage() {
     });
     setEditingId(produk.id);
 
-    const { data: sp } = await sb
-      .from("spesifikasi")
-      .select("*")
-      .eq("id_produk", produk.id)
-      .order("urutan");
     setSpesifikasi(
-      (sp ?? []).map((s: any) => ({
+      (sp ?? []).map((s: SpesifikasiItem) => ({
         parameter_uji: s.parameter_uji,
         tipe_batas: s.tipe_batas,
         nilai_min: s.nilai_min ?? "",
@@ -180,68 +269,21 @@ export default function ProdukPage() {
       return;
     }
     setSaving(true);
-
     try {
-      if (editingId) {
-        const { error: e1 } = await sb
-          .from("master_produk")
-          .update({
-            kode_produk: form.kode_produk,
-            nama_produk: form.nama_produk,
-            kategori: form.kategori,
-            satuan: form.satuan,
-            status_halal: form.status_halal,
-            tipe_kemasan: form.tipe_kemasan,
-          })
-          .eq("id", editingId);
-        if (e1) throw e1;
-
-        // delete old spesifikasi, re-insert
-        await sb.from("spesifikasi").delete().eq("id_produk", editingId);
-        if (spesifikasi.length > 0) {
-          const { error: e2 } = await sb.from("spesifikasi").insert(
-            spesifikasi.map((s, i) => ({
-              id_produk: editingId,
-              ...s,
-              urutan: i,
-            }))
-          );
-          if (e2) throw e2;
-        }
-        toast.success("Produk berhasil diperbarui.");
-      } else {
-        const { data: inserted, error: e1 } = await sb
-          .from("master_produk")
-          .insert({
-            kode_produk: form.kode_produk,
-            nama_produk: form.nama_produk,
-            kategori: form.kategori,
-            satuan: form.satuan,
-            status_halal: form.status_halal,
-            tipe_kemasan: form.tipe_kemasan,
-          })
-          .select()
-          .single();
-        if (e1) throw e1;
-
-        if (spesifikasi.length > 0 && inserted) {
-          const { error: e2 } = await sb.from("spesifikasi").insert(
-            spesifikasi.map((s, i) => ({
-              id_produk: inserted.id,
-              ...s,
-              urutan: i,
-            }))
-          );
-          if (e2) throw e2;
-        }
-        toast.success("Produk berhasil ditambahkan.");
+      // Mutasi lewat server action: sesi + peran dicek server-side.
+      const res = await saveProdukAction({ id: editingId, ...form, spesifikasi });
+      if (!res.ok) {
+        toast.error(res.error ?? "Gagal menyimpan produk. Coba lagi.");
+        return;
       }
-
+      toast.success(editingId ? "Produk berhasil diperbarui." : "Produk berhasil ditambahkan.");
       setDialogOpen(false);
       resetForm();
       fetchData();
-    } catch (err: any) {
-      toast.error(err.message || "Gagal menyimpan.");
+    } catch {
+      // Transport error (mis. jaringan putus): server action melempar, bukan
+      // mengembalikan { ok:false } — tanpa catch user tidak lihat apa pun.
+      toast.error("Gagal terhubung ke server. Coba lagi.");
     } finally {
       setSaving(false);
     }
@@ -250,29 +292,26 @@ export default function ProdukPage() {
   async function handleDelete(id: string) {
     if (!confirm("Hapus produk ini? Semua spesifikasi juga akan dihapus.")) return;
 
-    // Check no hasil_uji references this product
-    const { data: existingUji } = await sb
-      .from("hasil_uji")
-      .select("id")
-      .eq("id_produk", id)
-      .limit(1);
-
-    if (existingUji && existingUji.length > 0) {
-      toast.error("Produk tidak dapat dihapus karena masih memiliki hasil uji.");
-      return;
-    }
-
-    const { error } = await sb.from("master_produk").delete().eq("id", id);
-    if (error) {
-      toast.error(error.message);
-    } else {
+    // Server action: pre-check COA/hasil uji + role check server-side.
+    try {
+      const res = await deleteProdukAction(id);
+      if (!res.ok) {
+        toast.error(res.error ?? "Gagal menghapus produk. Coba lagi.");
+        return;
+      }
       toast.success("Produk dihapus.");
       fetchData();
+    } catch {
+      // transport error — action tetap { ok:false } untuk kegagalan aplikatif;
+      // tanpa catch user tidak lihat apa pun.
+      toast.error("Gagal terhubung ke server. Coba lagi.");
     }
   }
 
   const role: UserRole = (user?.role as UserRole) ?? "viewer";
   const canDelete = canAction(role, "delete_produk");
+  const canCreate = canAction(role, "create_produk");
+  const canUpdate = canAction(role, "update_produk");
 
   return (
     <div className="space-y-6">
@@ -285,7 +324,9 @@ export default function ProdukPage() {
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={(v) => { setDialogOpen(v); if (!v) resetForm(); }}>
-          <DialogTrigger render={<Button><Plus className="size-4" /> Produk Baru</Button>} />
+          {canCreate && (
+            <DialogTrigger render={<Button><Plus className="size-4" /> Produk Baru</Button>} />
+          )}
           <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
@@ -462,8 +503,8 @@ export default function ProdukPage() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted pointer-events-none" />
         <Input
           placeholder="Cari produk…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => onSearchChange(e.target.value)}
           className="pl-9"
         />
       </div>
@@ -482,14 +523,24 @@ export default function ProdukPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading && (
+            {loading && <TableSkeleton rows={5} cols={6} />}
+            {!loading && loadError && (
               <TableRow>
-                <TableCell colSpan={6} className="px-4 py-8 text-center text-muted">
-                  Memuat…
+                <TableCell colSpan={6} className="px-4 py-8">
+                  <div className="flex items-center justify-center gap-3 text-muted">
+                    Gagal memuat data.
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fetchData()}
+                    >
+                      Coba Lagi
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             )}
-            {!loading && produkList.length === 0 && (
+            {!loading && !loadError && produkList.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="px-4 py-8 text-center text-muted">
                   Tidak ada produk.
@@ -508,13 +559,15 @@ export default function ProdukPage() {
                 <TableCell className="px-4 py-3 text-muted">{p.tipe_kemasan}</TableCell>
                 <TableCell className="px-4 py-3">
                   <div className="flex items-center gap-1">
-                    <button
-                      className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
-                      onClick={() => openEdit(p)}
-                      title="Edit"
-                    >
-                      <Pencil className="size-3.5" />
-                    </button>
+                    {canUpdate && (
+                      <button
+                        className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
+                        onClick={() => openEdit(p)}
+                        title="Edit"
+                      >
+                        <Pencil className="size-3.5" />
+                      </button>
+                    )}
                     {canDelete && (
                       <button
                         className="p-1.5 rounded hover:bg-danger-bg text-danger"
@@ -531,6 +584,27 @@ export default function ProdukPage() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination: load-more + counter */}
+      {!loading && !loadError && produkList.length > 0 && (
+        <div className="space-y-2">
+          {produkList.length < totalCount && (
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={loadingMore}
+              onClick={() => loadMore()}
+            >
+              {loadingMore
+                ? "Memuat…"
+                : `Muat lagi (${totalCount - produkList.length} tersisa)`}
+            </Button>
+          )}
+          <p className="text-xs text-muted text-center">
+            Menampilkan {produkList.length} dari {totalCount} data
+          </p>
+        </div>
+      )}
     </div>
   );
 }

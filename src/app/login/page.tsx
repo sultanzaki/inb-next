@@ -1,4 +1,6 @@
-import { loginAction } from './actions';
+"use client";
+
+import { LoginForm } from './login-form';
 
 export default function LoginPage() {
   return (
@@ -20,8 +22,11 @@ export default function LoginPage() {
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 fill-mode-both">
             <div className="w-[66px] h-[66px] rounded-xl bg-white/10 border border-white/14 flex items-center justify-center">
               <img
-                src="https://lh3.googleusercontent.com/d/1cTPhZUSGNhnud4LJyyuaA8Hc_ulDem-6"
+                src="/logo.png"
                 alt="INBIONUSA"
+                width={46}
+                height={46}
+                onError={(e) => { e.currentTarget.style.display = "none"; }}
                 className="max-h-[46px] max-w-[46px] object-contain"
               />
             </div>
@@ -53,35 +58,7 @@ export default function LoginPage() {
             <p className="text-sm text-muted-foreground mt-1">Masuk ke Quality Control System</p>
           </div>
 
-          <form action={loginAction} className="space-y-5">
-            <div className="space-y-1.5">
-              <label htmlFor="username" className="text-sm font-medium">Username</label>
-              <input
-                id="username" name="username" type="text" required autoFocus
-                className="w-full h-11 px-4 rounded-lg border border-input bg-background text-sm
-                  placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring
-                  transition-all duration-150"
-                placeholder="Masukkan username"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="password" className="text-sm font-medium">Password</label>
-              <input
-                id="password" name="password" type="password" required
-                className="w-full h-11 px-4 rounded-lg border border-input bg-background text-sm
-                  placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring
-                  transition-all duration-150"
-                placeholder="Masukkan password"
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full h-11 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-semibold
-                transition-all duration-150 active:scale-[0.98] cursor-pointer"
-            >
-              Masuk
-            </button>
-          </form>
+          <LoginForm />
         </div>
       </main>
     </div>

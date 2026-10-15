@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 /* ==========================================================================
    INBIONUSA Quality Control System — Design Tokens
@@ -48,17 +49,23 @@
   /* shadcn/ui compatibility */
   --background: var(--color-page-bg);
   --foreground: var(--color-text);
+  --card: #ffffff;
+  --card-foreground: var(--color-text);
+  --popover: #ffffff;
+  --popover-foreground: var(--color-text);
+  --primary: var(--color-primary);
   --primary-foreground: #ffffff;
   --secondary: #f1f5f9;
   --secondary-foreground: var(--color-primary-dark);
+  --muted: var(--secondary);
+  --muted-foreground: var(--color-muted);
   --accent: var(--color-primary-soft);
   --accent-foreground: var(--color-primary-dark);
   --destructive: var(--color-danger);
-  --muted-foreground: var(--color-muted);
-  --card: #ffffff;
-  --card-foreground: var(--color-text);
-  --ring: var(--color-primary);
+  --destructive-foreground: #ffffff;
+  --border: var(--color-border);
   --input: var(--color-border);
+  --ring: var(--color-primary);
   --radius: 0.5rem;
 
   /* Layout */
@@ -94,6 +101,24 @@
   --color-info-bg: var(--color-info-bg);
   --color-violet: var(--color-violet);
   --color-violet-bg: var(--color-violet-bg);
+
+  /* shadcn/ui semantic tokens → Tailwind utilities */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
   --shadow-card: var(--shadow-card);
   --shadow-card-sm: var(--shadow-card-sm);
   --shadow-glow-primary: var(--shadow-glow-primary);

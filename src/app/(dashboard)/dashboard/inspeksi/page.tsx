@@ -1,14 +1,22 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
-import type { MasterProduk, SpesifikasiItem, UserRole } from "@/lib/types";
+import type {
+  HasilUjiItem,
+  HasilUjiRow,
+  MasterProduk,
+  SpesifikasiItem,
+  UserRole,
+} from "@/lib/types";
 import { toast } from "sonner";
+import { saveInspeksiAction, deleteInspeksiAction } from "@/lib/actions/inspeksi-actions";
 import { Search, Plus, Pencil, Trash2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TableSkeleton } from "@/components/table-skeleton";
 import {
   Table,
   TableBody,
@@ -26,6 +34,40 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+
+// Module-level browser client: a single instance instead of one per render.
+const sb = createClient();
+
+// Monotonic counter used to ignore stale list-fetch responses.
+let requestSeq = 0;
+
+// Monotonic counter used to ignore stale spesifikasi fetches (openEdit race,
+// rapid product switches).
+let specSeq = 0;
+
+// Monotonic counter used to ignore stale openEdit resolutions (clicking
+// Edit(A) then Edit(B), or opening the new-form dialog, while A is in flight).
+let editSeq = 0;
+
+// Escape a raw search term for a PostgREST .or() ilike filter. The PostgREST
+// v12 quoted-value parser strips ONE backslash from EVERY "\X" pair
+// unconditionally, and Postgres LIKE then consumes one more level, so each
+// special character ships with two spare backslashes:
+//   \ -> \\\\  (parser: \\\\ -> \\ ; LIKE: \\ -> literal \)
+//   " -> \"    (parser: \" -> " ; keeps the quoted value intact)
+//   % -> \\\%  (parser: \\\% -> \% ; LIKE: \% -> literal %)
+//   _ -> \\_   (parser: \\_ -> \_ ; LIKE: \_ -> literal _)
+// The escaped term is placed inside double quotes in the filter itself: the
+// grammar treats , and ) as syntax only in bare values, while a quoted value
+// keeps them literal (a bare value like "%a,b%" would truncate at the comma
+// -> PGRST100 400).
+function escapeOr(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/%/g, "\\\\\\%")
+    .replace(/_/g, "\\\\_");
+}
 
 function StatusBadge({ status }: { status: string }) {
   const isPass = status === "PASS";
@@ -75,57 +117,134 @@ const emptyForm: UjiForm = {
 
 export default function InspeksiPage() {
   const { user } = useUser();
-  const sb = createClient();
 
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [data, setData] = useState<any[]>([]);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [data, setData] = useState<HasilUjiRow[]>([]);
   const [produkList, setProdukList] = useState<MasterProduk[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [detailItem, setDetailItem] = useState<any>(null);
+  const [detailItem, setDetailItem] = useState<HasilUjiRow | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<UjiForm>(emptyForm);
   const [spesifikasi, setSpesifikasi] = useState<SpesifikasiItem[]>([]);
   const [hasilValues, setHasilValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    let q = sb
-      .from("hasil_uji")
-      .select("*, master_produk!inner(kode_produk, nama_produk)")
-      .order("created_at", { ascending: false });
-    if (search) {
-      q = q.or(
-        `no_lot.ilike.%${search}%,master_produk.nama_produk.ilike.%${search}%`
-      );
-    }
-    const { data: raw } = await q;
-    setData((raw as any[]) ?? []);
-    setLoading(false);
-  }, [search]);
+  // Pagination: list queries are bounded with .range(); count:"exact" returns
+  // the filtered row total (ignoring the range window) in the same request, so
+  // "Muat lagi" knows how many rows are left without a second query.
+  const [pageSize] = useState(50);
+  const [offset, setOffset] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Which product the current hasilValues belong to. Values are kept only
+  // while the selected product is unchanged; any product switch wipes them,
+  // because parameter names collide across products and stale values would
+  // be saved under the wrong product's parameters.
+  const valuesProductIdRef = useRef<string | null>(null);
+
+  // Bounded query runner shared by the fresh fetch and load-more.
+  // append=false swaps the accumulated list (mount, search, retry, after a
+  // mutation); append=true fetches the page starting at `start` and appends.
+  const runQuery = useCallback(
+    async (start: number, append: boolean) => {
+      const seq = ++requestSeq;
+      if (append) setLoadingMore(true);
+      else setLoading(true);
+      let q = sb
+        .from("hasil_uji")
+        .select("*, master_produk!inner(kode_produk, nama_produk)", {
+          count: "exact",
+        })
+        .order("created_at", { ascending: false })
+        .range(start, start + pageSize - 1);
+      if (search) {
+        // Quoted values (via escapeOr): commas/parens stay literal and the
+        // escaped %/_ reach Postgres LIKE as literals, not wildcards.
+        const term = escapeOr(search);
+        q = q.or(
+          `no_lot.ilike."%${term}%",master_produk.nama_produk.ilike."%${term}%"`
+        );
+      }
+      const { data: raw, count, error } = await q;
+      if (seq !== requestSeq) {
+        // Superseded by a newer request: release the loading flag this
+        // request owned (the newer one manages its own).
+        if (append) setLoadingMore(false);
+        return;
+      }
+      if (error) {
+        // A failed load-more keeps the accumulated rows and leaves the offset
+        // unchanged, so retrying "Muat lagi" re-requests the same page.
+        if (!append) {
+          setLoadError(true);
+          setData([]);
+          setTotalCount(0);
+        }
+        toast.error("Gagal memuat data. Coba lagi.");
+      } else {
+        const rows = (raw as HasilUjiRow[]) ?? [];
+        setLoadError(false);
+        setData((prev) => (append ? [...prev, ...rows] : rows));
+        setTotalCount(count ?? 0);
+        if (append) setOffset(start + rows.length);
+      }
+      if (append) setLoadingMore(false);
+      else setLoading(false);
+    },
+    [search, pageSize]
+  );
+
+  // Fresh fetch: page 0 replaces any accumulated rows and resets the offset
+  // (also fires when the debounced search changes).
+  const fetchData = useCallback(() => {
+    setOffset(0);
+    return runQuery(0, false);
+  }, [runQuery]);
+
+  // Load-more: append the next page to the accumulated rows.
+  const loadMore = useCallback(() => {
+    return runQuery(offset, true);
+  }, [runQuery, offset]);
 
   const fetchProduk = useCallback(async () => {
-    const { data } = await sb
+    const { data, error } = await sb
       .from("master_produk")
       .select("*")
       .order("nama_produk");
+    if (error) {
+      setProdukList([]);
+      toast.error("Gagal memuat data. Coba lagi.");
+      return;
+    }
     setProdukList((data as MasterProduk[]) ?? []);
   }, []);
 
+  // Pure loader: only fills spesifikasi state, never touches hasilValues.
   const fetchSpesifikasi = useCallback(async (id_produk: string) => {
+    const seq = ++specSeq;
     if (!id_produk) {
       setSpesifikasi([]);
       return;
     }
-    const { data } = await sb
+    const { data, error } = await sb
       .from("spesifikasi")
       .select("*")
       .eq("id_produk", id_produk)
       .order("urutan");
+    if (seq !== specSeq) return; // superseded by a newer fetch
+    if (error) {
+      setSpesifikasi([]);
+      toast.error("Gagal memuat data. Coba lagi.");
+      return;
+    }
     setSpesifikasi((data as SpesifikasiItem[]) ?? []);
-    setHasilValues({});
   }, []);
 
   useEffect(() => {
@@ -133,9 +252,29 @@ export default function InspeksiPage() {
     fetchProduk();
   }, [fetchData, fetchProduk]);
 
+  // Clear the pending debounce timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, []);
+
   useEffect(() => {
     fetchSpesifikasi(form.id_produk);
+    // Keep hasil values only while they belong to the currently selected
+    // product. On any product change — fresh form or a product switch while
+    // editing — wipe them: parameter names collide across products, so
+    // retaining values would prefill/save them under the wrong parameters.
+    if (form.id_produk !== valuesProductIdRef.current) {
+      setHasilValues({});
+    }
   }, [form.id_produk, fetchSpesifikasi]);
+
+  function onSearchChange(value: string) {
+    setSearchInput(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setSearch(value), 300);
+  }
 
   function resetForm() {
     setForm(emptyForm);
@@ -144,7 +283,10 @@ export default function InspeksiPage() {
     setEditingId(null);
   }
 
-  async function openEdit(item: any) {
+  async function openEdit(item: HasilUjiRow) {
+    const seq = ++editSeq;
+    setEditingId(item.id);
+    valuesProductIdRef.current = item.id_produk;
     setForm({
       id_produk: item.id_produk,
       no_lot: item.no_lot,
@@ -153,33 +295,43 @@ export default function InspeksiPage() {
       inspector: item.inspector,
       catatan: item.catatan ?? "",
     });
-    setEditingId(item.id);
 
-    // Load values from hasil_detail
+    // Load spesifikasi first, THEN populate hasil values, so no code path
+    // can wipe the values after they are set.
+    await fetchSpesifikasi(item.id_produk);
+
+    // A newer Edit click (or a new-form dialog open) superseded this one;
+    // applying A's resolved values under B's form would corrupt row B on save.
+    if (seq !== editSeq) return;
+
+    const vals: Record<string, string> = {};
     if (item.hasil_detail) {
-      const vals: Record<string, string> = {};
       for (const h of item.hasil_detail) {
         vals[h.p] = h.val;
       }
-      setHasilValues(vals);
     }
+    setHasilValues(vals);
 
-    // Load spesifikasi for the product
-    await fetchSpesifikasi(item.id_produk);
     setDialogOpen(true);
   }
 
-  function openDetail(item: any) {
+  function openDetail(item: HasilUjiRow) {
     setDetailItem(item);
     setDetailOpen(true);
   }
 
-  function computeOverallStatus(): "PASS" | "FAIL" {
+  // null = nothing filled in yet (rendered as neutral), otherwise PASS/FAIL.
+  function computeOverallStatus(): "PASS" | "FAIL" | null {
+    if (spesifikasi.length === 0) return null;
+    const hasAnyValue = spesifikasi.some(
+      (sp) => (hasilValues[sp.parameter_uji] ?? "") !== ""
+    );
+    if (!hasAnyValue) return null;
     for (const sp of spesifikasi) {
-      const val = hasilValues[sp.parameter_uji] ?? "";
-      if (evaluateParam(sp, val) === "FAIL") return "FAIL";
+      if (evaluateParam(sp, hasilValues[sp.parameter_uji] ?? "") === "FAIL") {
+        return "FAIL";
+      }
     }
-    if (spesifikasi.length === 0) return "FAIL";
     return "PASS";
   }
 
@@ -204,35 +356,31 @@ export default function InspeksiPage() {
     setSaving(true);
 
     const detail = buildHasilDetail();
-    const status = computeOverallStatus();
-
-    const payload = {
-      id_produk: form.id_produk,
-      no_lot: form.no_lot,
-      tgl_sampling: form.tgl_sampling,
-      tgl_uji: form.tgl_uji,
-      inspector: form.inspector,
-      hasil_detail: detail,
-      status,
-      catatan: form.catatan,
-    };
+    const status = computeOverallStatus() ?? "FAIL";
 
     try {
-      if (editingId) {
-        const { error } = await sb.from("hasil_uji").update(payload).eq("id", editingId);
-        if (error) throw error;
-        toast.success("Hasil uji diperbarui.");
-      } else {
-        const { error } = await sb.from("hasil_uji").insert(payload);
-        if (error) throw error;
-        toast.success("Hasil uji ditambahkan.");
+      // Mutasi lewat server action: sesi + peran dicek server-side.
+      const res = await saveInspeksiAction({
+        id: editingId,
+        id_produk: form.id_produk,
+        no_lot: form.no_lot,
+        tgl_sampling: form.tgl_sampling,
+        tgl_uji: form.tgl_uji,
+        inspector: form.inspector,
+        catatan: form.catatan,
+        hasil_detail: detail,
+        status,
+      });
+      if (!res.ok) {
+        toast.error(res.error ?? "Gagal menyimpan hasil uji. Coba lagi.");
+        return;
       }
-
+      toast.success(editingId ? "Hasil uji diperbarui." : "Hasil uji ditambahkan.");
       setDialogOpen(false);
       resetForm();
       fetchData();
-    } catch (err: any) {
-      toast.error(err.message || "Gagal menyimpan.");
+    } catch {
+      toast.error("Gagal terhubung ke server. Coba lagi.");
     } finally {
       setSaving(false);
     }
@@ -240,17 +388,26 @@ export default function InspeksiPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("Hapus hasil uji ini?")) return;
-    const { error } = await sb.from("hasil_uji").delete().eq("id", id);
-    if (error) {
-      toast.error(error.message);
-    } else {
+
+    // Server action: role check server-side.
+    try {
+      const res = await deleteInspeksiAction(id);
+      if (!res.ok) {
+        toast.error(res.error ?? "Gagal menghapus hasil uji. Coba lagi.");
+        return;
+      }
       toast.success("Hasil uji dihapus.");
       fetchData();
+    } catch {
+      toast.error("Gagal terhubung ke server. Coba lagi.");
     }
   }
 
   const role: UserRole = (user?.role as UserRole) ?? "viewer";
   const canDelete = canAction(role, "delete_uji");
+  const canCreate = canAction(role, "create_uji");
+  const canUpdate = canAction(role, "update_uji");
+  const overallStatus = computeOverallStatus();
 
   return (
     <div className="space-y-6">
@@ -262,8 +419,10 @@ export default function InspeksiPage() {
             Kelola data pengujian dan inspeksi produk.
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(v) => { setDialogOpen(v); if (!v) resetForm(); }}>
-          <DialogTrigger render={<Button><Plus className="size-4" /> Input Uji Baru</Button>} />
+        <Dialog open={dialogOpen} onOpenChange={(v) => { if (v) editSeq++; setDialogOpen(v); if (!v) resetForm(); }}>
+          {canCreate && (
+            <DialogTrigger render={<Button><Plus className="size-4" /> Input Uji Baru</Button>} />
+          )}
           <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingId ? "Edit Hasil Uji" : "Input Hasil Uji Baru"}</DialogTitle>
@@ -362,12 +521,13 @@ export default function InspeksiPage() {
                             className="w-28 h-7 text-sm"
                             placeholder={sp.tipe_batas === "TEXT" ? "Nilai" : "0"}
                             value={val}
-                            onChange={(e) =>
+                            onChange={(e) => {
+                              valuesProductIdRef.current = form.id_produk;
                               setHasilValues({
                                 ...hasilValues,
                                 [sp.parameter_uji]: e.target.value,
-                              })
-                            }
+                              });
+                            }}
                           />
                           {res && (
                             <span
@@ -387,7 +547,13 @@ export default function InspeksiPage() {
 
                   <div className="mt-3 flex items-center gap-2">
                     <span className="text-xs font-medium">Status Final:</span>
-                    <StatusBadge status={computeOverallStatus()} />
+                    {overallStatus === null ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-chip-bg text-muted">
+                        Belum diisi
+                      </span>
+                    ) : (
+                      <StatusBadge status={overallStatus} />
+                    )}
                   </div>
                 </div>
               )}
@@ -413,8 +579,8 @@ export default function InspeksiPage() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted pointer-events-none" />
         <Input
           placeholder="Cari no lot atau produk…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => onSearchChange(e.target.value)}
           className="pl-9"
         />
       </div>
@@ -434,21 +600,32 @@ export default function InspeksiPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading && (
+            {loading && <TableSkeleton rows={5} cols={7} />}
+            {!loading && loadError && (
               <TableRow>
-                <TableCell colSpan={7} className="px-4 py-8 text-center text-muted">
-                  Memuat…
+                <TableCell colSpan={7} className="px-4 py-8">
+                  <div className="flex items-center justify-center gap-3 text-muted">
+                    Gagal memuat data.
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fetchData()}
+                    >
+                      Coba Lagi
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             )}
-            {!loading && data.length === 0 && (
+            {!loading && !loadError && data.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="px-4 py-8 text-center text-muted">
                   Tidak ada data inspeksi.
                 </TableCell>
               </TableRow>
             )}
-            {data.map((row) => (
+            {!loading &&
+              data.map((row) => (
               <TableRow
                 key={row.id}
                 className="border-b border-border last:border-0 hover:bg-chip-bg/40 cursor-pointer"
@@ -473,13 +650,15 @@ export default function InspeksiPage() {
                     >
                       <Eye className="size-3.5" />
                     </button>
-                    <button
-                      className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
-                      onClick={() => openEdit(row)}
-                      title="Edit"
-                    >
-                      <Pencil className="size-3.5" />
-                    </button>
+                    {canUpdate && (
+                      <button
+                        className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
+                        onClick={() => openEdit(row)}
+                        title="Edit"
+                      >
+                        <Pencil className="size-3.5" />
+                      </button>
+                    )}
                     {canDelete && (
                       <button
                         className="p-1.5 rounded hover:bg-danger-bg text-danger"
@@ -496,6 +675,27 @@ export default function InspeksiPage() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination: load-more + counter */}
+      {!loading && !loadError && data.length > 0 && (
+        <div className="space-y-2">
+          {data.length < totalCount && (
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={loadingMore}
+              onClick={() => loadMore()}
+            >
+              {loadingMore
+                ? "Memuat…"
+                : `Muat lagi (${totalCount - data.length} tersisa)`}
+            </Button>
+          )}
+          <p className="text-xs text-muted text-center">
+            Menampilkan {data.length} dari {totalCount} data
+          </p>
+        </div>
+      )}
 
       {/* Detail dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
@@ -555,7 +755,7 @@ export default function InspeksiPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {detailItem.hasil_detail.map((h: any, i: number) => (
+                      {detailItem.hasil_detail.map((h: HasilUjiItem, i: number) => (
                         <tr key={i} className="border-b border-border last:border-0">
                           <td className="py-1.5">{h.p}</td>
                           <td className="py-1.5">{h.val}</td>

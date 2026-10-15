@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
 import type { DokumenArsip, UserRole } from "@/lib/types";
 import { toast } from "sonner";
+import { uploadDokumenAction, deleteDokumenAction } from "@/lib/actions/arsip-actions";
 import { Search, Plus, Trash2, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TableSkeleton } from "@/components/table-skeleton";
 import {
   Table,
   TableBody,
@@ -27,6 +29,13 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 
+// Module-level browser client: a single instance instead of one per render.
+const sb = createClient();
+
+// Monotonic counter used to ignore stale list-fetch responses (fast typing
+// through the debounced search).
+let requestSeq = 0;
+
 const kategoriDocList = [
   "Sertifikat Halal",
   "Sertifikat BPOM",
@@ -37,6 +46,36 @@ const kategoriDocList = [
   "Kontrak",
   "Lainnya",
 ];
+
+// Local calendar date as YYYY-MM-DD. Built from the local getters with
+// padStart — NOT toISOString(), which yields the UTC date and is off by a
+// day in UTC+7 afternoons.
+function localTodayStr(): string {
+  const now = new Date();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${m}-${d}`;
+}
+
+// Escape a raw search term for a PostgREST .or() ilike filter. The PostgREST
+// v12 quoted-value parser strips ONE backslash from EVERY "\X" pair
+// unconditionally, and Postgres LIKE then consumes one more level, so each
+// special character ships with two spare backslashes:
+//   \ -> \\\\  (parser: \\\\ -> \\ ; LIKE: \\ -> literal \)
+//   " -> \"    (parser: \" -> " ; keeps the quoted value intact)
+//   % -> \\\%  (parser: \\\% -> \% ; LIKE: \% -> literal %)
+//   _ -> \\_   (parser: \\_ -> \_ ; LIKE: \_ -> literal _)
+// The escaped term is placed inside double quotes in the filter itself: the
+// grammar treats , and ) as syntax only in bare values, while a quoted value
+// keeps them literal (a bare value like "%a,b%" would truncate at the comma
+// -> PGRST100 400).
+function escapeOr(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/%/g, "\\\\\\%")
+    .replace(/_/g, "\\\\_");
+}
 
 interface DocForm {
   judul_dokumen: string;
@@ -49,7 +88,7 @@ interface DocForm {
 const emptyForm: DocForm = {
   judul_dokumen: "",
   kategori: "",
-  tanggal_berlaku: new Date().toISOString().split("T")[0],
+  tanggal_berlaku: localTodayStr(),
   masa_kadaluarsa: "",
   link_drive: "",
 };
@@ -71,31 +110,101 @@ function StatusDocBadge({ expired }: { expired: boolean }) {
 
 export default function DokumenPage() {
   const { user } = useUser();
-  const sb = createClient();
 
   const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [dokumenList, setDokumenList] = useState<DokumenArsip[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<DocForm>(emptyForm);
   const [saving, setSaving] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    let q = sb.from("dokumen_arsip").select("*").order("created_at", { ascending: false });
-    if (search) {
-      q = q.or(
-        `judul_dokumen.ilike.%${search}%,kategori.ilike.%${search}%`
-      );
-    }
-    const { data } = await q;
-    setDokumenList((data as DokumenArsip[]) ?? []);
-    setLoading(false);
-  }, [search]);
+  // Pagination: list queries are bounded with .range(); count:"exact" returns
+  // the filtered row total (ignoring the range window) in the same request, so
+  // "Muat lagi" knows how many rows are left without a second query.
+  const [pageSize] = useState(50);
+  const [offset, setOffset] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Bounded query runner shared by the fresh fetch and load-more.
+  // append=false swaps the accumulated list (mount, search, retry, after a
+  // mutation); append=true fetches the page starting at `start` and appends.
+  const runQuery = useCallback(
+    async (start: number, append: boolean) => {
+      const seq = ++requestSeq;
+      if (append) setLoadingMore(true);
+      else setLoading(true);
+      let q = sb
+        .from("dokumen_arsip")
+        .select("*", { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(start, start + pageSize - 1);
+      if (search) {
+        const term = escapeOr(search);
+        q = q.or(
+          `judul_dokumen.ilike."%${term}%",kategori.ilike."%${term}%"`
+        );
+      }
+      const { data, count, error } = await q;
+      if (seq !== requestSeq) {
+        // Superseded by a newer request: release the loading flag this
+        // request owned (the newer one manages its own).
+        if (append) setLoadingMore(false);
+        return;
+      }
+      if (error) {
+        // A failed load-more keeps the accumulated rows and leaves the offset
+        // unchanged, so retrying "Muat lagi" re-requests the same page.
+        if (!append) {
+          setLoadError(true);
+          setDokumenList([]);
+          setTotalCount(0);
+        }
+        toast.error("Gagal memuat data. Coba lagi.");
+      } else {
+        const rows = (data as DokumenArsip[]) ?? [];
+        setLoadError(false);
+        setDokumenList((prev) => (append ? [...prev, ...rows] : rows));
+        setTotalCount(count ?? 0);
+        if (append) setOffset(start + rows.length);
+      }
+      if (append) setLoadingMore(false);
+      else setLoading(false);
+    },
+    [search, pageSize]
+  );
+
+  // Fresh fetch: page 0 replaces any accumulated rows and resets the offset
+  // (also fires when the debounced search changes).
+  const fetchData = useCallback(() => {
+    setOffset(0);
+    return runQuery(0, false);
+  }, [runQuery]);
+
+  // Load-more: append the next page to the accumulated rows.
+  const loadMore = useCallback(() => {
+    return runQuery(offset, true);
+  }, [runQuery, offset]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Clear the pending debounce timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, []);
+
+  function onSearchChange(value: string) {
+    setSearchInput(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setSearch(value), 300);
+  }
 
   function resetForm() {
     setForm(emptyForm);
@@ -109,22 +218,24 @@ export default function DokumenPage() {
     setSaving(true);
 
     try {
-      const { error } = await sb.from("dokumen_arsip").insert({
+      // Mutasi lewat server action: sesi + peran dicek server-side.
+      const res = await uploadDokumenAction({
         judul_dokumen: form.judul_dokumen,
         kategori: form.kategori,
         tanggal_berlaku: form.tanggal_berlaku,
         masa_kadaluarsa: form.masa_kadaluarsa,
         link_drive: form.link_drive,
-        file_url: "",
       });
-      if (error) throw error;
-
+      if (!res.ok) {
+        toast.error(res.error ?? "Gagal menyimpan dokumen. Coba lagi.");
+        return;
+      }
       toast.success("Dokumen berhasil ditambahkan.");
       setDialogOpen(false);
       resetForm();
       fetchData();
-    } catch (err: any) {
-      toast.error(err.message || "Gagal menyimpan.");
+    } catch {
+      toast.error("Gagal terhubung ke server. Coba lagi.");
     } finally {
       setSaving(false);
     }
@@ -132,22 +243,39 @@ export default function DokumenPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("Hapus dokumen ini?")) return;
-    const { error } = await sb.from("dokumen_arsip").delete().eq("id", id);
-    if (error) {
-      toast.error(error.message);
-    } else {
+
+    // Server action: role check server-side.
+    try {
+      const res = await deleteDokumenAction(id);
+      if (!res.ok) {
+        toast.error(res.error ?? "Gagal menghapus dokumen. Coba lagi.");
+        return;
+      }
       toast.success("Dokumen dihapus.");
       fetchData();
+    } catch {
+      toast.error("Gagal terhubung ke server. Coba lagi.");
     }
   }
 
   function isExpired(doc: DokumenArsip): boolean {
     if (!doc.masa_kadaluarsa) return false;
-    return new Date(doc.masa_kadaluarsa) < new Date();
+    // Compare DATE STRINGS, matching the dashboard's
+    // .lt("masa_kadaluarsa", today) partition: a document is expired only
+    // when its expiry date is strictly before today. new Date('YYYY-MM-DD')
+    // parses as UTC midnight, so a naive Date comparison flagged the last
+    // valid day (or any UTC+7 afternoon) as 'Kadaluarsa' while the
+    // dashboard counted the same document as 'Berlaku'.
+    return doc.masa_kadaluarsa.slice(0, 10) < localTodayStr();
   }
 
   const role: UserRole = (user?.role as UserRole) ?? "viewer";
   const canDelete = canAction(role, "delete_doc");
+  // dokumen_arsip writes are gated by create_doc, limited to the same
+  // privileged set as delete_doc ('admin qc', 'administrator inbionusa').
+  // Hide the upload trigger for other roles, whose insert would only fail
+  // server-side with a raw RLS error.
+  const canUpload = canAction(role, "create_doc");
 
   return (
     <div className="space-y-6">
@@ -166,7 +294,9 @@ export default function DokumenPage() {
             if (!v) resetForm();
           }}
         >
-          <DialogTrigger render={<Button><Plus className="size-4" /> Upload Dokumen</Button>} />
+          {canUpload && (
+            <DialogTrigger render={<Button><Plus className="size-4" /> Upload Dokumen</Button>} />
+          )}
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Tambah Dokumen</DialogTitle>
@@ -249,8 +379,8 @@ export default function DokumenPage() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted pointer-events-none" />
         <Input
           placeholder="Cari dokumen…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => onSearchChange(e.target.value)}
           className="pl-9"
         />
       </div>
@@ -270,14 +400,24 @@ export default function DokumenPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading && (
+            {loading && <TableSkeleton rows={5} cols={7} />}
+            {!loading && loadError && (
               <TableRow>
-                <TableCell colSpan={7} className="px-4 py-8 text-center text-muted">
-                  Memuat…
+                <TableCell colSpan={7} className="px-4 py-8">
+                  <div className="flex items-center justify-center gap-3 text-muted">
+                    Gagal memuat data.
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fetchData()}
+                    >
+                      Coba Lagi
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             )}
-            {!loading && dokumenList.length === 0 && (
+            {!loading && !loadError && dokumenList.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="px-4 py-8 text-center text-muted">
                   Tidak ada dokumen.
@@ -341,6 +481,27 @@ export default function DokumenPage() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination: load-more + counter */}
+      {!loading && !loadError && dokumenList.length > 0 && (
+        <div className="space-y-2">
+          {dokumenList.length < totalCount && (
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={loadingMore}
+              onClick={() => loadMore()}
+            >
+              {loadingMore
+                ? "Memuat…"
+                : `Muat lagi (${totalCount - dokumenList.length} tersisa)`}
+            </Button>
+          )}
+          <p className="text-xs text-muted text-center">
+            Menampilkan {dokumenList.length} dari {totalCount} data
+          </p>
+        </div>
+      )}
     </div>
   );
 }
