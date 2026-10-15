@@ -521,7 +521,7 @@ export default function InspeksiPage() {
                                 {sp.parameter_uji}
                               </span>
                               {sp.tipe_batas !== "TEXT" && (
-                                <span className="font-data ml-2 text-[11px] text-faint">
+                                <span className="font-data ml-2 text-[11px] text-muted">
                                   ({sp.tipe_batas}: {sp.nilai_min}
                                   {sp.tipe_batas === "RANGE" && ` — ${sp.nilai_maks}`}
                                   {sp.satuan && ` ${sp.satuan}`})

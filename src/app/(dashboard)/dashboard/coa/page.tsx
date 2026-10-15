@@ -817,8 +817,8 @@ export default function COAPage() {
               <TableHead className="pl-4">No COA</TableHead>
               <TableHead>Produk</TableHead>
               <TableHead>No Lot</TableHead>
-              <TableHead>Tgl Rilis</TableHead>
-              <TableHead>Tgl Expired</TableHead>
+              <TableHead className="text-right">Tgl Rilis</TableHead>
+              <TableHead className="text-right">Tgl Expired</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="pr-4">Aksi</TableHead>
             </TableRow>
@@ -880,10 +880,10 @@ export default function COAPage() {
                 <TableCell className="font-data text-muted">
                   {coa.no_lot}
                 </TableCell>
-                <TableCell className="font-data text-muted">
+                <TableCell className="font-data text-muted text-right">
                   {coa.tanggal_rilis}
                 </TableCell>
-                <TableCell className="font-data text-muted">
+                <TableCell className="font-data text-muted text-right">
                   {coa.tanggal_expired}
                 </TableCell>
                 <TableCell>{coaStatusBadge(coa.tanggal_expired)}</TableCell>

@@ -319,7 +319,7 @@ export default function DokumenPage() {
           )}
 
           <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
-            <DialogHeader className="gap-1 border-b border-border px-6 py-4 pr-14">
+            <DialogHeader className="gap-1 border-b border-border-soft px-6 py-4 pr-14">
               <p className="micro-label">DOKUMEN</p>
               <DialogTitle className="text-2xl font-semibold tracking-tight">
                 Tambah Dokumen
@@ -484,10 +484,10 @@ export default function DokumenPage() {
                     </div>
                   </TableCell>
                   <TableCell className="text-muted">{doc.kategori}</TableCell>
-                  <TableCell className="font-data text-muted">
+                  <TableCell className="font-data text-muted text-right">
                     {doc.tanggal_berlaku}
                   </TableCell>
-                  <TableCell className="font-data text-muted">
+                  <TableCell className="font-data text-muted text-right">
                     {doc.masa_kadaluarsa || "—"}
                   </TableCell>
                   <TableCell>
