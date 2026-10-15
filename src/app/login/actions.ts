@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   verifyPassword,
+  hashPassword,
   upgradePasswordHash,
   createSession,
   setSessionCookie,
@@ -15,6 +16,7 @@ export type LoginState = { error?: string };
 // Rate limit in-process per username: blokir setelah 5 kegagalan / 15 menit.
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000;
+const MAX_ENTRIES = 10_000; // batasi ukuran Map: cegah memory DoS via flooding username unik
 const attempts = new Map<string, { count: number; resetAt: number }>();
 
 function isRateLimited(username: string): boolean {
@@ -31,6 +33,11 @@ function recordFailure(username: string): void {
   const now = Date.now();
   const entry = attempts.get(username);
   if (!entry || now > entry.resetAt) {
+    // Evict entri tertua (urutan insert) saat Map penuh, agar tetap bounded.
+    if (!attempts.has(username) && attempts.size >= MAX_ENTRIES) {
+      const oldest = attempts.keys().next().value;
+      if (oldest !== undefined) attempts.delete(oldest);
+    }
     attempts.set(username, { count: 1, resetAt: now + WINDOW_MS });
   } else {
     entry.count += 1;
@@ -62,7 +69,14 @@ export async function loginAction(
     .limit(1);
 
   const user = users && users.length > 0 ? users[0] : null;
-  const valid = user ? await verifyPassword(password, user.password_hash) : false;
+  // Equalize scrypt cost: user tidak ada tetap membakar kerja hash yang setara,
+  // supaya waktu respons tidak membocorkan keberadaan username.
+  let valid = false;
+  if (user) {
+    valid = await verifyPassword(password, user.password_hash);
+  } else {
+    await hashPassword(password);
+  }
 
   if (userError || !user || !valid) {
     recordFailure(username);
