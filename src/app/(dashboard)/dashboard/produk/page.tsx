@@ -6,6 +6,7 @@ import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
 import type { MasterProduk, UserRole } from "@/lib/types";
 import { toast } from "sonner";
+import { saveProdukAction, deleteProdukAction } from "@/lib/actions/produk-actions";
 import {
   Search,
   Plus,
@@ -40,18 +41,6 @@ const sb = createClient();
 
 // Monotonic counter used to ignore stale list-fetch responses.
 let requestSeq = 0;
-
-function friendlyDbError(
-  err: { message?: string; code?: string } | null | undefined
-): string {
-  const msg: string = err?.message ?? "";
-  const code: string = err?.code ?? "";
-  if (code === "23503" || /foreign key/i.test(msg))
-    return "Gagal menghapus: produk masih dipakai oleh data lain.";
-  if (code === "42501" || /row-level security|permission denied/i.test(msg))
-    return "Gagal menghapus: Anda tidak memiliki izin untuk aksi ini.";
-  return "Gagal menghapus produk. Coba lagi.";
-}
 
 const kategoriList = [
   "Bahan Baku",
@@ -235,99 +224,17 @@ export default function ProdukPage() {
       return;
     }
     setSaving(true);
-
     try {
-      if (editingId) {
-        const { error: e1 } = await sb
-          .from("master_produk")
-          .update({
-            kode_produk: form.kode_produk,
-            nama_produk: form.nama_produk,
-            kategori: form.kategori,
-            satuan: form.satuan,
-            status_halal: form.status_halal,
-            tipe_kemasan: form.tipe_kemasan,
-          })
-          .eq("id", editingId);
-        if (e1) throw e1;
-
-        // Reversible spec save: snapshot the existing rows BEFORE deleting, so
-        // a failed insert can restore the old set instead of losing it forever.
-        const { data: oldSpecs, error: snapErr } = await sb
-          .from("spesifikasi")
-          .select("*")
-          .eq("id_produk", editingId);
-        if (snapErr) throw snapErr;
-
-        const { error: delErr } = await sb
-          .from("spesifikasi")
-          .delete()
-          .eq("id_produk", editingId);
-        if (delErr) throw delErr;
-
-        if (spesifikasi.length > 0) {
-          const { error: e2 } = await sb.from("spesifikasi").insert(
-            spesifikasi.map((s, i) => ({
-              id_produk: editingId,
-              ...s,
-              urutan: i,
-            }))
-          );
-          if (e2) {
-            // Rollback: restore the snapshot rows (best effort).
-            const snap = oldSpecs ?? [];
-            if (snap.length > 0) {
-              const { error: rbErr } = await sb
-                .from("spesifikasi")
-                .insert(snap);
-              if (rbErr) {
-                console.error("Gagal memulihkan spesifikasi lama:", rbErr);
-                toast.error(
-                  "Gagal menyimpan spesifikasi, dan pemulihan data lama GAGAL. Jangan tutup dialog; coba simpan lagi atau hubungi admin."
-                );
-                return;
-              }
-            }
-            toast.error(
-              "Gagal menyimpan spesifikasi. Spesifikasi lama telah dipulihkan."
-            );
-            return;
-          }
-        }
-        toast.success("Produk berhasil diperbarui.");
-      } else {
-        const { data: inserted, error: e1 } = await sb
-          .from("master_produk")
-          .insert({
-            kode_produk: form.kode_produk,
-            nama_produk: form.nama_produk,
-            kategori: form.kategori,
-            satuan: form.satuan,
-            status_halal: form.status_halal,
-            tipe_kemasan: form.tipe_kemasan,
-          })
-          .select()
-          .single();
-        if (e1) throw e1;
-
-        if (spesifikasi.length > 0 && inserted) {
-          const { error: e2 } = await sb.from("spesifikasi").insert(
-            spesifikasi.map((s, i) => ({
-              id_produk: inserted.id,
-              ...s,
-              urutan: i,
-            }))
-          );
-          if (e2) throw e2;
-        }
-        toast.success("Produk berhasil ditambahkan.");
+      // Mutasi lewat server action: sesi + peran dicek server-side.
+      const res = await saveProdukAction({ id: editingId, ...form, spesifikasi });
+      if (!res.ok) {
+        toast.error(res.error ?? "Gagal menyimpan produk. Coba lagi.");
+        return;
       }
-
+      toast.success(editingId ? "Produk berhasil diperbarui." : "Produk berhasil ditambahkan.");
       setDialogOpen(false);
       resetForm();
       fetchData();
-    } catch (err: any) {
-      toast.error(friendlyDbError(err));
     } finally {
       setSaving(false);
     }
@@ -336,43 +243,14 @@ export default function ProdukPage() {
   async function handleDelete(id: string) {
     if (!confirm("Hapus produk ini? Semua spesifikasi juga akan dihapus.")) return;
 
-    // Pre-check COA references: deleting the product would leave orphan COA
-    // rows that vanish from the COA list while the dashboard still counts them.
-    const { count: coaCount, error: coaErr } = await sb
-      .from("coa")
-      .select("id", { count: "exact", head: true })
-      .eq("id_produk", id);
-    if (coaErr) {
-      toast.error("Gagal memuat data. Coba lagi.");
+    // Server action: pre-check COA/hasil uji + role check server-side.
+    const res = await deleteProdukAction(id);
+    if (!res.ok) {
+      toast.error(res.error ?? "Gagal menghapus produk. Coba lagi.");
       return;
     }
-    if ((coaCount ?? 0) > 0) {
-      toast.error("Produk masih punya COA. Hapus COA-nya dulu.");
-      return;
-    }
-
-    // Check no hasil_uji references this product
-    const { data: existingUji, error: ujiErr } = await sb
-      .from("hasil_uji")
-      .select("id")
-      .eq("id_produk", id)
-      .limit(1);
-    if (ujiErr) {
-      toast.error("Gagal memuat data. Coba lagi.");
-      return;
-    }
-    if (existingUji && existingUji.length > 0) {
-      toast.error("Produk tidak dapat dihapus karena masih memiliki hasil uji.");
-      return;
-    }
-
-    const { error } = await sb.from("master_produk").delete().eq("id", id);
-    if (error) {
-      toast.error(friendlyDbError(error));
-    } else {
-      toast.success("Produk dihapus.");
-      fetchData();
-    }
+    toast.success("Produk dihapus.");
+    fetchData();
   }
 
   const role: UserRole = (user?.role as UserRole) ?? "viewer";
