@@ -4,18 +4,24 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
-import type { MasterProduk, SpesifikasiItem, UserRole } from "@/lib/types";
+import type { MasterProduk, UserRole } from "@/lib/types";
 import { toast } from "sonner";
 import {
   Search,
   Plus,
   Pencil,
   Trash2,
-  GripVertical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Dialog,
   DialogTrigger,
@@ -25,6 +31,7 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 
 const kategoriList = [
   "Bahan Baku",
@@ -65,12 +72,12 @@ const emptyForm: ProdukForm = {
 function statusHalalBadge(val: string) {
   if (val === "Halal")
     return (
-      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+      <Badge variant="outline" className="bg-success-bg text-success-dark border-success-bg">
         {val}
       </Badge>
     );
   return (
-    <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+    <Badge variant="outline" className="bg-danger-bg text-danger-dark border-danger-bg">
       {val}
     </Badge>
   );
@@ -242,6 +249,19 @@ export default function ProdukPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("Hapus produk ini? Semua spesifikasi juga akan dihapus.")) return;
+
+    // Check no hasil_uji references this product
+    const { data: existingUji } = await sb
+      .from("hasil_uji")
+      .select("id")
+      .eq("id_produk", id)
+      .limit(1);
+
+    if (existingUji && existingUji.length > 0) {
+      toast.error("Produk tidak dapat dihapus karena masih memiliki hasil uji.");
+      return;
+    }
+
     const { error } = await sb.from("master_produk").delete().eq("id", id);
     if (error) {
       toast.error(error.message);
@@ -255,12 +275,12 @@ export default function ProdukPage() {
   const canDelete = canAction(role, "delete_produk");
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold">Master Produk</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          <p className="text-sm text-muted mt-1">
             Kelola daftar produk dan spesifikasi pengujian.
           </p>
         </div>
@@ -295,7 +315,7 @@ export default function ProdukPage() {
                 <div className="space-y-1">
                   <label className="text-xs font-medium">Kategori</label>
                   <select
-                    className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                    className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                     value={form.kategori}
                     onChange={(e) => setForm({ ...form, kategori: e.target.value })}
                   >
@@ -308,7 +328,7 @@ export default function ProdukPage() {
                 <div className="space-y-1">
                   <label className="text-xs font-medium">Satuan</label>
                   <select
-                    className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                    className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                     value={form.satuan}
                     onChange={(e) => setForm({ ...form, satuan: e.target.value })}
                   >
@@ -321,7 +341,7 @@ export default function ProdukPage() {
                 <div className="space-y-1">
                   <label className="text-xs font-medium">Status Halal</label>
                   <select
-                    className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                    className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                     value={form.status_halal}
                     onChange={(e) => setForm({ ...form, status_halal: e.target.value })}
                   >
@@ -332,7 +352,7 @@ export default function ProdukPage() {
                 <div className="space-y-1">
                   <label className="text-xs font-medium">Tipe Kemasan</label>
                   <select
-                    className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                    className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                     value={form.tipe_kemasan}
                     onChange={(e) => setForm({ ...form, tipe_kemasan: e.target.value })}
                   >
@@ -345,9 +365,9 @@ export default function ProdukPage() {
               </div>
 
               {/* Spesifikasi section */}
-              <div className="border-t pt-4">
+              <div className="border-t border-border pt-4">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted">
                     Spesifikasi Pengujian
                   </span>
                   <Button variant="outline" size="sm" onClick={addSpesifikasiRow}>
@@ -356,7 +376,7 @@ export default function ProdukPage() {
                 </div>
 
                 {spesifikasi.length === 0 && (
-                  <p className="text-xs text-muted-foreground py-2">
+                  <p className="text-xs text-muted py-2">
                     Belum ada parameter. Klik &ldquo;Tambah Parameter&rdquo; untuk menambahkan.
                   </p>
                 )}
@@ -365,11 +385,11 @@ export default function ProdukPage() {
                   {spesifikasi.map((sp, idx) => (
                     <div
                       key={idx}
-                      className="flex items-start gap-2 p-3 rounded-lg border bg-muted/30"
+                      className="flex items-start gap-2 p-3 rounded-lg border border-border bg-surface-alt"
                     >
                       <div className="flex-1 grid grid-cols-6 gap-2">
                         <div className="col-span-2 space-y-1">
-                          <label className="text-[10px] font-medium text-muted-foreground">Parameter</label>
+                          <label className="text-[10px] font-medium text-muted">Parameter</label>
                           <Input
                             value={sp.parameter_uji}
                             onChange={(e) => updateSpesifikasi(idx, "parameter_uji", e.target.value)}
@@ -377,9 +397,9 @@ export default function ProdukPage() {
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[10px] font-medium text-muted-foreground">Tipe</label>
+                          <label className="text-[10px] font-medium text-muted">Tipe</label>
                           <select
-                            className="h-8 w-full rounded-lg border border-input bg-white px-2 text-xs focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                            className="flex h-8 w-full rounded-lg border border-input bg-white px-2 text-xs shadow-sm transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                             value={sp.tipe_batas}
                             onChange={(e) => updateSpesifikasi(idx, "tipe_batas", e.target.value)}
                           >
@@ -390,7 +410,7 @@ export default function ProdukPage() {
                           </select>
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[10px] font-medium text-muted-foreground">Min</label>
+                          <label className="text-[10px] font-medium text-muted">Min</label>
                           <Input
                             value={sp.nilai_min}
                             onChange={(e) => updateSpesifikasi(idx, "nilai_min", e.target.value)}
@@ -398,7 +418,7 @@ export default function ProdukPage() {
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[10px] font-medium text-muted-foreground">Maks</label>
+                          <label className="text-[10px] font-medium text-muted">Maks</label>
                           <Input
                             value={sp.nilai_maks}
                             onChange={(e) => updateSpesifikasi(idx, "nilai_maks", e.target.value)}
@@ -406,7 +426,7 @@ export default function ProdukPage() {
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[10px] font-medium text-muted-foreground">Satuan</label>
+                          <label className="text-[10px] font-medium text-muted">Satuan</label>
                           <Input
                             value={sp.satuan}
                             onChange={(e) => updateSpesifikasi(idx, "satuan", e.target.value)}
@@ -415,7 +435,7 @@ export default function ProdukPage() {
                         </div>
                       </div>
                       <button
-                        className="mt-5 p-1 rounded hover:bg-red-50 text-red-500"
+                        className="mt-5 p-1 rounded hover:bg-danger-bg text-danger"
                         onClick={() => removeSpesifikasi(idx)}
                         title="Hapus"
                       >
@@ -438,8 +458,8 @@ export default function ProdukPage() {
       </div>
 
       {/* Search */}
-      <div className="search-wrap max-w-xs">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+      <div className="relative max-w-xs">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted pointer-events-none" />
         <Input
           placeholder="Cari produk…"
           value={search}
@@ -449,69 +469,67 @@ export default function ProdukPage() {
       </div>
 
       {/* Table */}
-      <div className="panel">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wider">
-                <th className="text-left px-4 py-3 font-medium">Produk</th>
-                <th className="text-left px-4 py-3 font-medium">Kategori</th>
-                <th className="text-left px-4 py-3 font-medium">Satuan</th>
-                <th className="text-left px-4 py-3 font-medium">Halal</th>
-                <th className="text-left px-4 py-3 font-medium">Kemasan</th>
-                <th className="text-left px-4 py-3 font-medium">Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
-                    Memuat…
-                  </td>
-                </tr>
-              )}
-              {!loading && produkList.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
-                    Tidak ada produk.
-                  </td>
-                </tr>
-              )}
-              {produkList.map((p) => (
-                <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/30">
-                  <td className="px-4 py-3">
-                    <div className="font-medium">{p.nama_produk}</div>
-                    <div className="text-xs text-muted-foreground">{p.kode_produk}</div>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">{p.kategori}</td>
-                  <td className="px-4 py-3">{p.satuan}</td>
-                  <td className="px-4 py-3">{statusHalalBadge(p.status_halal)}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{p.tipe_kemasan}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
+      <div className="rounded-xl bg-surface shadow-card-sm overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-surface-alt">
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Produk</TableHead>
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Kategori</TableHead>
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Satuan</TableHead>
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Halal</TableHead>
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Kemasan</TableHead>
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Aksi</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading && (
+              <TableRow>
+                <TableCell colSpan={6} className="px-4 py-8 text-center text-muted">
+                  Memuat…
+                </TableCell>
+              </TableRow>
+            )}
+            {!loading && produkList.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="px-4 py-8 text-center text-muted">
+                  Tidak ada produk.
+                </TableCell>
+              </TableRow>
+            )}
+            {produkList.map((p) => (
+              <TableRow key={p.id} className="border-b border-border last:border-0 hover:bg-chip-bg/40">
+                <TableCell className="px-4 py-3">
+                  <div className="font-medium">{p.nama_produk}</div>
+                  <div className="text-xs text-muted">{p.kode_produk}</div>
+                </TableCell>
+                <TableCell className="px-4 py-3 text-muted">{p.kategori}</TableCell>
+                <TableCell className="px-4 py-3">{p.satuan}</TableCell>
+                <TableCell className="px-4 py-3">{statusHalalBadge(p.status_halal)}</TableCell>
+                <TableCell className="px-4 py-3 text-muted">{p.tipe_kemasan}</TableCell>
+                <TableCell className="px-4 py-3">
+                  <div className="flex items-center gap-1">
+                    <button
+                      className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
+                      onClick={() => openEdit(p)}
+                      title="Edit"
+                    >
+                      <Pencil className="size-3.5" />
+                    </button>
+                    {canDelete && (
                       <button
-                        className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                        onClick={() => openEdit(p)}
-                        title="Edit"
+                        className="p-1.5 rounded hover:bg-danger-bg text-danger"
+                        onClick={() => handleDelete(p.id)}
+                        title="Hapus"
                       >
-                        <Pencil className="size-3.5" />
+                        <Trash2 className="size-3.5" />
                       </button>
-                      {canDelete && (
-                        <button
-                          className="p-1.5 rounded hover:bg-red-50 text-red-500"
-                          onClick={() => handleDelete(p.id)}
-                          title="Hapus"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
     </div>
   );

@@ -4,11 +4,19 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
-import type { COA, HasilUji, MasterProduk, UserRole } from "@/lib/types";
+import type { UserRole } from "@/lib/types";
 import { toast } from "sonner";
 import { Search, Plus, Pencil, Trash2, Printer, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Dialog,
   DialogTrigger,
@@ -36,6 +44,30 @@ const emptyForm: COAForm = {
   mfg_date: "",
   tanda_tangan: "Terverifikasi Digital",
 };
+
+function generateNoCOA(prevCount: number): string {
+  const year = new Date().getFullYear();
+  const seq = (prevCount + 1).toString().padStart(4, "0");
+  return `COA/IBN/${year}/${seq}`;
+}
+
+async function logAudit(
+  sb: ReturnType<typeof createClient>,
+  user_name: string,
+  aksi: string,
+  referensi: string
+) {
+  try {
+    await sb.from("audit_log").insert({
+      waktu: new Date().toISOString(),
+      user_name,
+      aksi,
+      referensi,
+    });
+  } catch {
+    // silent — audit failure should not block the user
+  }
+}
 
 export default function COAPage() {
   const { user } = useUser();
@@ -118,6 +150,7 @@ export default function COAPage() {
       }
       setSaving(true);
       try {
+        const before = coaList.find((c: any) => c.id === editingId);
         const { error } = await sb
           .from("coa")
           .update({
@@ -129,7 +162,10 @@ export default function COAPage() {
           })
           .eq("id", editingId);
         if (error) throw error;
+
         toast.success("COA diperbarui.");
+        logAudit(sb, user?.nama_lengkap || user?.username || "system", `update_coa: ${form.no_coa}`, editingId);
+
         setDialogOpen(false);
         resetForm();
         fetchData();
@@ -155,7 +191,7 @@ export default function COAPage() {
       if (!selected) throw new Error("Hasil uji tidak ditemukan.");
 
       // Auto-generate COA number if empty
-      const no_coa = form.no_coa || `COA-${Date.now()}`;
+      const no_coa = form.no_coa || generateNoCOA(coaList.length);
 
       const snapshot = {
         produk: selected.master_produk?.nama_produk || "",
@@ -177,6 +213,8 @@ export default function COAPage() {
       if (error) throw error;
 
       toast.success("COA berhasil diterbitkan.");
+      logAudit(sb, user?.nama_lengkap || user?.username || "system", `terbit_coa: ${no_coa}`, `hasil_uji:${selected.id}`);
+
       setDialogOpen(false);
       resetForm();
       fetchData();
@@ -190,11 +228,13 @@ export default function COAPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("Hapus COA ini?")) return;
+    const target = coaList.find((c: any) => c.id === id);
     const { error } = await sb.from("coa").delete().eq("id", id);
     if (error) {
       toast.error(error.message);
     } else {
       toast.success("COA dihapus.");
+      logAudit(sb, user?.nama_lengkap || user?.username || "system", `delete_coa: ${target?.no_coa || id}`, id);
       fetchData();
       fetchAvailableHasil();
     }
@@ -330,7 +370,6 @@ export default function COAPage() {
     </thead>
     <tbody>
       ${items.map((item: any) => {
-        const spec = [item.mn || "-", item.mx || "-"].filter(Boolean).join(" – ");
         const specText = item.t === "TEXT" ? "Teks" : item.t === "MIN" ? "> " + item.mn : item.t === "MAX" ? "< " + item.mx : (item.mn || "-") + " — " + (item.mx || "-");
         return `<tr><td>${item.p}</td><td>${specText}</td><td>${item.val || "-"}</td><td>${item.st === "PASS" ? "✓ PASS" : "✗ FAIL"}</td></tr>`;
       }).join("")}
@@ -368,12 +407,12 @@ export default function COAPage() {
   );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold">Certificate of Analysis</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          <p className="text-sm text-muted mt-1">
             Terbitkan dan kelola COA produk.
           </p>
         </div>
@@ -400,9 +439,20 @@ export default function COAPage() {
                       Pilih Hasil Uji (PASS)
                     </label>
                     <select
-                      className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                      className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                       value={form.id_hasil}
-                      onChange={(e) => setForm({ ...form, id_hasil: e.target.value })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setForm({ ...form, id_hasil: val });
+                        // Auto-generate COA number when a hasil is selected
+                        if (val && !form.no_coa) {
+                          setForm((prev) => ({
+                            ...prev,
+                            id_hasil: val,
+                            no_coa: generateNoCOA(coaList.length),
+                          }));
+                        }
+                      }}
                     >
                       <option value="">Pilih hasil uji…</option>
                       {availableHasil.map((h: any) => (
@@ -413,7 +463,7 @@ export default function COAPage() {
                       ))}
                     </select>
                     {availableHasil.length === 0 && (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted">
                         Tidak ada hasil uji PASS yang tersedia.
                       </p>
                     )}
@@ -475,16 +525,16 @@ export default function COAPage() {
                 </div>
 
                 {!editingId && selectedHasil && (
-                  <div className="border-t pt-3">
-                    <span className="text-xs font-semibold text-muted-foreground block mb-2">
+                  <div className="border-t border-border pt-3">
+                    <span className="text-xs font-semibold text-muted block mb-2">
                       Pratinjau Hasil Uji
                     </span>
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="border-b border-border">
-                          <th className="text-left py-1 font-medium">Parameter</th>
-                          <th className="text-left py-1 font-medium">Nilai</th>
-                          <th className="text-left py-1 font-medium">Status</th>
+                          <th className="text-left py-1 font-medium text-muted">Parameter</th>
+                          <th className="text-left py-1 font-medium text-muted">Nilai</th>
+                          <th className="text-left py-1 font-medium text-muted">Status</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -493,7 +543,7 @@ export default function COAPage() {
                             <tr key={i} className="border-b border-border last:border-0">
                               <td className="py-1">{item.p}</td>
                               <td className="py-1">{item.val}</td>
-                              <td className="py-1 font-medium text-emerald-700">
+                              <td className="py-1 font-medium text-success-dark">
                                 {item.st}
                               </td>
                             </tr>
@@ -521,8 +571,8 @@ export default function COAPage() {
       </div>
 
       {/* Search */}
-      <div className="search-wrap max-w-xs">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+      <div className="relative max-w-xs">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted pointer-events-none" />
         <Input
           placeholder="Cari COA atau produk…"
           value={search}
@@ -532,91 +582,89 @@ export default function COAPage() {
       </div>
 
       {/* Table */}
-      <div className="panel">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wider">
-                <th className="text-left px-4 py-3 font-medium">No COA</th>
-                <th className="text-left px-4 py-3 font-medium">Produk</th>
-                <th className="text-left px-4 py-3 font-medium">No Lot</th>
-                <th className="text-left px-4 py-3 font-medium">Tgl Rilis</th>
-                <th className="text-left px-4 py-3 font-medium">Tgl Expired</th>
-                <th className="text-left px-4 py-3 font-medium">Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
-                    Memuat…
-                  </td>
-                </tr>
-              )}
-              {!loading && coaList.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
-                    Belum ada COA.
-                  </td>
-                </tr>
-              )}
-              {coaList.map((coa) => (
-                <tr
-                  key={coa.id}
-                  className="border-b border-border last:border-0 hover:bg-muted/30"
-                >
-                  <td className="px-4 py-3 font-medium">{coa.no_coa}</td>
-                  <td className="px-4 py-3">
-                    {coa.master_produk?.nama_produk || "-"}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {coa.no_lot}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {coa.tanggal_rilis}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {coa.tanggal_expired}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
+      <div className="rounded-xl bg-surface shadow-card-sm overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-surface-alt">
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">No COA</TableHead>
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Produk</TableHead>
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">No Lot</TableHead>
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Tgl Rilis</TableHead>
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Tgl Expired</TableHead>
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Aksi</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading && (
+              <TableRow>
+                <TableCell colSpan={6} className="px-4 py-8 text-center text-muted">
+                  Memuat…
+                </TableCell>
+              </TableRow>
+            )}
+            {!loading && coaList.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="px-4 py-8 text-center text-muted">
+                  Belum ada COA.
+                </TableCell>
+              </TableRow>
+            )}
+            {coaList.map((coa) => (
+              <TableRow
+                key={coa.id}
+                className="border-b border-border last:border-0 hover:bg-chip-bg/40"
+              >
+                <TableCell className="px-4 py-3 font-medium">{coa.no_coa}</TableCell>
+                <TableCell className="px-4 py-3">
+                  {coa.master_produk?.nama_produk || "-"}
+                </TableCell>
+                <TableCell className="px-4 py-3 text-muted">
+                  {coa.no_lot}
+                </TableCell>
+                <TableCell className="px-4 py-3 text-muted">
+                  {coa.tanggal_rilis}
+                </TableCell>
+                <TableCell className="px-4 py-3 text-muted">
+                  {coa.tanggal_expired}
+                </TableCell>
+                <TableCell className="px-4 py-3">
+                  <div className="flex items-center gap-1">
+                    <button
+                      className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
+                      onClick={() => openDetail(coa)}
+                      title="Detail"
+                    >
+                      <Eye className="size-3.5" />
+                    </button>
+                    <button
+                      className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
+                      onClick={() => openEdit(coa)}
+                      title="Edit"
+                    >
+                      <Pencil className="size-3.5" />
+                    </button>
+                    <button
+                      className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
+                      onClick={() => handlePrint(coa)}
+                      title="Cetak"
+                    >
+                      <Printer className="size-3.5" />
+                    </button>
+                    {canDelete && (
                       <button
-                        className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                        onClick={() => openDetail(coa)}
-                        title="Detail"
+                        className="p-1.5 rounded hover:bg-danger-bg text-danger"
+                        onClick={() => handleDelete(coa.id)}
+                        title="Hapus"
                       >
-                        <Eye className="size-3.5" />
+                        <Trash2 className="size-3.5" />
                       </button>
-                      <button
-                        className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                        onClick={() => openEdit(coa)}
-                        title="Edit"
-                      >
-                        <Pencil className="size-3.5" />
-                      </button>
-                      <button
-                        className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                        onClick={() => handlePrint(coa)}
-                        title="Cetak"
-                      >
-                        <Printer className="size-3.5" />
-                      </button>
-                      {canDelete && (
-                        <button
-                          className="p-1.5 rounded hover:bg-red-50 text-red-500"
-                          onClick={() => handleDelete(coa.id)}
-                          title="Hapus"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
 
       {/* Detail dialog */}
@@ -629,51 +677,51 @@ export default function COAPage() {
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
                 <div>
-                  <span className="text-xs text-muted-foreground">No COA</span>
+                  <span className="text-xs text-muted">No COA</span>
                   <p className="font-medium">{detailItem.no_coa}</p>
                 </div>
                 <div>
-                  <span className="text-xs text-muted-foreground">Produk</span>
+                  <span className="text-xs text-muted">Produk</span>
                   <p className="font-medium">
                     {detailItem.master_produk?.nama_produk || "-"}
                   </p>
                 </div>
                 <div>
-                  <span className="text-xs text-muted-foreground">No Lot</span>
+                  <span className="text-xs text-muted">No Lot</span>
                   <p>{detailItem.no_lot}</p>
                 </div>
                 <div>
-                  <span className="text-xs text-muted-foreground">Tgl Rilis</span>
+                  <span className="text-xs text-muted">Tgl Rilis</span>
                   <p>{detailItem.tanggal_rilis}</p>
                 </div>
                 <div>
-                  <span className="text-xs text-muted-foreground">Tgl Expired</span>
+                  <span className="text-xs text-muted">Tgl Expired</span>
                   <p>{detailItem.tanggal_expired}</p>
                 </div>
                 {detailItem.mfg_date && (
                   <div>
-                    <span className="text-xs text-muted-foreground">MFG Date</span>
+                    <span className="text-xs text-muted">MFG Date</span>
                     <p>{detailItem.mfg_date}</p>
                   </div>
                 )}
               </div>
 
               <div>
-                <span className="text-xs text-muted-foreground">Tanda Tangan</span>
+                <span className="text-xs text-muted">Tanda Tangan</span>
                 <p className="text-sm">{detailItem.tanda_tangan_digital}</p>
               </div>
 
               {detailItem.hasil_uji_snapshot?.items?.length > 0 && (
                 <div>
-                  <span className="text-xs font-semibold text-muted-foreground block mb-2">
+                  <span className="text-xs font-semibold text-muted block mb-2">
                     Hasil Uji
                   </span>
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-border">
-                        <th className="text-left py-1 font-medium">Parameter</th>
-                        <th className="text-left py-1 font-medium">Nilai</th>
-                        <th className="text-left py-1 font-medium">Status</th>
+                        <th className="text-left py-1 font-medium text-muted">Parameter</th>
+                        <th className="text-left py-1 font-medium text-muted">Nilai</th>
+                        <th className="text-left py-1 font-medium text-muted">Status</th>
                       </tr>
                     </thead>
                     <tbody>

@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { HasilUji, DashboardData } from "@/lib/types";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -27,63 +26,58 @@ const statCards = [
     key: "total_produk",
     label: "Total Produk",
     icon: Package,
-    bg: "bg-emerald-50",
-    text: "text-emerald-600",
-    iconColor: "#059669",
+    bg: "bg-success-bg",
+    text: "text-success",
   },
   {
     key: "total_lot",
     label: "Lot Diuji",
     icon: FlaskConical,
-    bg: "bg-blue-50",
-    text: "text-blue-600",
-    iconColor: "#2563eb",
+    bg: "bg-info-bg",
+    text: "text-info",
   },
   {
     key: "lot_pass",
     label: "Lot PASS",
     icon: CheckCircle2,
-    bg: "bg-emerald-50",
-    text: "text-emerald-600",
-    iconColor: "#059669",
+    bg: "bg-success-bg",
+    text: "text-success",
   },
   {
     key: "lot_fail",
     label: "Lot FAIL",
     icon: XCircle,
-    bg: "bg-red-50",
-    text: "text-red-600",
-    iconColor: "#dc2626",
+    bg: "bg-danger-bg",
+    text: "text-danger",
   },
   {
     key: "total_coa",
     label: "COA Terbit",
     icon: FileText,
-    bg: "bg-violet-50",
-    text: "text-violet-600",
-    iconColor: "#7c3aed",
+    bg: "bg-violet-bg",
+    text: "text-violet",
   },
   {
     key: "dok_berlaku",
     label: "Dokumen",
     icon: FolderArchive,
-    bg: "bg-amber-50",
-    text: "text-amber-600",
-    iconColor: "#d97706",
+    bg: "bg-warning-bg",
+    text: "text-warning",
   },
 ];
 
-function statusBadge(status: string) {
-  if (status === "PASS")
-    return (
-      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50">
-        PASS
-      </Badge>
-    );
+function StatusBadge({ status }: { status: string }) {
+  const isPass = status === "PASS";
   return (
-    <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 hover:bg-red-50">
-      FAIL
-    </Badge>
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+        isPass
+          ? "bg-success-bg text-success-dark"
+          : "bg-danger-bg text-danger-dark"
+      }`}
+    >
+      {status}
+    </span>
   );
 }
 
@@ -111,7 +105,7 @@ function DonutChart({
             cy="50"
             r="42"
             fill="none"
-            stroke="#f1f5f9"
+            stroke="var(--color-border)"
             strokeWidth="10"
           />
           {passRate > 0 && (
@@ -120,7 +114,7 @@ function DonutChart({
               cy="50"
               r="42"
               fill="none"
-              stroke="#047857"
+              stroke="var(--color-success)"
               strokeWidth="10"
               strokeDasharray={circumference}
               strokeDashoffset={passOffset}
@@ -134,7 +128,7 @@ function DonutChart({
               cy="50"
               r="42"
               fill="none"
-              stroke="#b91c1c"
+              stroke="var(--color-danger)"
               strokeWidth="10"
               strokeDasharray={circumference}
               strokeDashoffset={failOffset}
@@ -145,22 +139,28 @@ function DonutChart({
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-2xl font-bold tracking-tight">{passRate}%</span>
-          <span className="text-[11px] text-muted-foreground font-medium">
-            PASS
-          </span>
+          <span className="text-[11px] text-muted font-medium">PASS</span>
         </div>
       </div>
       <div className="flex items-center gap-5 mt-3 text-sm">
         <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
-          <span className="text-muted-foreground">
-            PASS <span className="font-semibold text-foreground">{passCount}</span>
+          <span
+            className="w-2.5 h-2.5 rounded-full"
+            style={{ backgroundColor: "var(--color-success)" }}
+          />
+          <span className="text-muted">
+            PASS{" "}
+            <span className="font-semibold text-text">{passCount}</span>
           </span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-red-600" />
-          <span className="text-muted-foreground">
-            FAIL <span className="font-semibold text-foreground">{failCount}</span>
+          <span
+            className="w-2.5 h-2.5 rounded-full"
+            style={{ backgroundColor: "var(--color-danger)" }}
+          />
+          <span className="text-muted">
+            FAIL{" "}
+            <span className="font-semibold text-text">{failCount}</span>
           </span>
         </div>
       </div>
@@ -170,9 +170,9 @@ function DonutChart({
 
 function StatCardSkeleton() {
   return (
-    <div className="rounded-xl border border-border bg-white p-5 shadow-xs">
+    <div className="rounded-xl bg-surface shadow-card-sm p-5">
       <div className="flex items-start gap-4">
-        <Skeleton className="size-10 rounded-lg shrink-0" />
+        <Skeleton className="size-11 rounded-xl shrink-0" />
         <div className="flex-1 min-w-0 space-y-2">
           <Skeleton className="h-3 w-20" />
           <Skeleton className="h-7 w-16" />
@@ -184,7 +184,7 @@ function StatCardSkeleton() {
 
 function TableSkeleton() {
   return (
-    <div className="rounded-xl border border-border bg-white shadow-xs">
+    <div className="rounded-xl bg-surface shadow-card-sm">
       <div className="px-5 py-4 border-b border-border">
         <Skeleton className="h-4 w-36" />
       </div>
@@ -274,22 +274,17 @@ export default function DashboardPage() {
   if (loading || !data) {
     return (
       <div className="space-y-6">
-        {/* Greeting skeleton */}
         <div className="space-y-1.5">
           <Skeleton className="h-7 w-52" />
           <Skeleton className="h-4 w-44" />
         </div>
-
-        {/* Stat cards skeleton */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <StatCardSkeleton key={i} />
           ))}
         </div>
-
-        {/* Donut + table skeleton */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="rounded-xl border border-border bg-white p-6 shadow-xs">
+          <div className="rounded-xl bg-surface shadow-card-sm p-6">
             <Skeleton className="h-4 w-32 mb-6" />
             <div className="flex flex-col items-center gap-4">
               <Skeleton className="size-36 rounded-full" />
@@ -312,8 +307,8 @@ export default function DashboardPage() {
     <div className="space-y-6">
       {/* Greeting */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">{greeting}</h1>
-        <p className="text-sm text-muted-foreground mt-1">
+        <h1 className="text-xl font-bold">{greeting}</h1>
+        <p className="text-sm text-muted mt-1">
           Ringkasan sistem quality control.
         </p>
       </div>
@@ -326,22 +321,20 @@ export default function DashboardPage() {
           return (
             <div
               key={s.key}
-              className="rounded-xl border border-border bg-white p-5 shadow-xs transition-all duration-200 hover:shadow-md hover:border-foreground/10"
+              className="rounded-xl bg-surface shadow-card-sm p-5 flex items-start gap-4 transition-shadow duration-200 hover:shadow-card"
             >
-              <div className="flex items-start gap-4">
-                <div
-                  className={`${s.bg} ${s.text} flex size-11 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ring-black/5`}
-                >
-                  <Icon className="size-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    {s.label}
-                  </p>
-                  <p className="text-2xl font-bold tracking-tight mt-0.5">
-                    {value.toLocaleString()}
-                  </p>
-                </div>
+              <div
+                className={`${s.bg} ${s.text} flex size-11 shrink-0 items-center justify-center rounded-xl`}
+              >
+                <Icon className="size-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted">
+                  {s.label}
+                </p>
+                <p className="text-2xl font-bold tracking-tight mt-0.5">
+                  {value.toLocaleString()}
+                </p>
               </div>
             </div>
           );
@@ -351,7 +344,7 @@ export default function DashboardPage() {
       {/* Donut chart + Recent inspections table */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Pass/Fail ring chart */}
-        <div className="rounded-xl border border-border bg-white shadow-xs p-5 lg:p-6 flex flex-col items-center justify-center">
+        <div className="rounded-xl bg-surface shadow-card-sm p-5 lg:p-6 flex flex-col items-center justify-center">
           <h3 className="text-sm font-semibold self-start mb-5">
             Tingkat Kelulusan
           </h3>
@@ -364,23 +357,23 @@ export default function DashboardPage() {
         </div>
 
         {/* Inspeksi Terbaru table */}
-        <div className="lg:col-span-2 rounded-xl border border-border bg-white shadow-xs">
+        <div className="lg:col-span-2 rounded-xl bg-surface shadow-card-sm">
           <div className="px-5 py-4 border-b border-border">
             <h3 className="text-sm font-semibold">Inspeksi Terbaru</h3>
           </div>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">
+                <TableHead className="text-xs uppercase tracking-wider text-muted">
                   No Lot
                 </TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">
+                <TableHead className="text-xs uppercase tracking-wider text-muted">
                   Produk
                 </TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">
+                <TableHead className="text-xs uppercase tracking-wider text-muted">
                   Tanggal
                 </TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">
+                <TableHead className="text-xs uppercase tracking-wider text-muted text-right">
                   Status
                 </TableHead>
               </TableRow>
@@ -391,16 +384,16 @@ export default function DashboardPage() {
                   <TableCell className="font-medium">
                     {row.no_lot}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell className="text-muted">
                     {(row as any).master_produk?.nama_produk ||
                       row.nama_produk ||
                       "-"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell className="text-muted">
                     {row.tgl_uji}
                   </TableCell>
                   <TableCell className="text-right">
-                    {statusBadge(row.status)}
+                    <StatusBadge status={row.status} />
                   </TableCell>
                 </TableRow>
               ))}
@@ -408,7 +401,7 @@ export default function DashboardPage() {
                 <TableRow>
                   <TableCell
                     colSpan={4}
-                    className="py-8 text-center text-muted-foreground"
+                    className="py-8 text-center text-muted"
                   >
                     Belum ada data inspeksi.
                   </TableCell>

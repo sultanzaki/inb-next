@@ -6,10 +6,17 @@ import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
 import type { DokumenArsip, UserRole } from "@/lib/types";
 import { toast } from "sonner";
-import { Search, Plus, Trash2, ExternalLink, Upload } from "lucide-react";
+import { Search, Plus, Trash2, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Dialog,
   DialogTrigger,
@@ -46,6 +53,21 @@ const emptyForm: DocForm = {
   masa_kadaluarsa: "",
   link_drive: "",
 };
+
+function StatusDocBadge({ expired }: { expired: boolean }) {
+  if (expired) {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-danger-bg text-danger-dark">
+        Kadaluarsa
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-success-bg text-success-dark">
+      Berlaku
+    </span>
+  );
+}
 
 export default function DokumenPage() {
   const { user } = useUser();
@@ -128,12 +150,12 @@ export default function DokumenPage() {
   const canDelete = canAction(role, "delete_doc");
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold">Arsip Dokumen</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          <p className="text-sm text-muted mt-1">
             Kelola dokumen mutu dan sertifikasi.
           </p>
         </div>
@@ -164,7 +186,7 @@ export default function DokumenPage() {
               <div className="space-y-1">
                 <label className="text-xs font-medium">Kategori *</label>
                 <select
-                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                   value={form.kategori}
                   onChange={(e) =>
                     setForm({ ...form, kategori: e.target.value })
@@ -223,8 +245,8 @@ export default function DokumenPage() {
       </div>
 
       {/* Search */}
-      <div className="search-wrap max-w-xs">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+      <div className="relative max-w-xs">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted pointer-events-none" />
         <Input
           placeholder="Cari dokumen…"
           value={search}
@@ -234,106 +256,90 @@ export default function DokumenPage() {
       </div>
 
       {/* Table */}
-      <div className="panel">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wider">
-                <th className="text-left px-4 py-3 font-medium">ID</th>
-                <th className="text-left px-4 py-3 font-medium">Judul</th>
-                <th className="text-left px-4 py-3 font-medium">Kategori</th>
-                <th className="text-left px-4 py-3 font-medium">Tgl Berlaku</th>
-                <th className="text-left px-4 py-3 font-medium">Masa Kadaluarsa</th>
-                <th className="text-left px-4 py-3 font-medium">Status</th>
-                <th className="text-left px-4 py-3 font-medium">Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
-                    Memuat…
-                  </td>
-                </tr>
-              )}
-              {!loading && dokumenList.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
-                    Tidak ada dokumen.
-                  </td>
-                </tr>
-              )}
-              {dokumenList.map((doc) => {
-                const expired = isExpired(doc);
-                return (
-                  <tr
-                    key={doc.id}
-                    className="border-b border-border last:border-0 hover:bg-muted/30"
-                  >
-                    <td className="px-4 py-3 text-xs text-muted-foreground font-mono">
-                      {doc.id.slice(0, 8)}...
-                    </td>
-                    <td className="px-4 py-3 font-medium">
-                      {doc.judul_dokumen}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant="outline" className="font-normal">
-                        {doc.kategori}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {doc.tanggal_berlaku}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {doc.masa_kadaluarsa}
-                    </td>
-                    <td className="px-4 py-3">
-                      {expired ? (
-                        <Badge
-                          variant="outline"
-                          className="bg-red-50 text-red-700 border-red-200"
+      <div className="rounded-xl bg-surface shadow-card-sm overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-surface-alt">
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">ID</TableHead>
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Judul</TableHead>
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Kategori</TableHead>
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Tgl Berlaku</TableHead>
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Masa Kadaluarsa</TableHead>
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Status</TableHead>
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Aksi</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading && (
+              <TableRow>
+                <TableCell colSpan={7} className="px-4 py-8 text-center text-muted">
+                  Memuat…
+                </TableCell>
+              </TableRow>
+            )}
+            {!loading && dokumenList.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} className="px-4 py-8 text-center text-muted">
+                  Tidak ada dokumen.
+                </TableCell>
+              </TableRow>
+            )}
+            {dokumenList.map((doc) => {
+              const expired = isExpired(doc);
+              return (
+                <TableRow
+                  key={doc.id}
+                  className="border-b border-border last:border-0 hover:bg-chip-bg/40"
+                >
+                  <TableCell className="px-4 py-3 text-xs text-muted font-mono">
+                    {doc.id.slice(0, 8)}...
+                  </TableCell>
+                  <TableCell className="px-4 py-3 font-medium">
+                    {doc.judul_dokumen}
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-chip-bg text-muted">
+                      {doc.kategori}
+                    </span>
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-muted">
+                    {doc.tanggal_berlaku}
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-muted">
+                    {doc.masa_kadaluarsa}
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    <StatusDocBadge expired={expired} />
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    <div className="flex items-center gap-1">
+                      {doc.link_drive && (
+                        <a
+                          href={doc.link_drive}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
+                          title="Buka link"
                         >
-                          Kadaluarsa
-                        </Badge>
-                      ) : (
-                        <Badge
-                          variant="outline"
-                          className="bg-emerald-50 text-emerald-700 border-emerald-200"
-                        >
-                          Berlaku
-                        </Badge>
+                          <ExternalLink className="size-3.5" />
+                        </a>
                       )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        {doc.link_drive && (
-                          <a
-                            href={doc.link_drive}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                            title="Buka link"
-                          >
-                            <ExternalLink className="size-3.5" />
-                          </a>
-                        )}
-                        {canDelete && (
-                          <button
-                            className="p-1.5 rounded hover:bg-red-50 text-red-500"
-                            onClick={() => handleDelete(doc.id)}
-                            title="Hapus"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      {canDelete && (
+                        <button
+                          className="p-1.5 rounded hover:bg-danger-bg text-danger"
+                          onClick={() => handleDelete(doc.id)}
+                          title="Hapus"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
       </div>
     </div>
   );
