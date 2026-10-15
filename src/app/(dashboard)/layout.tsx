@@ -4,7 +4,7 @@ import { Sidebar } from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
 import { UserContextProvider } from "./user-context";
 
-export const dynamic = 'force-dynamic';
+export const instant = false;
 
 export default async function DashboardLayout({
   children,
