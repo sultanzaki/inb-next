@@ -1,22 +1,26 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+// session_token dibuat via crypto.randomUUID() -> UUID 36 karakter.
+const SESSION_TOKEN_RE = /^[0-9a-f-]{36}$/i;
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow login page and static assets
+  // Halaman login & aset statis dilewati.
   if (
     pathname === '/login' ||
     pathname.startsWith('/_next') ||
-    pathname.startsWith('/api') ||
     pathname === '/favicon.ico'
   ) {
     return NextResponse.next();
   }
 
-  const token = request.cookies.get('session_token')?.value;
+  // Sesi wajib: cookie harus ada dan berbentuk UUID valid.
+  // Cookie sampah / kedaluwarsa dianggap belum login.
+  const token = request.cookies.get('session_token')?.value ?? '';
 
-  if (!token && pathname !== '/login') {
+  if (!SESSION_TOKEN_RE.test(token)) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
