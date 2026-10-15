@@ -13,12 +13,21 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import {
   Package,
   FlaskConical,
   CheckCircle2,
   XCircle,
   FileText,
   FolderArchive,
+  CalendarX2,
+  AlertCircle,
 } from "lucide-react";
 
 const statCards = [
@@ -64,6 +73,13 @@ const statCards = [
     bg: "bg-warning-bg",
     text: "text-warning",
   },
+  {
+    key: "dok_expired",
+    label: "Dok. Kadaluarsa",
+    icon: CalendarX2,
+    bg: "bg-danger-bg",
+    text: "text-danger",
+  },
 ];
 
 function StatusBadge({ status }: { status: string }) {
@@ -86,15 +102,24 @@ function DonutChart({
   failRate,
   passCount,
   failCount,
+  failed,
 }: {
   passRate: number;
   failRate: number;
   passCount: number;
   failCount: number;
+  failed: boolean;
 }) {
   const circumference = 2 * Math.PI * 42;
+
+  // PASS: full-length dash trimmed to passRate%, starting at 12 o'clock
+  // (the svg has -rotate-90 and a <circle> path starts at 3 o'clock).
+  // FAIL: dash segment of failRate% length, shifted forward by passRate%
+  // via a negative dashoffset, so it starts exactly where PASS ends.
+  // Sanity check: pass 90 / fail 10 => green covers 0-90% of the ring,
+  // red covers 90-100% (not 90% of the ring like the old math produced).
   const passOffset = circumference - (passRate / 100) * circumference;
-  const failOffset = circumference - (failRate / 100) * circumference;
+  const failOffset = -(passRate / 100) * circumference;
 
   return (
     <div className="flex flex-col items-center">
@@ -130,7 +155,7 @@ function DonutChart({
               fill="none"
               stroke="var(--color-danger)"
               strokeWidth="10"
-              strokeDasharray={circumference}
+              strokeDasharray={`${(failRate / 100) * circumference} ${circumference}`}
               strokeDashoffset={failOffset}
               strokeLinecap="round"
               className="transition-all duration-700 ease-out"
@@ -138,7 +163,9 @@ function DonutChart({
           )}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-bold tracking-tight">{passRate}%</span>
+          <span className="text-2xl font-bold tracking-tight">
+            {failed ? "—" : `${passRate}%`}
+          </span>
           <span className="text-[11px] text-muted font-medium">PASS</span>
         </div>
       </div>
@@ -150,7 +177,9 @@ function DonutChart({
           />
           <span className="text-muted">
             PASS{" "}
-            <span className="font-semibold text-text">{passCount}</span>
+            <span className="font-semibold text-text">
+              {failed ? "—" : passCount}
+            </span>
           </span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -160,7 +189,9 @@ function DonutChart({
           />
           <span className="text-muted">
             FAIL{" "}
-            <span className="font-semibold text-text">{failCount}</span>
+            <span className="font-semibold text-text">
+              {failed ? "—" : failCount}
+            </span>
           </span>
         </div>
       </div>
@@ -205,6 +236,8 @@ function TableSkeleton() {
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [failedKeys, setFailedKeys] = useState<string[]>([]);
   const [greeting, setGreeting] = useState("");
 
   useEffect(() => {
@@ -217,54 +250,98 @@ export default function DashboardPage() {
 
   const fetchData = useCallback(async () => {
     const sb = createClient();
+    setLoading(true);
+    const today = new Date().toISOString().split("T")[0];
 
-    const [
-      { count: total_produk },
-      { count: total_lot },
-      { count: lot_pass },
-      { count: lot_fail },
-      { count: total_coa },
-      { count: total_dok },
-      { data: hasilRaw },
-    ] = await Promise.all([
-      sb.from("master_produk").select("*", { count: "exact", head: true }),
-      sb.from("hasil_uji").select("*", { count: "exact", head: true }),
-      sb
-        .from("hasil_uji")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "PASS"),
-      sb
-        .from("hasil_uji")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "FAIL"),
-      sb.from("coa").select("*", { count: "exact", head: true }),
-      sb
-        .from("dokumen_arsip")
-        .select("*", { count: "exact", head: true })
-        .gte("masa_kadaluarsa", new Date().toISOString().split("T")[0]),
-      sb
-        .from("hasil_uji")
-        .select("*, master_produk!inner(kode_produk, nama_produk)")
-        .order("created_at", { ascending: false })
-        .limit(8),
-    ]);
+    try {
+      const [
+        { count: total_produk, error: e_produk },
+        { count: total_lot, error: e_lot },
+        { count: lot_pass, error: e_pass },
+        { count: lot_fail, error: e_fail },
+        { count: total_coa, error: e_coa },
+        { count: total_dok, error: e_dok },
+        { count: dok_expired, error: e_expired },
+        { data: hasilRaw, error: e_inspeksi },
+      ] = await Promise.all([
+        sb.from("master_produk").select("*", { count: "exact", head: true }),
+        sb.from("hasil_uji").select("*", { count: "exact", head: true }),
+        sb
+          .from("hasil_uji")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "PASS"),
+        sb
+          .from("hasil_uji")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "FAIL"),
+        sb.from("coa").select("*", { count: "exact", head: true }),
+        sb
+          .from("dokumen_arsip")
+          .select("*", { count: "exact", head: true })
+          .gte("masa_kadaluarsa", today),
+        sb
+          .from("dokumen_arsip")
+          .select("*", { count: "exact", head: true })
+          .lt("masa_kadaluarsa", today),
+        sb
+          .from("hasil_uji")
+          .select("*, master_produk!inner(kode_produk, nama_produk)")
+          .order("created_at", { ascending: false })
+          .limit(8),
+      ]);
 
-    const { count: dok_expired } = await sb
-      .from("dokumen_arsip")
-      .select("*", { count: "exact", head: true })
-      .lt("masa_kadaluarsa", new Date().toISOString().split("T")[0]);
+      // Check .error on EVERY query: a failed count must never be rendered
+      // as a real 0 / "Belum ada data inspeksi."
+      const failures: string[] = [];
+      if (e_produk) failures.push("total_produk");
+      if (e_lot) failures.push("total_lot");
+      if (e_pass) failures.push("lot_pass");
+      if (e_fail) failures.push("lot_fail");
+      if (e_coa) failures.push("total_coa");
+      if (e_dok) failures.push("dok_berlaku");
+      if (e_expired) failures.push("dok_expired");
+      if (e_inspeksi) failures.push("recent_inspeksi");
 
-    setData({
-      total_produk: total_produk ?? 0,
-      total_lot: total_lot ?? 0,
-      lot_pass: lot_pass ?? 0,
-      lot_fail: lot_fail ?? 0,
-      total_coa: total_coa ?? 0,
-      dok_berlaku: total_dok ?? 0,
-      dok_expired: dok_expired ?? 0,
-      recent_inspeksi: (hasilRaw as unknown as HasilUji[]) ?? [],
-    });
-    setLoading(false);
+      setFailedKeys(failures);
+      setLoadError(failures.length > 0);
+
+      setData({
+        total_produk: total_produk ?? 0,
+        total_lot: total_lot ?? 0,
+        lot_pass: lot_pass ?? 0,
+        lot_fail: lot_fail ?? 0,
+        total_coa: total_coa ?? 0,
+        dok_berlaku: total_dok ?? 0,
+        dok_expired: dok_expired ?? 0,
+        recent_inspeksi: (hasilRaw as unknown as HasilUji[]) ?? [],
+      });
+    } catch {
+      // Promise.all itself rejected (network throw): treat every query as
+      // failed so every KPI renders "—" instead of fake zeros.
+      setFailedKeys([
+        "total_produk",
+        "total_lot",
+        "lot_pass",
+        "lot_fail",
+        "total_coa",
+        "dok_berlaku",
+        "dok_expired",
+        "recent_inspeksi",
+      ]);
+      setLoadError(true);
+      setData({
+        total_produk: 0,
+        total_lot: 0,
+        lot_pass: 0,
+        lot_fail: 0,
+        total_coa: 0,
+        dok_berlaku: 0,
+        dok_expired: 0,
+        recent_inspeksi: [],
+      });
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -279,7 +356,7 @@ export default function DashboardPage() {
           <Skeleton className="h-4 w-44" />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => (
+          {Array.from({ length: 7 }).map((_, i) => (
             <StatCardSkeleton key={i} />
           ))}
         </div>
@@ -302,22 +379,49 @@ export default function DashboardPage() {
   const total = data.lot_pass + data.lot_fail;
   const passRate = total > 0 ? Math.round((data.lot_pass / total) * 100) : 0;
   const failRate = total > 0 ? Math.round((data.lot_fail / total) * 100) : 0;
+  const lotFailed =
+    failedKeys.includes("lot_pass") || failedKeys.includes("lot_fail");
 
   return (
     <div className="space-y-6">
       {/* Greeting */}
       <div>
-        <h1 className="text-xl font-bold">{greeting}</h1>
+        {greeting ? (
+          <h1 className="text-xl font-bold">{greeting}</h1>
+        ) : (
+          <div
+            className="h-8 w-48 rounded-md bg-muted/50 animate-pulse"
+            aria-hidden="true"
+          />
+        )}
         <p className="text-sm text-muted mt-1">
           Ringkasan sistem quality control.
         </p>
       </div>
 
-      {/* KPI stat cards — 3x2 grid */}
+      {/* Error banner */}
+      {loadError && (
+        <Alert variant="destructive">
+          <AlertCircle />
+          <AlertTitle>Gagal memuat data dashboard</AlertTitle>
+          <AlertDescription>
+            Beberapa data tidak berhasil dimuat dari server. Angka bertanda
+            &ldquo;&mdash;&rdquo; tidak tersedia.
+          </AlertDescription>
+          <AlertAction>
+            <Button variant="outline" size="sm" onClick={() => fetchData()}>
+              Coba Lagi
+            </Button>
+          </AlertAction>
+        </Alert>
+      )}
+
+      {/* KPI stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {statCards.map((s) => {
           const Icon = s.icon;
           const value = data[s.key as keyof DashboardData] as number;
+          const failed = failedKeys.includes(s.key);
           return (
             <div
               key={s.key}
@@ -333,7 +437,7 @@ export default function DashboardPage() {
                   {s.label}
                 </p>
                 <p className="text-2xl font-bold tracking-tight mt-0.5">
-                  {value.toLocaleString()}
+                  {failed ? "—" : value.toLocaleString()}
                 </p>
               </div>
             </div>
@@ -353,6 +457,7 @@ export default function DashboardPage() {
             failRate={failRate}
             passCount={data.lot_pass}
             failCount={data.lot_fail}
+            failed={lotFailed}
           />
         </div>
 
@@ -397,13 +502,16 @@ export default function DashboardPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {data.recent_inspeksi.length === 0 && (
+              {(failedKeys.includes("recent_inspeksi") ||
+                data.recent_inspeksi.length === 0) && (
                 <TableRow>
                   <TableCell
                     colSpan={4}
                     className="py-8 text-center text-muted"
                   >
-                    Belum ada data inspeksi.
+                    {failedKeys.includes("recent_inspeksi")
+                      ? "Gagal memuat data inspeksi."
+                      : "Belum ada data inspeksi."}
                   </TableCell>
                 </TableRow>
               )}
