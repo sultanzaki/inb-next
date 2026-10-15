@@ -293,13 +293,19 @@ export default function ProdukPage() {
     if (!confirm("Hapus produk ini? Semua spesifikasi juga akan dihapus.")) return;
 
     // Server action: pre-check COA/hasil uji + role check server-side.
-    const res = await deleteProdukAction(id);
-    if (!res.ok) {
-      toast.error(res.error ?? "Gagal menghapus produk. Coba lagi.");
-      return;
+    try {
+      const res = await deleteProdukAction(id);
+      if (!res.ok) {
+        toast.error(res.error ?? "Gagal menghapus produk. Coba lagi.");
+        return;
+      }
+      toast.success("Produk dihapus.");
+      fetchData();
+    } catch {
+      // transport error — action tetap { ok:false } untuk kegagalan aplikatif;
+      // tanpa catch user tidak lihat apa pun.
+      toast.error("Gagal terhubung ke server. Coba lagi.");
     }
-    toast.success("Produk dihapus.");
-    fetchData();
   }
 
   const role: UserRole = (user?.role as UserRole) ?? "viewer";
