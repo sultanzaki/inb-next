@@ -115,6 +115,10 @@ export const ROLE_ALLOW: Record<string, UserRole[]> = {
   create_doc: ['admin qc', 'administrator inbionusa'],
   update_coa: ['admin qc', 'administrator inbionusa', 'qc supervisor'],
   issue_coa: ['admin qc', 'administrator inbionusa', 'qc supervisor'],
+  create_produk: ['admin qc', 'administrator inbionusa', 'qc supervisor'],
+  update_produk: ['admin qc', 'administrator inbionusa', 'qc supervisor'],
+  create_uji: ['admin qc', 'administrator inbionusa', 'qc supervisor'],
+  update_uji: ['admin qc', 'administrator inbionusa', 'qc supervisor'],
 };
 
 export function canAction(role: UserRole, action: string): boolean {

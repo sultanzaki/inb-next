@@ -235,6 +235,10 @@ export default function ProdukPage() {
       setDialogOpen(false);
       resetForm();
       fetchData();
+    } catch {
+      // Transport error (mis. jaringan putus): server action melempar, bukan
+      // mengembalikan { ok:false } — tanpa catch user tidak lihat apa pun.
+      toast.error("Gagal terhubung ke server. Coba lagi.");
     } finally {
       setSaving(false);
     }
@@ -255,6 +259,8 @@ export default function ProdukPage() {
 
   const role: UserRole = (user?.role as UserRole) ?? "viewer";
   const canDelete = canAction(role, "delete_produk");
+  const canCreate = canAction(role, "create_produk");
+  const canUpdate = canAction(role, "update_produk");
 
   return (
     <div className="space-y-6">
@@ -267,7 +273,9 @@ export default function ProdukPage() {
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={(v) => { setDialogOpen(v); if (!v) resetForm(); }}>
-          <DialogTrigger render={<Button><Plus className="size-4" /> Produk Baru</Button>} />
+          {canCreate && (
+            <DialogTrigger render={<Button><Plus className="size-4" /> Produk Baru</Button>} />
+          )}
           <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
@@ -500,13 +508,15 @@ export default function ProdukPage() {
                 <TableCell className="px-4 py-3 text-muted">{p.tipe_kemasan}</TableCell>
                 <TableCell className="px-4 py-3">
                   <div className="flex items-center gap-1">
-                    <button
-                      className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
-                      onClick={() => openEdit(p)}
-                      title="Edit"
-                    >
-                      <Pencil className="size-3.5" />
-                    </button>
+                    {canUpdate && (
+                      <button
+                        className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
+                        onClick={() => openEdit(p)}
+                        title="Edit"
+                      >
+                        <Pencil className="size-3.5" />
+                      </button>
+                    )}
                     {canDelete && (
                       <button
                         className="p-1.5 rounded hover:bg-danger-bg text-danger"

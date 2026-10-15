@@ -34,6 +34,9 @@ export interface SaveProdukPayload {
 
 export type ActionResult = { ok: boolean; error?: string };
 
+// UUID v1-v8 (hex, dash-delimited 8-4-4-4-12), case-insensitive.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const SESSION_EXPIRED = "Sesi berakhir. Muat ulang halaman.";
 const FORBIDDEN = "Anda tidak punya izin untuk aksi ini.";
 
@@ -65,6 +68,33 @@ function refProduk(p: { id?: string | null; kode_produk?: string | null }): stri
   return `${p.kode_produk ?? "-"}${p.id ? ` (${p.id})` : ""}`;
 }
 
+/** Baris insert `spesifikasi` — kolom eksplisit, tidak pernah di-spread dari payload. */
+interface SpecInsertRow {
+  id_produk: string;
+  parameter_uji: string;
+  tipe_batas: "RANGE" | "MIN" | "MAX" | "TEXT";
+  nilai_min: string;
+  nilai_maks: string;
+  satuan: string;
+  keterangan: string;
+  urutan: number;
+}
+
+// Petakan HANYA field spesifikasi yang sah (Minor 1): payload client tidak
+// pernah di-spread mentah ke insert, dan id_produk selalu dipaksa di sini.
+function specRow(id_produk: string, s: SpesifikasiPayload, urutan: number): SpecInsertRow {
+  return {
+    id_produk,
+    parameter_uji: s.parameter_uji,
+    tipe_batas: s.tipe_batas,
+    nilai_min: s.nilai_min,
+    nilai_maks: s.nilai_maks,
+    satuan: s.satuan,
+    keterangan: s.keterangan,
+    urutan,
+  };
+}
+
 export async function saveProdukAction(payload: SaveProdukPayload): Promise<ActionResult> {
   const session = await requireUser();
   const user = session?.user;
@@ -72,6 +102,10 @@ export async function saveProdukAction(payload: SaveProdukPayload): Promise<Acti
 
   const actionKey = payload.id ? "update_produk" : "create_produk";
   if (!canAction(user.role, actionKey)) return { ok: false, error: FORBIDDEN };
+
+  if (payload.id && !UUID_RE.test(payload.id)) {
+    return { ok: false, error: "ID produk tidak valid." };
+  }
 
   if (!payload.kode_produk?.trim() || !payload.nama_produk?.trim()) {
     return { ok: false, error: "Kode dan nama produk wajib diisi." };
@@ -86,7 +120,7 @@ export async function saveProdukAction(payload: SaveProdukPayload): Promise<Acti
     status_halal: payload.status_halal,
     tipe_kemasan: payload.tipe_kemasan,
   };
-  const specs = (payload.spesifikasi ?? []).map((s, i) => ({ ...s, urutan: i }));
+  const specs = payload.spesifikasi ?? [];
 
   // Produk baru: insert, lalu spesifikasi bila ada.
   if (!payload.id) {
@@ -104,7 +138,7 @@ export async function saveProdukAction(payload: SaveProdukPayload): Promise<Acti
     if (specs.length > 0) {
       const { error: e2 } = await admin
         .from("spesifikasi")
-        .insert(specs.map((s) => ({ ...s, id_produk: inserted.id })));
+        .insert(specs.map((s, i) => specRow(inserted.id, s, i)));
       if (e2) {
         // Produk tetap tersimpan (perilaku lama); spesifikasi gagal masuk.
         console.error("[saveProdukAction] gagal insert spesifikasi:", e2);
@@ -160,7 +194,7 @@ export async function saveProdukAction(payload: SaveProdukPayload): Promise<Acti
   if (specs.length > 0) {
     const { error: e2 } = await admin
       .from("spesifikasi")
-      .insert(specs.map((s) => ({ ...s, id_produk: payload.id! })));
+      .insert(specs.map((s, i) => specRow(payload.id!, s, i)));
     if (e2) {
       console.error("[saveProdukAction] gagal insert spesifikasi baru:", e2);
       // Rollback: pulihkan snapshot baris lama (best effort).
