@@ -8,6 +8,7 @@ import {
   createSession,
   setSessionCookie,
   logAudit,
+  purgeExpiredSessions,
 } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 
@@ -51,6 +52,10 @@ export async function loginAction(
   const username = (formData.get('username') as string | null)?.trim() ?? '';
   // Password tidak di-trim: hash apa adanya sesuai input pengguna.
   const password = (formData.get('password') as string | null) ?? '';
+
+  // Housekeeping: bersihkan sesi kedaluwarsa sekali per percobaan login
+  // (bukan di render path — lihat purgeExpiredSessions).
+  await purgeExpiredSessions();
 
   if (!username || !password) {
     return { error: 'Username dan password wajib diisi.' };

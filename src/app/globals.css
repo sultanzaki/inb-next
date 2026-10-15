@@ -16,15 +16,15 @@
   --color-primary-line: #a7f3d0;
 
   /* Neutrals */
-  --color-page-bg: #f4f7f9;
+  --color-page-bg: #f6f7f9;
   --color-surface: #ffffff;
-  --color-surface-alt: #f8fafb;
-  --color-border: #e6ebef;
-  --color-border-soft: #eff3f6;
+  --color-surface-alt: #fafbfc;
+  --color-border: #e4e8ec;
+  --color-border-soft: #edf0f3;
   --color-chip-bg: #eef2f5;
   --color-text: #0f172a;
-  --color-muted: #64748b;
-  --color-faint: #94a3b8;
+  --color-muted: #5b6b7c;
+  --color-faint: #8b98a5;
 
   /* Semantic */
   --color-success: #047857;
@@ -41,10 +41,13 @@
   --color-violet: #6d28d9;
   --color-violet-bg: #f5f3ff;
 
-  /* Shadows */
-  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 22px rgba(15, 23, 42, 0.05);
-  --shadow-card-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.04);
-  --shadow-glow-primary: 0 6px 16px rgba(4, 120, 87, 0.26);
+  /* Shadows — the redesign language is borders, not shadows. Legacy shadow
+     tokens are kept as names but neutralized to a transparent zero shadow so
+     `shadow-card` / `shadow-card-sm` / `shadow-glow-primary` utilities (still
+     referenced by pages) compile and render nothing. */
+  --shadow-card: 0 0 #0000;
+  --shadow-card-sm: 0 0 #0000;
+  --shadow-glow-primary: 0 0 #0000;
 
   /* shadcn/ui compatibility */
   --background: var(--color-page-bg);
@@ -67,6 +70,11 @@
   --input: var(--color-border);
   --ring: var(--color-primary);
   --radius: 0.5rem;
+
+  /* Radius scale — precision instrument: card 8 / control 6 / chip 4 */
+  --radius-card: 8px;
+  --radius-control: 6px;
+  --radius-chip: 4px;
 
   /* Layout */
   --topbar-h: 58px;
@@ -122,11 +130,23 @@
   --shadow-card: var(--shadow-card);
   --shadow-card-sm: var(--shadow-card-sm);
   --shadow-glow-primary: var(--shadow-glow-primary);
-  --font-sans: var(--font-dm-sans), "DM Sans", -apple-system, BlinkMacSystemFont,
+  --font-sans: var(--font-inter), "Inter", -apple-system, BlinkMacSystemFont,
     "Segoe UI", system-ui, sans-serif;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
-  --radius-2xl: 1rem;
+  --font-heading: var(--font-inter), "Inter", system-ui, sans-serif;
+  /* Numbers stay in Inter (no mono per client): map the legacy font-mono
+     utility onto Inter so old page classes render the new voice. */
+  --font-mono: var(--font-inter), "Inter", system-ui, sans-serif;
+
+  /* Radius — collapse the legacy Tailwind scale onto the precision scale so
+     old rounded-xl / rounded-2xl classes render at the new card radius. */
+  --radius-sm: var(--radius-chip);
+  --radius-md: var(--radius-control);
+  --radius-lg: var(--radius-card);
+  --radius-xl: var(--radius-card);
+  --radius-2xl: var(--radius-card);
+  --radius-card: var(--radius-card);
+  --radius-control: var(--radius-control);
+  --radius-chip: var(--radius-chip);
 }
 
 /* ==========================================================================
@@ -141,7 +161,7 @@ body {
   /* min-height (not height) so long content still scrolls the document */
   min-height: 100%;
   color: var(--color-text);
-  font-family: var(--font-dm-sans), "DM Sans", -apple-system, BlinkMacSystemFont,
+  font-family: var(--font-inter), "Inter", -apple-system, BlinkMacSystemFont,
     "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.5;
@@ -190,11 +210,29 @@ select:focus,
 textarea:focus {
   outline: none;
   border-color: var(--color-primary) !important;
-  box-shadow: 0 0 0 3px var(--color-primary-soft);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 15%, transparent);
 }
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/* Data numerals — numbers stay in Inter, heavier weight + tabular alignment
+   so columns of figures line up like an instrument readout. */
+@utility font-data {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Signature section label — tiny uppercase letterspaced micro-label. */
+@utility micro-label {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
 }
 
 /* ==========================================================================
@@ -230,7 +268,8 @@ textarea:focus {
   pointer-events: none;
 }
 
-/* Skeleton shimmer */
+/* Skeleton placeholder — static block, no pulse (instrument aesthetic).
+   Class name kept for pages; the shimmer overlay is disabled. */
 @keyframes shimmer {
   100% {
     transform: translateX(100%);
@@ -242,17 +281,7 @@ textarea:focus {
   background: var(--color-chip-bg);
 }
 .skeleton-shimmer::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  transform: translateX(-100%);
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.6),
-    transparent
-  );
-  animation: shimmer 1.6s ease-in-out infinite;
+  content: none;
 }
 
 /* Staggered list entrance — each row sets --stagger: <index> */
@@ -283,33 +312,30 @@ textarea:focus {
   }
 }
 
+/* Popover/menu entrances — opacity only (no scale, per motion spec). */
 @keyframes menu-pop {
   from {
     opacity: 0;
-    transform: scale(0.96) translateY(-4px);
   }
   to {
     opacity: 1;
-    transform: scale(1) translateY(0);
   }
 }
 .menu-pop {
-  animation: menu-pop 160ms cubic-bezier(0.25, 0.8, 0.4, 1) both;
+  animation: menu-pop 150ms ease-out both;
   transform-origin: top right;
 }
 
 @keyframes pop-in {
   from {
     opacity: 0;
-    transform: scale(0.97) translateY(8px);
   }
   to {
     opacity: 1;
-    transform: scale(1) translateY(0);
   }
 }
 .pop-in {
-  animation: pop-in 200ms cubic-bezier(0.25, 0.8, 0.4, 1) both;
+  animation: pop-in 150ms ease-out both;
 }
 
 @keyframes toast-in {

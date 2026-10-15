@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, type ReactNode } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { HasilUjiRow, DashboardData } from "@/lib/types";
 import {
@@ -19,16 +20,7 @@ import {
   AlertTitle,
 } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Package,
-  FlaskConical,
-  CheckCircle2,
-  XCircle,
-  FileText,
-  FolderArchive,
-  CalendarX2,
-  AlertCircle,
-} from "lucide-react";
+import { AlertCircle, ArrowRight } from "lucide-react";
 
 // Local calendar date as YYYY-MM-DD. Built from the local getters with
 // padStart — NOT toISOString(), which yields the UTC date and disagrees with
@@ -40,70 +32,56 @@ function localTodayStr(): string {
   return `${now.getFullYear()}-${m}-${d}`;
 }
 
-const statCards = [
-  {
-    key: "total_produk",
-    label: "Total Produk",
-    icon: Package,
-    bg: "bg-success-bg",
-    text: "text-success",
-  },
-  {
-    key: "total_lot",
-    label: "Lot Diuji",
-    icon: FlaskConical,
-    bg: "bg-info-bg",
-    text: "text-info",
-  },
-  {
-    key: "lot_pass",
-    label: "Lot PASS",
-    icon: CheckCircle2,
-    bg: "bg-success-bg",
-    text: "text-success",
-  },
-  {
-    key: "lot_fail",
-    label: "Lot FAIL",
-    icon: XCircle,
-    bg: "bg-danger-bg",
-    text: "text-danger",
-  },
-  {
-    key: "total_coa",
-    label: "COA Terbit",
-    icon: FileText,
-    bg: "bg-violet-bg",
-    text: "text-violet",
-  },
-  {
-    key: "dok_berlaku",
-    label: "Dokumen",
-    icon: FolderArchive,
-    bg: "bg-warning-bg",
-    text: "text-warning",
-  },
-  {
-    key: "dok_expired",
-    label: "Dok. Kadaluarsa",
-    icon: CalendarX2,
-    bg: "bg-danger-bg",
-    text: "text-danger",
-  },
+type StatKey =
+  | "total_produk"
+  | "total_lot"
+  | "lot_pass"
+  | "lot_fail"
+  | "total_coa"
+  | "dok_berlaku"
+  | "dok_expired";
+
+// One instrument row: each cell keeps its semantic accent for the 3px bar.
+const statCells: { key: StatKey; label: string; accent: string }[] = [
+  { key: "total_produk", label: "Total Produk", accent: "var(--color-success)" },
+  { key: "total_lot", label: "Lot Diuji", accent: "var(--color-info)" },
+  { key: "lot_pass", label: "Lot PASS", accent: "var(--color-success)" },
+  { key: "lot_fail", label: "Lot FAIL", accent: "var(--color-danger)" },
+  { key: "total_coa", label: "COA Terbit", accent: "var(--color-violet)" },
+  { key: "dok_berlaku", label: "Dokumen", accent: "var(--color-warning)" },
+  { key: "dok_expired", label: "Dok. Kadaluarsa", accent: "var(--color-danger)" },
 ];
 
-function StatusBadge({ status }: { status: string }) {
-  const isPass = status === "PASS";
+type DotTone = "success" | "danger" | "warning";
+
+const dotTones: Record<DotTone, { chip: string; dot: string }> = {
+  success: { chip: "bg-success-bg text-success-dark", dot: "bg-success" },
+  danger: { chip: "bg-danger-bg text-danger-dark", dot: "bg-danger" },
+  warning: { chip: "bg-warning-bg text-warning-dark", dot: "bg-warning" },
+};
+
+// Status chip: 4px radius, 5px semantic dot + text, tinted bg, no border.
+function DotChip({
+  tone,
+  children,
+}: {
+  tone: DotTone;
+  children: ReactNode;
+}) {
+  const t = dotTones[tone];
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-        isPass
-          ? "bg-success-bg text-success-dark"
-          : "bg-danger-bg text-danger-dark"
-      }`}
+      className={`inline-flex items-center gap-2 rounded-[4px] px-2 py-1 text-[11.5px] font-medium leading-tight ${t.chip}`}
     >
-      {status}
+      <span className={`size-[5px] rounded-full ${t.dot}`} aria-hidden="true" />
+      {children}
     </span>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  return (
+    <DotChip tone={status === "PASS" ? "success" : "danger"}>{status}</DotChip>
   );
 }
 
@@ -132,9 +110,9 @@ function DonutChart({
   const failOffset = -(passRate / 100) * circumference;
 
   return (
-    <div className="flex flex-col items-center">
-      <div className="relative w-36 h-36">
-        <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+    <div className="flex w-full flex-col items-center">
+      <div className="relative h-40 w-40">
+        <svg className="h-full w-full -rotate-90" viewBox="0 0 100 100">
           <circle
             cx="50"
             cy="50"
@@ -176,35 +154,25 @@ function DonutChart({
           )}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-bold tracking-tight">
+          <span className="text-[26px] font-bold leading-none tracking-[-0.01em] tabular-nums">
             {failed ? "—" : `${passRate}%`}
           </span>
-          <span className="text-[11px] text-muted font-medium">PASS</span>
-        </div>
-      </div>
-      <div className="flex items-center gap-5 mt-3 text-sm">
-        <div className="flex items-center gap-1.5">
-          <span
-            className="w-2.5 h-2.5 rounded-full"
-            style={{ backgroundColor: "var(--color-success)" }}
-          />
-          <span className="text-muted">
-            PASS{" "}
-            <span className="font-semibold text-text">
-              {failed ? "—" : passCount}
-            </span>
+          <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+            PASS
           </span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span
-            className="w-2.5 h-2.5 rounded-full"
-            style={{ backgroundColor: "var(--color-danger)" }}
-          />
-          <span className="text-muted">
-            FAIL{" "}
-            <span className="font-semibold text-text">
-              {failed ? "—" : failCount}
-            </span>
+      </div>
+      <div className="mt-4 w-full space-y-2">
+        <div className="flex items-center justify-between">
+          <DotChip tone="success">PASS</DotChip>
+          <span className="font-data text-[13px]">
+            {failed ? "—" : passCount}
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <DotChip tone="danger">FAIL</DotChip>
+          <span className="font-data text-[13px]">
+            {failed ? "—" : failCount}
           </span>
         </div>
       </div>
@@ -212,15 +180,29 @@ function DonutChart({
   );
 }
 
-function StatCardSkeleton() {
+// Shared header anatomy: micro-label + 24px title left, date/greeting right.
+function PageHeaderSkeleton() {
   return (
-    <div className="rounded-xl bg-surface shadow-card-sm p-5">
-      <div className="flex items-start gap-4">
-        <Skeleton className="size-11 rounded-xl shrink-0" />
-        <div className="flex-1 min-w-0 space-y-2">
-          <Skeleton className="h-3 w-20" />
-          <Skeleton className="h-7 w-16" />
-        </div>
+    <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="space-y-2">
+        <Skeleton className="h-3 w-20" />
+        <Skeleton className="h-6 w-40" />
+      </div>
+      <Skeleton className="h-11 w-44" />
+    </div>
+  );
+}
+
+function KpiStripSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-surface">
+      <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-4 xl:grid-cols-7">
+        {Array.from({ length: 7 }).map((_, i) => (
+          <div key={i} className="bg-surface p-4">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="mt-2 h-7 w-12" />
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -228,19 +210,62 @@ function StatCardSkeleton() {
 
 function TableSkeleton() {
   return (
-    <div className="rounded-xl bg-surface shadow-card-sm">
-      <div className="px-5 py-4 border-b border-border">
-        <Skeleton className="h-4 w-36" />
+    <div className="overflow-hidden rounded-lg border border-border bg-surface">
+      <div className="border-b border-border px-4 py-3">
+        <Skeleton className="h-3 w-32" />
       </div>
-      <div className="p-5 space-y-3">
+      <div className="flex h-11 items-center gap-4 bg-surface-alt px-3">
+        <Skeleton className="h-3 w-16" />
+        <Skeleton className="h-3 w-28" />
+        <Skeleton className="h-3 w-20" />
+        <Skeleton className="ml-auto h-3 w-14" />
+      </div>
+      <div className="divide-y divide-border-soft">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-4">
-            <Skeleton className="h-4 w-28" />
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-5 w-14 rounded-full" />
+          <div key={i} className="flex h-11 items-center gap-4 px-3">
+            <Skeleton className="h-3.5 w-24" />
+            <Skeleton className="h-3.5 w-40" />
+            <Skeleton className="ml-auto h-3.5 w-20" />
+            <Skeleton className="h-5 w-14" />
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function RightColumnSkeleton() {
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="rounded-lg border border-border bg-surface p-4">
+        <Skeleton className="h-3 w-28" />
+        <div className="mt-4 flex justify-center">
+          <Skeleton className="size-40 rounded-full" />
+        </div>
+        <div className="mt-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-5 w-14" />
+            <Skeleton className="h-3.5 w-8" />
+          </div>
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-5 w-14" />
+            <Skeleton className="h-3.5 w-8" />
+          </div>
+        </div>
+      </div>
+      <div className="rounded-lg border border-border bg-surface p-4">
+        <Skeleton className="h-3 w-20" />
+        <div className="mt-4 grid grid-cols-2">
+          <div className="pr-4">
+            <Skeleton className="h-5 w-16" />
+            <Skeleton className="mt-2 h-7 w-12" />
+          </div>
+          <div className="border-l border-border-soft pl-4">
+            <Skeleton className="h-5 w-20" />
+            <Skeleton className="mt-2 h-7 w-12" />
+          </div>
+        </div>
+        <Skeleton className="mt-4 h-3.5 w-28" />
       </div>
     </div>
   );
@@ -252,13 +277,25 @@ export default function DashboardPage() {
   const [loadError, setLoadError] = useState(false);
   const [failedKeys, setFailedKeys] = useState<string[]>([]);
   const [greeting, setGreeting] = useState("");
+  const [todayLabel, setTodayLabel] = useState("");
 
   useEffect(() => {
-    const h = new Date().getHours();
+    const now = new Date();
+    const h = now.getHours();
     if (h < 12) setGreeting("Selamat Pagi");
     else if (h < 15) setGreeting("Selamat Siang");
     else if (h < 18) setGreeting("Selamat Sore");
     else setGreeting("Selamat Malam");
+    // Date label computed inside the effect: `new Date()` during render is an
+    // unstable value and fails Cache Components prerender validation.
+    setTodayLabel(
+      new Intl.DateTimeFormat("id-ID", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }).format(now)
+    );
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -364,26 +401,11 @@ export default function DashboardPage() {
   if (loading || !data) {
     return (
       <div className="space-y-6">
-        <div className="space-y-1.5">
-          <Skeleton className="h-7 w-52" />
-          <Skeleton className="h-4 w-44" />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.from({ length: 7 }).map((_, i) => (
-            <StatCardSkeleton key={i} />
-          ))}
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="rounded-xl bg-surface shadow-card-sm p-6">
-            <Skeleton className="h-4 w-32 mb-6" />
-            <div className="flex flex-col items-center gap-4">
-              <Skeleton className="size-36 rounded-full" />
-              <Skeleton className="h-4 w-40" />
-            </div>
-          </div>
-          <div className="lg:col-span-2">
-            <TableSkeleton />
-          </div>
+        <PageHeaderSkeleton />
+        <KpiStripSkeleton />
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[2fr_1fr]">
+          <TableSkeleton />
+          <RightColumnSkeleton />
         </div>
       </div>
     );
@@ -395,21 +417,36 @@ export default function DashboardPage() {
   const lotFailed =
     failedKeys.includes("lot_pass") || failedKeys.includes("lot_fail");
 
+  const dokBerlaku = failedKeys.includes("dok_berlaku")
+    ? "—"
+    : data.dok_berlaku.toLocaleString();
+  const dokExpired = failedKeys.includes("dok_expired")
+    ? "—"
+    : data.dok_expired.toLocaleString();
+
   return (
     <div className="space-y-6">
-      {/* Greeting */}
-      <div>
-        {greeting ? (
-          <h1 className="text-xl font-bold">{greeting}</h1>
-        ) : (
-          <div
-            className="h-7 w-48 rounded-md bg-muted/50 animate-pulse"
-            aria-hidden="true"
-          />
-        )}
-        <p className="text-sm text-muted mt-1">
-          Ringkasan sistem quality control.
-        </p>
+      {/* Page header: micro-label + title left, date/greeting right */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="micro-label">RINGKASAN</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+            Dashboard
+          </h1>
+        </div>
+        <div className="text-right">
+          {greeting ? (
+            <>
+              <p className="text-sm font-medium">{greeting}</p>
+              <p className="mt-1 text-[13px] text-muted">{todayLabel}</p>
+            </>
+          ) : (
+            <div
+              className="ml-auto h-11 w-44 rounded-[4px] bg-chip-bg"
+              aria-hidden="true"
+            />
+          )}
+        </div>
       </div>
 
       {/* Error banner */}
@@ -429,83 +466,53 @@ export default function DashboardPage() {
         </Alert>
       )}
 
-      {/* KPI stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {statCards.map((s) => {
-          const Icon = s.icon;
-          const value = data[s.key as keyof DashboardData] as number;
-          const failed = failedKeys.includes(s.key);
-          return (
-            <div
-              key={s.key}
-              className="rounded-xl bg-surface shadow-card-sm p-5 flex items-start gap-4 transition-shadow duration-200 hover:shadow-card"
-            >
-              <div
-                className={`${s.bg} ${s.text} flex size-11 shrink-0 items-center justify-center rounded-xl`}
-              >
-                <Icon className="size-5" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium uppercase tracking-wider text-muted">
-                  {s.label}
-                </p>
-                <p className="text-2xl font-bold tracking-tight mt-0.5">
+      {/* KPI instrument strip: one card, cells split by vertical hairlines */}
+      <div className="overflow-hidden rounded-lg border border-border bg-surface">
+        <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-4 xl:grid-cols-7">
+          {statCells.map((s) => {
+            const value = data[s.key];
+            const failed = failedKeys.includes(s.key);
+            return (
+              <div key={s.key} className="relative bg-surface p-4">
+                <div
+                  className="absolute inset-y-0 left-0 w-[3px]"
+                  style={{ backgroundColor: s.accent }}
+                  aria-hidden="true"
+                />
+                <p className="micro-label">{s.label}</p>
+                <p className="mt-2 text-[28px] font-bold leading-none tracking-[-0.01em] tabular-nums">
                   {failed ? "—" : value.toLocaleString()}
                 </p>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
-      {/* Donut chart + Recent inspections table */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Pass/Fail ring chart */}
-        <div className="rounded-xl bg-surface shadow-card-sm p-5 lg:p-6 flex flex-col items-center justify-center">
-          <h3 className="text-sm font-semibold self-start mb-5">
-            Tingkat Kelulusan
-          </h3>
-          <DonutChart
-            passRate={passRate}
-            failRate={failRate}
-            passCount={data.lot_pass}
-            failCount={data.lot_fail}
-            failed={lotFailed}
-          />
-        </div>
-
-        {/* Inspeksi Terbaru table */}
-        <div className="lg:col-span-2 rounded-xl bg-surface shadow-card-sm">
-          <div className="px-5 py-4 border-b border-border">
-            <h3 className="text-sm font-semibold">Inspeksi Terbaru</h3>
+      {/* Two-column zone: recent inspections (dominant) + right stack */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[2fr_1fr]">
+        {/* Inspeksi Terbaru */}
+        <section className="overflow-hidden rounded-lg border border-border bg-surface">
+          <div className="border-b border-border px-4 py-3">
+            <p className="micro-label">INSPEKSI TERBARU</p>
           </div>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-xs uppercase tracking-wider text-muted">
-                  No Lot
-                </TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted">
-                  Produk
-                </TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted">
-                  Tanggal
-                </TableHead>
-                <TableHead className="text-xs uppercase tracking-wider text-muted text-right">
-                  Status
-                </TableHead>
+                <TableHead>No Lot</TableHead>
+                <TableHead>Produk</TableHead>
+                <TableHead className="text-right">Tanggal</TableHead>
+                <TableHead className="text-right">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.recent_inspeksi.map((row) => (
                 <TableRow key={row.id}>
-                  <TableCell className="font-medium">
-                    {row.no_lot}
-                  </TableCell>
+                  <TableCell className="font-data">{row.no_lot}</TableCell>
                   <TableCell className="text-muted">
                     {row.master_produk?.nama_produk || "-"}
                   </TableCell>
-                  <TableCell className="text-muted">
+                  <TableCell className="font-data text-right">
                     {row.tgl_uji}
                   </TableCell>
                   <TableCell className="text-right">
@@ -528,6 +535,47 @@ export default function DashboardPage() {
               )}
             </TableBody>
           </Table>
+        </section>
+
+        {/* Right stack: pass-rate ring + documents */}
+        <div className="flex flex-col gap-6">
+          <section className="rounded-lg border border-border bg-surface p-4">
+            <p className="micro-label">TINGKAT KELULUSAN</p>
+            <div className="mt-4">
+              <DonutChart
+                passRate={passRate}
+                failRate={failRate}
+                passCount={data.lot_pass}
+                failCount={data.lot_fail}
+                failed={lotFailed}
+              />
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-border bg-surface p-4">
+            <p className="micro-label">DOKUMEN</p>
+            <div className="mt-4 grid grid-cols-2">
+              <div className="pr-4">
+                <DotChip tone="warning">Berlaku</DotChip>
+                <p className="mt-2 text-[28px] font-bold leading-none tracking-[-0.01em] tabular-nums">
+                  {dokBerlaku}
+                </p>
+              </div>
+              <div className="border-l border-border-soft pl-4">
+                <DotChip tone="danger">Kadaluarsa</DotChip>
+                <p className="mt-2 text-[28px] font-bold leading-none tracking-[-0.01em] tabular-nums">
+                  {dokExpired}
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/dashboard/arsip"
+              className="mt-4 inline-flex items-center gap-2 rounded-[4px] text-[13px] font-medium text-muted transition-colors duration-150 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            >
+              Kelola dokumen
+              <ArrowRight className="size-3.5" aria-hidden="true" />
+            </Link>
+          </section>
         </div>
       </div>
     </div>

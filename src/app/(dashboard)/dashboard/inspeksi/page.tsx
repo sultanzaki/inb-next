@@ -13,7 +13,7 @@ import type {
 } from "@/lib/types";
 import { toast } from "sonner";
 import { saveInspeksiAction, deleteInspeksiAction } from "@/lib/actions/inspeksi-actions";
-import { Search, Plus, Pencil, Trash2, Eye } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, Eye, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TableSkeleton } from "@/components/table-skeleton";
@@ -34,6 +34,7 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 
 // Module-level browser client: a single instance instead of one per render.
 const sb = createClient();
@@ -69,19 +70,10 @@ function escapeOr(value: string): string {
     .replace(/_/g, "\\\\_");
 }
 
+// Status is always a dot-chip: emerald tint for PASS, danger tint otherwise.
 function StatusBadge({ status }: { status: string }) {
-  const isPass = status === "PASS";
-  return (
-    <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-        isPass
-          ? "bg-success-bg text-success-dark"
-          : "bg-danger-bg text-danger-dark"
-      }`}
-    >
-      {status}
-    </span>
-  );
+  if (status === "PASS") return <Badge>PASS</Badge>;
+  return <Badge variant="destructive">{status}</Badge>;
 }
 
 function evaluateParam(sp: SpesifikasiItem, val: string): "PASS" | "FAIL" {
@@ -114,6 +106,16 @@ const emptyForm: UjiForm = {
   inspector: "",
   catatan: "",
 };
+
+// Native select styled to match the Input kit (hairline border, 36px, 6px
+// radius); focus border + ring come from the global input/select rule.
+const selectClass =
+  "h-9 w-full rounded-md border border-input bg-surface px-2.5 text-sm transition-colors duration-150 outline-none";
+
+// Native textarea styled to match the Input kit; focus comes from the global
+// textarea rule (emerald border + ring).
+const textareaClass =
+  "min-h-16 w-full rounded-md border border-input bg-surface px-2.5 py-1.5 text-sm transition-colors duration-150 outline-none";
 
 export default function InspeksiPage() {
   const { user } = useUser();
@@ -411,11 +413,12 @@ export default function InspeksiPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Page header: micro-label + title left, primary action right */}
+      <div className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold">Inspeksi / Hasil Uji</h1>
-          <p className="text-sm text-muted mt-1">
+          <p className="micro-label">PENGUJIAN</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Inspeksi</h1>
+          <p className="mt-1 text-[13px] text-muted">
             Kelola data pengujian dan inspeksi produk.
           </p>
         </div>
@@ -423,148 +426,151 @@ export default function InspeksiPage() {
           {canCreate && (
             <DialogTrigger render={<Button><Plus className="size-4" /> Input Uji Baru</Button>} />
           )}
-          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{editingId ? "Edit Hasil Uji" : "Input Hasil Uji Baru"}</DialogTitle>
+
+          <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+            <DialogHeader className="gap-1 border-b border-border-soft px-6 py-4 pr-14">
+              <p className="micro-label">PENGUJIAN</p>
+              <DialogTitle className="text-2xl font-semibold tracking-tight">
+                {editingId ? "Edit Hasil Uji" : "Input Hasil Uji Baru"}
+              </DialogTitle>
             </DialogHeader>
 
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-medium">Produk *</label>
-                  <select
-                    className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                    value={form.id_produk}
-                    onChange={(e) => setForm({ ...form, id_produk: e.target.value })}
-                  >
-                    <option value="">Pilih produk…</option>
-                    {produkList.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.kode_produk} — {p.nama_produk}
-                      </option>
-                    ))}
-                  </select>
+            {/* Scrollable body; the footer stays pinned below it. */}
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              <div className="space-y-6">
+                {/* Uji fields: two-column grid */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <label className="text-xs font-medium">Produk *</label>
+                    <select
+                      className={selectClass}
+                      value={form.id_produk}
+                      onChange={(e) => setForm({ ...form, id_produk: e.target.value })}
+                    >
+                      <option value="">Pilih produk…</option>
+                      {produkList.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.kode_produk} — {p.nama_produk}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium">No Lot *</label>
+                    <Input
+                      value={form.no_lot}
+                      onChange={(e) => setForm({ ...form, no_lot: e.target.value })}
+                      placeholder="LOT-001"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium">Inspector</label>
+                    <Input
+                      value={form.inspector}
+                      onChange={(e) => setForm({ ...form, inspector: e.target.value })}
+                      placeholder="Nama inspector"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium">Tgl Sampling</label>
+                    <Input
+                      type="date"
+                      value={form.tgl_sampling}
+                      onChange={(e) => setForm({ ...form, tgl_sampling: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium">Tgl Uji</label>
+                    <Input
+                      type="date"
+                      value={form.tgl_uji}
+                      onChange={(e) => setForm({ ...form, tgl_uji: e.target.value })}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium">No Lot *</label>
-                  <Input
-                    value={form.no_lot}
-                    onChange={(e) => setForm({ ...form, no_lot: e.target.value })}
-                    placeholder="LOT-001"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium">Tgl Sampling</label>
-                  <Input
-                    type="date"
-                    value={form.tgl_sampling}
-                    onChange={(e) => setForm({ ...form, tgl_sampling: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium">Tgl Uji</label>
-                  <Input
-                    type="date"
-                    value={form.tgl_uji}
-                    onChange={(e) => setForm({ ...form, tgl_uji: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium">Inspector</label>
-                  <Input
-                    value={form.inspector}
-                    onChange={(e) => setForm({ ...form, inspector: e.target.value })}
-                    placeholder="Nama inspector"
-                  />
-                </div>
-              </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-medium">Catatan</label>
-                <textarea
-                  className="flex min-h-16 w-full rounded-lg border border-input bg-transparent px-3 py-1.5 text-sm shadow-sm transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                  value={form.catatan}
-                  onChange={(e) => setForm({ ...form, catatan: e.target.value })}
-                  placeholder="Catatan (opsional)"
-                />
-              </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium">Catatan</label>
+                  <textarea
+                    className={textareaClass}
+                    value={form.catatan}
+                    onChange={(e) => setForm({ ...form, catatan: e.target.value })}
+                    placeholder="Catatan (opsional)"
+                  />
+                </div>
 
-              {/* Dynamic hasil input */}
-              {spesifikasi.length > 0 && (
-                <div className="border-t border-border pt-4">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted block mb-3">
-                    Hasil Pengujian
-                  </span>
-                  <div className="space-y-2">
-                    {spesifikasi.map((sp) => {
-                      const val = hasilValues[sp.parameter_uji] ?? "";
-                      const res =
-                        val !== "" ? evaluateParam(sp, val) : null;
-                      return (
-                        <div
-                          key={sp.id}
-                          className="flex items-center gap-3 p-2 rounded border border-border bg-surface-alt"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <span className="text-sm font-medium">
-                              {sp.parameter_uji}
-                            </span>
-                            {sp.tipe_batas !== "TEXT" && (
-                              <span className="text-xs text-muted ml-2">
-                                ({sp.tipe_batas}: {sp.nilai_min}
-                                {sp.tipe_batas === "RANGE" && ` — ${sp.nilai_maks}`}
-                                {sp.satuan && ` ${sp.satuan}`})
+                {/* Dynamic hasil input */}
+                {spesifikasi.length > 0 && (
+                  <div className="border-t border-border pt-5">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <span className="micro-label">Hasil Pengujian</span>
+                    </div>
+
+                    <div className="space-y-2">
+                      {spesifikasi.map((sp) => {
+                        const val = hasilValues[sp.parameter_uji] ?? "";
+                        const res =
+                          val !== "" ? evaluateParam(sp, val) : null;
+                        return (
+                          <div
+                            key={sp.id}
+                            className="flex items-center gap-3 rounded-md border border-border bg-surface-alt p-3"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <span className="text-sm font-medium">
+                                {sp.parameter_uji}
                               </span>
+                              {sp.tipe_batas !== "TEXT" && (
+                                <span className="font-data ml-2 text-[11px] text-muted">
+                                  ({sp.tipe_batas}: {sp.nilai_min}
+                                  {sp.tipe_batas === "RANGE" && ` — ${sp.nilai_maks}`}
+                                  {sp.satuan && ` ${sp.satuan}`})
+                                </span>
+                              )}
+                            </div>
+                            <Input
+                              className="w-28"
+                              placeholder={sp.tipe_batas === "TEXT" ? "Nilai" : "0"}
+                              value={val}
+                              onChange={(e) => {
+                                valuesProductIdRef.current = form.id_produk;
+                                setHasilValues({
+                                  ...hasilValues,
+                                  [sp.parameter_uji]: e.target.value,
+                                });
+                              }}
+                            />
+                            {res && (
+                              <Badge
+                                variant={res === "PASS" ? "default" : "destructive"}
+                              >
+                                {res}
+                              </Badge>
                             )}
                           </div>
-                          <Input
-                            className="w-28 h-7 text-sm"
-                            placeholder={sp.tipe_batas === "TEXT" ? "Nilai" : "0"}
-                            value={val}
-                            onChange={(e) => {
-                              valuesProductIdRef.current = form.id_produk;
-                              setHasilValues({
-                                ...hasilValues,
-                                [sp.parameter_uji]: e.target.value,
-                              });
-                            }}
-                          />
-                          {res && (
-                            <span
-                              className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
-                                res === "PASS"
-                                  ? "bg-success-bg text-success-dark"
-                                  : "bg-danger-bg text-danger-dark"
-                              }`}
-                            >
-                              {res}
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
 
-                  <div className="mt-3 flex items-center gap-2">
-                    <span className="text-xs font-medium">Status Final:</span>
-                    {overallStatus === null ? (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-chip-bg text-muted">
-                        Belum diisi
-                      </span>
-                    ) : (
-                      <StatusBadge status={overallStatus} />
-                    )}
+                    <div className="mt-4 flex items-center gap-2">
+                      <span className="text-xs font-medium">Status Final:</span>
+                      {overallStatus === null ? (
+                        <Badge variant="secondary">Belum diisi</Badge>
+                      ) : (
+                        <StatusBadge status={overallStatus} />
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-              {form.id_produk && spesifikasi.length === 0 && (
-                <p className="text-xs text-muted">
-                  Produk ini belum memiliki spesifikasi pengujian.
-                </p>
-              )}
+                )}
+                {form.id_produk && spesifikasi.length === 0 && (
+                  <p className="text-[13px] text-muted">
+                    Produk ini belum memiliki spesifikasi pengujian.
+                  </p>
+                )}
+              </div>
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="m-0 flex-row items-center justify-between gap-2 rounded-b-lg px-6 py-4 sm:justify-between">
               <DialogClose render={<Button variant="outline">Batal</Button>} />
               <Button onClick={handleSave} disabled={saving}>
                 {saving ? "Menyimpan…" : editingId ? "Simpan" : "Tambah"}
@@ -574,37 +580,43 @@ export default function InspeksiPage() {
         </Dialog>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-xs">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted pointer-events-none" />
-        <Input
-          placeholder="Cari no lot atau produk…"
-          value={searchInput}
-          onChange={(e) => onSearchChange(e.target.value)}
-          className="pl-9"
-        />
+      {/* Toolbar: search left, result meta right */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="relative w-60 max-w-full">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-faint" />
+          <Input
+            placeholder="Cari no lot atau produk…"
+            value={searchInput}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+        <p className="shrink-0 text-[13px] text-muted">
+          <span className="font-data text-text">{data.length}</span> dari{" "}
+          <span className="font-data text-text">{totalCount}</span> data
+        </p>
       </div>
 
-      {/* Table */}
-      <div className="rounded-xl bg-surface shadow-card-sm overflow-hidden">
+      {/* Table card: hairline border, radius 8, header micro-labels on surface-alt */}
+      <div className="overflow-hidden rounded-lg border border-border bg-surface">
         <Table>
           <TableHeader>
-            <TableRow className="bg-surface-alt">
-              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">No Lot</TableHead>
-              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Produk</TableHead>
-              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Tgl Sampling</TableHead>
-              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Tgl Uji</TableHead>
-              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Inspector</TableHead>
-              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Status</TableHead>
-              <TableHead className="text-xs font-semibold uppercase tracking-wider text-faint px-4 py-3">Aksi</TableHead>
+            <TableRow className="hover:bg-surface-alt">
+              <TableHead className="pl-4">No Lot</TableHead>
+              <TableHead>Produk</TableHead>
+              <TableHead className="text-right">Tgl Sampling</TableHead>
+              <TableHead className="text-right">Tgl Uji</TableHead>
+              <TableHead>Inspector</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="pr-4">Aksi</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading && <TableSkeleton rows={5} cols={7} />}
             {!loading && loadError && (
               <TableRow>
-                <TableCell colSpan={7} className="px-4 py-8">
-                  <div className="flex items-center justify-center gap-3 text-muted">
+                <TableCell colSpan={7} className="px-4 py-12">
+                  <div className="flex items-center justify-center gap-3 text-[13px] text-muted">
                     Gagal memuat data.
                     <Button
                       variant="outline"
@@ -618,9 +630,25 @@ export default function InspeksiPage() {
               </TableRow>
             )}
             {!loading && !loadError && data.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={7} className="px-4 py-8 text-center text-muted">
-                  Tidak ada data inspeksi.
+              <TableRow className="hover:bg-surface">
+                <TableCell colSpan={7} className="px-4 py-12">
+                  <div className="flex flex-col items-center gap-4 text-center">
+                    <div className="flex size-10 items-center justify-center rounded-full border border-border text-faint">
+                      <FlaskConical className="size-4" />
+                    </div>
+                    <p className="micro-label">
+                      {search ? "TIDAK ADA HASIL" : "TIDAK ADA DATA UJI"}
+                    </p>
+                    {!search && canCreate && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDialogOpen(true)}
+                      >
+                        <Plus className="size-3.5" /> Input Uji Baru
+                      </Button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             )}
@@ -628,23 +656,29 @@ export default function InspeksiPage() {
               data.map((row) => (
               <TableRow
                 key={row.id}
-                className="border-b border-border last:border-0 hover:bg-chip-bg/40 cursor-pointer"
+                className="cursor-pointer"
                 onClick={() => openDetail(row)}
               >
-                <TableCell className="px-4 py-3 font-medium">{row.no_lot}</TableCell>
-                <TableCell className="px-4 py-3">
+                <TableCell className="pl-4">
+                  <div className="font-data">{row.no_lot}</div>
+                </TableCell>
+                <TableCell className="text-muted">
                   {row.master_produk?.nama_produk || "-"}
                 </TableCell>
-                <TableCell className="px-4 py-3 text-muted">{row.tgl_sampling}</TableCell>
-                <TableCell className="px-4 py-3 text-muted">{row.tgl_uji}</TableCell>
-                <TableCell className="px-4 py-3">{row.inspector}</TableCell>
-                <TableCell className="px-4 py-3">
+                <TableCell className="font-data text-right text-muted">
+                  {row.tgl_sampling}
+                </TableCell>
+                <TableCell className="font-data text-right text-muted">
+                  {row.tgl_uji}
+                </TableCell>
+                <TableCell>{row.inspector || "-"}</TableCell>
+                <TableCell>
                   <StatusBadge status={row.status} />
                 </TableCell>
-                <TableCell className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                <TableCell className="pr-4" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-1">
                     <button
-                      className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
+                      className="rounded-md p-1.5 text-muted outline-none transition-colors duration-150 hover:bg-surface-alt hover:text-text focus-visible:ring-2 focus-visible:ring-primary/30"
                       onClick={() => openDetail(row)}
                       title="Detail"
                     >
@@ -652,7 +686,7 @@ export default function InspeksiPage() {
                     </button>
                     {canUpdate && (
                       <button
-                        className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
+                        className="rounded-md p-1.5 text-muted outline-none transition-colors duration-150 hover:bg-surface-alt hover:text-text focus-visible:ring-2 focus-visible:ring-primary/30"
                         onClick={() => openEdit(row)}
                         title="Edit"
                       >
@@ -661,7 +695,7 @@ export default function InspeksiPage() {
                     )}
                     {canDelete && (
                       <button
-                        className="p-1.5 rounded hover:bg-danger-bg text-danger"
+                        className="rounded-md p-1.5 text-danger outline-none transition-colors duration-150 hover:bg-danger-bg focus-visible:ring-2 focus-visible:ring-danger/20"
                         onClick={() => handleDelete(row.id)}
                         title="Hapus"
                       >
@@ -678,7 +712,7 @@ export default function InspeksiPage() {
 
       {/* Pagination: load-more + counter */}
       {!loading && !loadError && data.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {data.length < totalCount && (
             <Button
               variant="outline"
@@ -691,86 +725,94 @@ export default function InspeksiPage() {
                 : `Muat lagi (${totalCount - data.length} tersisa)`}
             </Button>
           )}
-          <p className="text-xs text-muted text-center">
-            Menampilkan {data.length} dari {totalCount} data
+          <p className="text-center text-[13px] text-muted">
+            Menampilkan <span className="font-data text-text">{data.length}</span> dari{" "}
+            <span className="font-data text-text">{totalCount}</span> data
           </p>
         </div>
       )}
 
       {/* Detail dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Detail Hasil Uji</DialogTitle>
+        <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+          <DialogHeader className="gap-1 border-b border-border-soft px-6 py-4 pr-14">
+            <p className="micro-label">PENGUJIAN</p>
+            <DialogTitle className="text-2xl font-semibold tracking-tight">
+              Detail Hasil Uji
+            </DialogTitle>
           </DialogHeader>
-          {detailItem && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
-                <div>
-                  <span className="text-xs text-muted">No Lot</span>
-                  <p className="font-medium">{detailItem.no_lot}</p>
-                </div>
-                <div>
-                  <span className="text-xs text-muted">Produk</span>
-                  <p className="font-medium">
-                    {detailItem.master_produk?.nama_produk || "-"}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-xs text-muted">Tgl Sampling</span>
-                  <p>{detailItem.tgl_sampling}</p>
-                </div>
-                <div>
-                  <span className="text-xs text-muted">Tgl Uji</span>
-                  <p>{detailItem.tgl_uji}</p>
-                </div>
-                <div>
-                  <span className="text-xs text-muted">Inspector</span>
-                  <p>{detailItem.inspector}</p>
-                </div>
-                <div>
-                  <span className="text-xs text-muted">Status</span>
-                  <p><StatusBadge status={detailItem.status} /></p>
-                </div>
-              </div>
 
-              {detailItem.catatan && (
-                <div>
-                  <span className="text-xs text-muted">Catatan</span>
-                  <p className="text-sm">{detailItem.catatan}</p>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+            {detailItem && (
+              <div className="space-y-5">
+                <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+                  <div>
+                    <span className="text-xs text-muted">No Lot</span>
+                    <p className="font-data text-sm">{detailItem.no_lot}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-muted">Produk</span>
+                    <p className="text-sm font-medium">
+                      {detailItem.master_produk?.nama_produk || "-"}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-muted">Tgl Sampling</span>
+                    <p className="font-data text-sm">{detailItem.tgl_sampling}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-muted">Tgl Uji</span>
+                    <p className="font-data text-sm">{detailItem.tgl_uji}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-muted">Inspector</span>
+                    <p className="text-sm">{detailItem.inspector || "-"}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-muted">Status</span>
+                    <p>
+                      <StatusBadge status={detailItem.status} />
+                    </p>
+                  </div>
                 </div>
-              )}
 
-              {detailItem.hasil_detail?.length > 0 && (
-                <div>
-                  <span className="text-xs font-semibold text-muted block mb-2">
-                    Hasil Detail
-                  </span>
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-1.5 font-medium text-muted">Parameter</th>
-                        <th className="text-left py-1.5 font-medium text-muted">Nilai</th>
-                        <th className="text-left py-1.5 font-medium text-muted">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {detailItem.hasil_detail.map((h: HasilUjiItem, i: number) => (
-                        <tr key={i} className="border-b border-border last:border-0">
-                          <td className="py-1.5">{h.p}</td>
-                          <td className="py-1.5">{h.val}</td>
-                          <td className="py-1.5">
-                            <span className={`font-medium ${h.st === "PASS" ? "text-success-dark" : "text-danger-dark"}`}>{h.st}</span>
-                          </td>
+                {detailItem.catatan && (
+                  <div className="border-t border-border-soft pt-4">
+                    <span className="text-xs text-muted">Catatan</span>
+                    <p className="mt-1 text-sm">{detailItem.catatan}</p>
+                  </div>
+                )}
+
+                {detailItem.hasil_detail?.length > 0 && (
+                  <div className="border-t border-border-soft pt-4">
+                    <p className="micro-label mb-3">Hasil Detail</p>
+                    <table className="w-full text-[13px]">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Parameter</th>
+                          <th className="py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Nilai</th>
+                          <th className="py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Status</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-          <DialogFooter>
+                      </thead>
+                      <tbody>
+                        {detailItem.hasil_detail.map((h: HasilUjiItem, i: number) => (
+                          <tr key={i} className="border-b border-border-soft last:border-0">
+                            <td className="py-2">{h.p}</td>
+                            <td className="font-data py-2 text-right">{h.val}</td>
+                            <td className="py-2 text-right">
+                              <span className={`font-data ${h.st === "PASS" ? "text-success-dark" : "text-danger-dark"}`}>{h.st}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="m-0 flex-row items-center justify-end gap-2 rounded-b-lg px-6 py-4">
             <DialogClose render={<Button variant="outline">Tutup</Button>} />
           </DialogFooter>
         </DialogContent>
