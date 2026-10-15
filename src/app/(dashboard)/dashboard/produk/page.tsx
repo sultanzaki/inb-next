@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
-import type { MasterProduk, UserRole } from "@/lib/types";
+import type { MasterProduk, SpesifikasiItem, UserRole } from "@/lib/types";
 import { toast } from "sonner";
 import { saveProdukAction, deleteProdukAction } from "@/lib/actions/produk-actions";
 import {
@@ -180,7 +180,7 @@ export default function ProdukPage() {
     setEditingId(produk.id);
 
     setSpesifikasi(
-      (sp ?? []).map((s: any) => ({
+      (sp ?? []).map((s: SpesifikasiItem) => ({
         parameter_uji: s.parameter_uji,
         tipe_batas: s.tipe_batas,
         nilai_min: s.nilai_min ?? "",

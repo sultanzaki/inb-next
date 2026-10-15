@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
-import type { UserRole } from "@/lib/types";
+import type { CoaRow, COA, HasilUjiItem, HasilUjiRow, UserRole } from "@/lib/types";
 import { toast } from "sonner";
 import {
   issueCoaAction,
@@ -86,13 +86,13 @@ export default function COAPage() {
   const [search, setSearch] = useState("");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [coaList, setCoaList] = useState<any[]>([]);
-  const [availableHasil, setAvailableHasil] = useState<any[]>([]);
+  const [coaList, setCoaList] = useState<CoaRow[]>([]);
+  const [availableHasil, setAvailableHasil] = useState<HasilUjiRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [detailItem, setDetailItem] = useState<any>(null);
+  const [detailItem, setDetailItem] = useState<CoaRow | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<COAForm>(emptyForm);
   const [saving, setSaving] = useState(false);
@@ -120,7 +120,7 @@ export default function COAPage() {
       toast.error("Gagal memuat data. Coba lagi.");
     } else {
       setLoadError(false);
-      setCoaList((raw as any[]) ?? []);
+      setCoaList((raw as CoaRow[]) ?? []);
     }
     setLoading(false);
   }, [search]);
@@ -128,8 +128,9 @@ export default function COAPage() {
   const fetchAvailableHasil = useCallback(async () => {
     // Get all hasil_uji with PASS status that don't have COA yet
     const { data: coaIds } = await sb.from("coa").select("id_produk, no_lot");
+    const coaKeys = (coaIds ?? []) as Pick<COA, "id_produk" | "no_lot">[];
     const existing = new Set(
-      (coaIds ?? []).map((c: any) => `${c.id_produk}::${c.no_lot}`)
+      coaKeys.map((c) => `${c.id_produk}::${c.no_lot}`)
     );
 
     const { data: hasil } = await sb
@@ -138,8 +139,9 @@ export default function COAPage() {
       .eq("status", "PASS")
       .order("created_at", { ascending: false });
 
-    const filtered = (hasil ?? []).filter(
-      (h: any) => !existing.has(`${h.id_produk}::${h.no_lot}`)
+    const hasilRows = (hasil ?? []) as HasilUjiRow[];
+    const filtered = hasilRows.filter(
+      (h) => !existing.has(`${h.id_produk}::${h.no_lot}`)
     );
     setAvailableHasil(filtered);
   }, []);
@@ -167,7 +169,7 @@ export default function COAPage() {
     setEditingId(null);
   }
 
-  async function openEdit(coa: any) {
+  async function openEdit(coa: CoaRow) {
     setForm({
       id_hasil: "",
       no_coa: coa.no_coa,
@@ -264,9 +266,9 @@ export default function COAPage() {
     }
   }
 
-  function handlePrint(coa: any) {
-    const snapshot = coa.hasil_uji_snapshot || {};
-    const items = snapshot.items || [];
+  function handlePrint(coa: CoaRow) {
+    const snapshot = coa.hasil_uji_snapshot;
+    const items: HasilUjiItem[] = snapshot.items ?? [];
     const w = window.open("", "_blank");
     if (!w) return;
     w.document.write(`<html><head><title>COA - ${escapeHtml(coa.no_coa)}</title>
@@ -393,7 +395,7 @@ export default function COAPage() {
       </tr>
     </thead>
     <tbody>
-      ${items.map((item: any) => {
+      ${items.map((item) => {
         const specText = item.t === "TEXT" ? "Teks" : item.t === "MIN" ? "> " + item.mn : item.t === "MAX" ? "< " + item.mx : (item.mn || "-") + " — " + (item.mx || "-");
         return `<tr><td>${escapeHtml(item.p)}</td><td>${escapeHtml(specText)}</td><td>${escapeHtml(item.val || "-")}</td><td>${item.st === "PASS" ? "✓ PASS" : "✗ FAIL"}</td></tr>`;
       }).join("")}
@@ -416,7 +418,7 @@ export default function COAPage() {
     w.document.close();
   }
 
-  function openDetail(coa: any) {
+  function openDetail(coa: CoaRow) {
     setDetailItem(coa);
     setDetailOpen(true);
   }
@@ -431,7 +433,7 @@ export default function COAPage() {
 
   // Determine selected hasil details for the preview
   const selectedHasil = availableHasil.find(
-    (h: any) => h.id === form.id_hasil
+    (h) => h.id === form.id_hasil
   );
 
   return (
@@ -502,7 +504,7 @@ export default function COAPage() {
                       }}
                     >
                       <option value="">Pilih hasil uji…</option>
-                      {availableHasil.map((h: any) => (
+                      {availableHasil.map((h) => (
                         <option key={h.id} value={h.id}>
                           {h.no_lot} —{" "}
                           {h.master_produk?.nama_produk || ""}
@@ -591,7 +593,7 @@ export default function COAPage() {
                       </thead>
                       <tbody>
                         {(selectedHasil.hasil_detail ?? []).map(
-                          (item: any, i: number) => (
+                          (item, i: number) => (
                             <tr key={i} className="border-b border-border last:border-0">
                               <td className="py-1">{item.p}</td>
                               <td className="py-1">{item.val}</td>
@@ -791,7 +793,7 @@ export default function COAPage() {
                     </thead>
                     <tbody>
                       {detailItem.hasil_uji_snapshot.items.map(
-                        (item: any, i: number) => (
+                        (item, i: number) => (
                           <tr key={i} className="border-b border-border last:border-0">
                             <td className="py-1">{item.p}</td>
                             <td className="py-1">{item.val}</td>

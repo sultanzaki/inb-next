@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { HasilUji, DashboardData } from "@/lib/types";
+import type { HasilUjiRow, DashboardData } from "@/lib/types";
 import {
   Table,
   TableBody,
@@ -326,7 +326,7 @@ export default function DashboardPage() {
         total_coa: total_coa ?? 0,
         dok_berlaku: total_dok ?? 0,
         dok_expired: dok_expired ?? 0,
-        recent_inspeksi: (hasilRaw as unknown as HasilUji[]) ?? [],
+        recent_inspeksi: (hasilRaw as HasilUjiRow[]) ?? [],
       });
     } catch {
       // Promise.all itself rejected (network throw): treat every query as
@@ -503,9 +503,7 @@ export default function DashboardPage() {
                     {row.no_lot}
                   </TableCell>
                   <TableCell className="text-muted">
-                    {(row as any).master_produk?.nama_produk ||
-                      row.nama_produk ||
-                      "-"}
+                    {row.master_produk?.nama_produk || "-"}
                   </TableCell>
                   <TableCell className="text-muted">
                     {row.tgl_uji}

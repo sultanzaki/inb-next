@@ -29,6 +29,7 @@ export interface SpesifikasiItem {
   keterangan: string;
   tipe_batas: 'RANGE' | 'MIN' | 'MAX' | 'TEXT';
   urutan: number;
+  created_at: string;
 }
 
 export interface HasilUjiItem {
@@ -42,27 +43,44 @@ export interface HasilUjiItem {
   st: 'PASS' | 'FAIL';
 }
 
+/**
+ * Kolom master_produk yang disematkan PostgREST pada query
+ * `select("*, master_produk!inner(kode_produk, nama_produk)")`.
+ */
+export interface ProdukJoin {
+  kode_produk: string;
+  nama_produk: string;
+}
+
+/**
+ * Baris tabel `hasil_uji` (bentuk flat di Postgres — nama/kode produk TIDAK
+ * jadi kolom; ambil dari join master_produk).
+ */
 export interface HasilUji {
   id: string;
   no_lot: string;
   id_produk: string;
-  kode_produk: string;
-  nama_produk: string;
   tgl_sampling: string;
   tgl_uji: string;
   inspector: string;
   hasil_detail: HasilUjiItem[];
   status: 'PASS' | 'FAIL';
-  catatan: string;
+  catatan: string | null;
   created_at: string;
+  updated_at: string;
 }
 
+/** hasil_uji + join master_produk (bentuk baris list dashboard/inspeksi). */
+export type HasilUjiRow = HasilUji & { master_produk: ProdukJoin };
+
+/**
+ * Baris tabel `coa` (bentuk flat di Postgres). Snapshot hasil uji ditulis
+ * server saat penerbitan; bentuknya dikunci oleh coa-actions.ts.
+ */
 export interface COA {
   id: string;
   no_coa: string;
   id_produk: string;
-  kode_produk: string;
-  nama_produk: string;
   no_lot: string;
   tanggal_rilis: string;
   tanggal_expired: string;
@@ -73,9 +91,13 @@ export interface COA {
     items: HasilUjiItem[];
   };
   tanda_tangan_digital: string;
-  mfg_date: string;
+  mfg_date: string | null;
   created_at: string;
+  updated_at: string;
 }
+
+/** COA + join master_produk (bentuk baris list di halaman COA). */
+export type CoaRow = COA & { master_produk: ProdukJoin };
 
 export interface DokumenArsip {
   id: string;
@@ -104,7 +126,7 @@ export interface DashboardData {
   total_coa: number;
   dok_berlaku: number;
   dok_expired: number;
-  recent_inspeksi: HasilUji[];
+  recent_inspeksi: HasilUjiRow[];
 }
 
 export const ROLE_ALLOW: Record<string, UserRole[]> = {

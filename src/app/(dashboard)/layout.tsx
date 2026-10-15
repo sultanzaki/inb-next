@@ -3,8 +3,6 @@ import { redirect } from "next/navigation";
 import { UserContextProvider } from "./user-context";
 import { Topbar } from "@/components/topbar";
 
-export const instant = false;
-
 export default async function DashboardLayout({
   children,
 }: {

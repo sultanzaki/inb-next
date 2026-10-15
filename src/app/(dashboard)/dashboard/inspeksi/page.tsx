@@ -4,7 +4,13 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
-import type { MasterProduk, SpesifikasiItem, UserRole } from "@/lib/types";
+import type {
+  HasilUjiItem,
+  HasilUjiRow,
+  MasterProduk,
+  SpesifikasiItem,
+  UserRole,
+} from "@/lib/types";
 import { toast } from "sonner";
 import { saveInspeksiAction, deleteInspeksiAction } from "@/lib/actions/inspeksi-actions";
 import { Search, Plus, Pencil, Trash2, Eye } from "lucide-react";
@@ -116,13 +122,13 @@ export default function InspeksiPage() {
   const [search, setSearch] = useState("");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<HasilUjiRow[]>([]);
   const [produkList, setProdukList] = useState<MasterProduk[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [detailItem, setDetailItem] = useState<any>(null);
+  const [detailItem, setDetailItem] = useState<HasilUjiRow | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<UjiForm>(emptyForm);
   const [spesifikasi, setSpesifikasi] = useState<SpesifikasiItem[]>([]);
@@ -158,7 +164,7 @@ export default function InspeksiPage() {
       toast.error("Gagal memuat data. Coba lagi.");
     } else {
       setLoadError(false);
-      setData((raw as any[]) ?? []);
+      setData((raw as HasilUjiRow[]) ?? []);
     }
     setLoading(false);
   }, [search]);
@@ -233,7 +239,7 @@ export default function InspeksiPage() {
     setEditingId(null);
   }
 
-  async function openEdit(item: any) {
+  async function openEdit(item: HasilUjiRow) {
     const seq = ++editSeq;
     setEditingId(item.id);
     valuesProductIdRef.current = item.id_produk;
@@ -265,7 +271,7 @@ export default function InspeksiPage() {
     setDialogOpen(true);
   }
 
-  function openDetail(item: any) {
+  function openDetail(item: HasilUjiRow) {
     setDetailItem(item);
     setDetailOpen(true);
   }
@@ -684,7 +690,7 @@ export default function InspeksiPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {detailItem.hasil_detail.map((h: any, i: number) => (
+                      {detailItem.hasil_detail.map((h: HasilUjiItem, i: number) => (
                         <tr key={i} className="border-b border-border last:border-0">
                           <td className="py-1.5">{h.p}</td>
                           <td className="py-1.5">{h.val}</td>
