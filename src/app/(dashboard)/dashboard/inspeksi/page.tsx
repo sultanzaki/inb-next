@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Search, Plus, Pencil, Trash2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TableSkeleton } from "@/components/table-skeleton";
 import {
   Table,
   TableBody,
@@ -26,6 +27,18 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+
+// Module-level browser client: a single instance instead of one per render.
+const sb = createClient();
+
+// Monotonic counter used to ignore stale list-fetch responses.
+let requestSeq = 0;
+
+// Escape characters that are special inside a PostgREST .or() filter so raw
+// user input (backslash, %, _, comma, parentheses) cannot break the syntax.
+function escapeOr(value: string): string {
+  return value.replace(/[\\%_,()]/g, "\\$&");
+}
 
 function StatusBadge({ status }: { status: string }) {
   const isPass = status === "PASS";
@@ -75,12 +88,15 @@ const emptyForm: UjiForm = {
 
 export default function InspeksiPage() {
   const { user } = useUser();
-  const sb = createClient();
 
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [data, setData] = useState<any[]>([]);
   const [produkList, setProdukList] = useState<MasterProduk[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailItem, setDetailItem] = useState<any>(null);
@@ -90,42 +106,71 @@ export default function InspeksiPage() {
   const [hasilValues, setHasilValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
+  // Ref mirror of editingId so the [form.id_produk] effect can decide whether
+  // to reset hasilValues without listing editingId in its dependencies.
+  const editingIdRef = useRef<string | null>(null);
+
+  function setEditing(id: string | null) {
+    editingIdRef.current = id;
+    setEditingId(id);
+  }
+
   const fetchData = useCallback(async () => {
+    const seq = ++requestSeq;
     setLoading(true);
     let q = sb
       .from("hasil_uji")
       .select("*, master_produk!inner(kode_produk, nama_produk)")
       .order("created_at", { ascending: false });
     if (search) {
+      const term = escapeOr(search);
       q = q.or(
-        `no_lot.ilike.%${search}%,master_produk.nama_produk.ilike.%${search}%`
+        `no_lot.ilike.%${term}%,master_produk.nama_produk.ilike.%${term}%`
       );
     }
-    const { data: raw } = await q;
-    setData((raw as any[]) ?? []);
+    const { data: raw, error } = await q;
+    if (seq !== requestSeq) return; // superseded by a newer request
+    if (error) {
+      setLoadError(true);
+      setData([]);
+      toast.error("Gagal memuat data. Coba lagi.");
+    } else {
+      setLoadError(false);
+      setData((raw as any[]) ?? []);
+    }
     setLoading(false);
   }, [search]);
 
   const fetchProduk = useCallback(async () => {
-    const { data } = await sb
+    const { data, error } = await sb
       .from("master_produk")
       .select("*")
       .order("nama_produk");
+    if (error) {
+      setProdukList([]);
+      toast.error("Gagal memuat data. Coba lagi.");
+      return;
+    }
     setProdukList((data as MasterProduk[]) ?? []);
   }, []);
 
+  // Pure loader: only fills spesifikasi state, never touches hasilValues.
   const fetchSpesifikasi = useCallback(async (id_produk: string) => {
     if (!id_produk) {
       setSpesifikasi([]);
       return;
     }
-    const { data } = await sb
+    const { data, error } = await sb
       .from("spesifikasi")
       .select("*")
       .eq("id_produk", id_produk)
       .order("urutan");
+    if (error) {
+      setSpesifikasi([]);
+      toast.error("Gagal memuat data. Coba lagi.");
+      return;
+    }
     setSpesifikasi((data as SpesifikasiItem[]) ?? []);
-    setHasilValues({});
   }, []);
 
   useEffect(() => {
@@ -133,18 +178,37 @@ export default function InspeksiPage() {
     fetchProduk();
   }, [fetchData, fetchProduk]);
 
+  // Clear the pending debounce timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, []);
+
   useEffect(() => {
     fetchSpesifikasi(form.id_produk);
+    // Only clear hasil values for a fresh (non-edit) product selection;
+    // while editing, existing values must survive the spec (re)load.
+    if (!editingIdRef.current) {
+      setHasilValues({});
+    }
   }, [form.id_produk, fetchSpesifikasi]);
+
+  function onSearchChange(value: string) {
+    setSearchInput(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setSearch(value), 300);
+  }
 
   function resetForm() {
     setForm(emptyForm);
     setSpesifikasi([]);
     setHasilValues({});
-    setEditingId(null);
+    setEditing(null);
   }
 
   async function openEdit(item: any) {
+    setEditing(item.id);
     setForm({
       id_produk: item.id_produk,
       no_lot: item.no_lot,
@@ -153,19 +217,19 @@ export default function InspeksiPage() {
       inspector: item.inspector,
       catatan: item.catatan ?? "",
     });
-    setEditingId(item.id);
 
-    // Load values from hasil_detail
+    // Load spesifikasi first, THEN populate hasil values, so no code path
+    // can wipe the values after they are set.
+    await fetchSpesifikasi(item.id_produk);
+
+    const vals: Record<string, string> = {};
     if (item.hasil_detail) {
-      const vals: Record<string, string> = {};
       for (const h of item.hasil_detail) {
         vals[h.p] = h.val;
       }
-      setHasilValues(vals);
     }
+    setHasilValues(vals);
 
-    // Load spesifikasi for the product
-    await fetchSpesifikasi(item.id_produk);
     setDialogOpen(true);
   }
 
@@ -174,12 +238,18 @@ export default function InspeksiPage() {
     setDetailOpen(true);
   }
 
-  function computeOverallStatus(): "PASS" | "FAIL" {
+  // null = nothing filled in yet (rendered as neutral), otherwise PASS/FAIL.
+  function computeOverallStatus(): "PASS" | "FAIL" | null {
+    if (spesifikasi.length === 0) return null;
+    const hasAnyValue = spesifikasi.some(
+      (sp) => (hasilValues[sp.parameter_uji] ?? "") !== ""
+    );
+    if (!hasAnyValue) return null;
     for (const sp of spesifikasi) {
-      const val = hasilValues[sp.parameter_uji] ?? "";
-      if (evaluateParam(sp, val) === "FAIL") return "FAIL";
+      if (evaluateParam(sp, hasilValues[sp.parameter_uji] ?? "") === "FAIL") {
+        return "FAIL";
+      }
     }
-    if (spesifikasi.length === 0) return "FAIL";
     return "PASS";
   }
 
@@ -204,7 +274,7 @@ export default function InspeksiPage() {
     setSaving(true);
 
     const detail = buildHasilDetail();
-    const status = computeOverallStatus();
+    const status = computeOverallStatus() ?? "FAIL";
 
     const payload = {
       id_produk: form.id_produk,
@@ -251,6 +321,7 @@ export default function InspeksiPage() {
 
   const role: UserRole = (user?.role as UserRole) ?? "viewer";
   const canDelete = canAction(role, "delete_uji");
+  const overallStatus = computeOverallStatus();
 
   return (
     <div className="space-y-6">
@@ -387,7 +458,13 @@ export default function InspeksiPage() {
 
                   <div className="mt-3 flex items-center gap-2">
                     <span className="text-xs font-medium">Status Final:</span>
-                    <StatusBadge status={computeOverallStatus()} />
+                    {overallStatus === null ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-chip-bg text-muted">
+                        Belum diisi
+                      </span>
+                    ) : (
+                      <StatusBadge status={overallStatus} />
+                    )}
                   </div>
                 </div>
               )}
@@ -413,8 +490,8 @@ export default function InspeksiPage() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted pointer-events-none" />
         <Input
           placeholder="Cari no lot atau produk…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => onSearchChange(e.target.value)}
           className="pl-9"
         />
       </div>
@@ -434,21 +511,23 @@ export default function InspeksiPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading && (
+            {loading && <TableSkeleton rows={5} cols={7} />}
+            {!loading && loadError && (
               <TableRow>
                 <TableCell colSpan={7} className="px-4 py-8 text-center text-muted">
-                  Memuat…
+                  Gagal memuat data. Coba lagi.
                 </TableCell>
               </TableRow>
             )}
-            {!loading && data.length === 0 && (
+            {!loading && !loadError && data.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="px-4 py-8 text-center text-muted">
                   Tidak ada data inspeksi.
                 </TableCell>
               </TableRow>
             )}
-            {data.map((row) => (
+            {!loading &&
+              data.map((row) => (
               <TableRow
                 key={row.id}
                 className="border-b border-border last:border-0 hover:bg-chip-bg/40 cursor-pointer"
