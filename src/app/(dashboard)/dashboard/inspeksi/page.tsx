@@ -6,6 +6,7 @@ import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
 import type { MasterProduk, SpesifikasiItem, UserRole } from "@/lib/types";
 import { toast } from "sonner";
+import { saveInspeksiAction, deleteInspeksiAction } from "@/lib/actions/inspeksi-actions";
 import { Search, Plus, Pencil, Trash2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -307,33 +308,29 @@ export default function InspeksiPage() {
     const detail = buildHasilDetail();
     const status = computeOverallStatus() ?? "FAIL";
 
-    const payload = {
-      id_produk: form.id_produk,
-      no_lot: form.no_lot,
-      tgl_sampling: form.tgl_sampling,
-      tgl_uji: form.tgl_uji,
-      inspector: form.inspector,
-      hasil_detail: detail,
-      status,
-      catatan: form.catatan,
-    };
-
     try {
-      if (editingId) {
-        const { error } = await sb.from("hasil_uji").update(payload).eq("id", editingId);
-        if (error) throw error;
-        toast.success("Hasil uji diperbarui.");
-      } else {
-        const { error } = await sb.from("hasil_uji").insert(payload);
-        if (error) throw error;
-        toast.success("Hasil uji ditambahkan.");
+      // Mutasi lewat server action: sesi + peran dicek server-side.
+      const res = await saveInspeksiAction({
+        id: editingId,
+        id_produk: form.id_produk,
+        no_lot: form.no_lot,
+        tgl_sampling: form.tgl_sampling,
+        tgl_uji: form.tgl_uji,
+        inspector: form.inspector,
+        catatan: form.catatan,
+        hasil_detail: detail,
+        status,
+      });
+      if (!res.ok) {
+        toast.error(res.error ?? "Gagal menyimpan hasil uji. Coba lagi.");
+        return;
       }
-
+      toast.success(editingId ? "Hasil uji diperbarui." : "Hasil uji ditambahkan.");
       setDialogOpen(false);
       resetForm();
       fetchData();
-    } catch (err: any) {
-      toast.error(err.message || "Gagal menyimpan.");
+    } catch {
+      toast.error("Gagal terhubung ke server. Coba lagi.");
     } finally {
       setSaving(false);
     }
@@ -341,17 +338,25 @@ export default function InspeksiPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("Hapus hasil uji ini?")) return;
-    const { error } = await sb.from("hasil_uji").delete().eq("id", id);
-    if (error) {
-      toast.error(error.message);
-    } else {
+
+    // Server action: role check server-side.
+    try {
+      const res = await deleteInspeksiAction(id);
+      if (!res.ok) {
+        toast.error(res.error ?? "Gagal menghapus hasil uji. Coba lagi.");
+        return;
+      }
       toast.success("Hasil uji dihapus.");
       fetchData();
+    } catch {
+      toast.error("Gagal terhubung ke server. Coba lagi.");
     }
   }
 
   const role: UserRole = (user?.role as UserRole) ?? "viewer";
   const canDelete = canAction(role, "delete_uji");
+  const canCreate = canAction(role, "create_uji");
+  const canUpdate = canAction(role, "update_uji");
   const overallStatus = computeOverallStatus();
 
   return (
@@ -365,7 +370,9 @@ export default function InspeksiPage() {
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={(v) => { if (v) editSeq++; setDialogOpen(v); if (!v) resetForm(); }}>
-          <DialogTrigger render={<Button><Plus className="size-4" /> Input Uji Baru</Button>} />
+          {canCreate && (
+            <DialogTrigger render={<Button><Plus className="size-4" /> Input Uji Baru</Button>} />
+          )}
           <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingId ? "Edit Hasil Uji" : "Input Hasil Uji Baru"}</DialogTitle>
@@ -593,13 +600,15 @@ export default function InspeksiPage() {
                     >
                       <Eye className="size-3.5" />
                     </button>
-                    <button
-                      className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
-                      onClick={() => openEdit(row)}
-                      title="Edit"
-                    >
-                      <Pencil className="size-3.5" />
-                    </button>
+                    {canUpdate && (
+                      <button
+                        className="p-1.5 rounded hover:bg-chip-bg text-muted hover:text-text"
+                        onClick={() => openEdit(row)}
+                        title="Edit"
+                      >
+                        <Pencil className="size-3.5" />
+                      </button>
+                    )}
                     {canDelete && (
                       <button
                         className="p-1.5 rounded hover:bg-danger-bg text-danger"
