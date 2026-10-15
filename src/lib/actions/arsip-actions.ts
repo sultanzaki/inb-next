@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser, logAudit } from "@/lib/auth";
 import { canAction } from "@/lib/types";
+import { assertUuid } from "@/lib/actions/shared";
 
 /**
  * Server actions untuk semua mutasi Arsip Dokumen.
@@ -39,6 +40,22 @@ export async function uploadDokumenAction(payload: UploadDokumenPayload): Promis
     return { ok: false, error: "Judul dan kategori wajib diisi." };
   }
 
+  // Allowlist link_drive: hanya tautan http(s) yang boleh disimpan/dirender —
+  // blokir skema berbahaya (javascript:, data:, dsb.). Kosong diperbolehkan.
+  const link = payload.link_drive?.trim() ?? "";
+  if (link) {
+    let allowed = false;
+    try {
+      const u = new URL(link);
+      allowed = u.protocol === "http:" || u.protocol === "https:";
+    } catch {
+      allowed = false;
+    }
+    if (!allowed) {
+      return { ok: false, error: "Link Drive harus berupa tautan http/https yang valid." };
+    }
+  }
+
   const admin = createAdminClient();
 
   // Kolom eksplisit — payload client tidak pernah di-spread mentah, dan
@@ -73,6 +90,9 @@ export async function deleteDokumenAction(id: string): Promise<ActionResult> {
   if (!user) return { ok: false, error: SESSION_EXPIRED };
 
   if (!canAction(user.role, "delete_doc")) return { ok: false, error: FORBIDDEN };
+
+  const idErr = assertUuid(id);
+  if (idErr) return { ok: false, error: idErr };
 
   const admin = createAdminClient();
 

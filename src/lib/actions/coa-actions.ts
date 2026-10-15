@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser, logAudit } from "@/lib/auth";
 import { canAction } from "@/lib/types";
+import { assertUuid } from "@/lib/actions/shared";
 
 /**
  * Server actions untuk semua mutasi COA. Enforcement peran dilakukan DI SINI
@@ -94,6 +95,8 @@ export async function issueCoaAction(payload: IssueCoaPayload): Promise<ActionRe
   if (!payload.id_hasil?.trim()) {
     return { ok: false, error: "Pilih hasil uji." };
   }
+  const idHasilErr = assertUuid(payload.id_hasil);
+  if (idHasilErr) return { ok: false, error: idHasilErr };
 
   const admin = createAdminClient();
 
@@ -123,6 +126,24 @@ export async function issueCoaAction(payload: IssueCoaPayload): Promise<ActionRe
   if (h.status !== "PASS") {
     await auditFailed(user.nama_lengkap, "issue_coa_failed", `not_pass ${refHasil(h)}`);
     return { ok: false, error: "COA hanya dapat diterbitkan dari hasil uji berstatus PASS." };
+  }
+
+  // Guard COA ganda: satu hasil uji hanya boleh punya satu COA. Relasi ke
+  // hasil_uji tidak disimpan sebagai kolom — pasangan (id_produk, no_lot)
+  // identik dengan hasil uji sumbernya.
+  const { count: existingCoa, error: coaCheckErr } = await admin
+    .from("coa")
+    .select("id", { count: "exact", head: true })
+    .eq("id_produk", h.id_produk)
+    .eq("no_lot", h.no_lot);
+  if (coaCheckErr) {
+    console.error("[issueCoaAction] gagal cek COA existing:", coaCheckErr);
+    await auditFailed(user.nama_lengkap, "issue_coa_failed", `precheck ${refHasil(h)}`);
+    return { ok: false, error: "Gagal memuat data. Coba lagi." };
+  }
+  if ((existingCoa ?? 0) > 0) {
+    await auditFailed(user.nama_lengkap, "issue_coa_failed", `sudah_ada ${refHasil(h)}`);
+    return { ok: false, error: "COA untuk hasil uji ini sudah diterbitkan." };
   }
 
   const produkRow = Array.isArray(h.master_produk) ? h.master_produk[0] : h.master_produk;
@@ -183,6 +204,8 @@ export async function updateCoaAction(payload: UpdateCoaPayload): Promise<Action
   if (!payload.id?.trim()) {
     return { ok: false, error: "COA tidak ditemukan." };
   }
+  const idErr = assertUuid(payload.id);
+  if (idErr) return { ok: false, error: idErr };
   if (!payload.no_coa?.trim()) {
     return { ok: false, error: "No COA wajib diisi." };
   }
@@ -221,6 +244,9 @@ export async function deleteCoaAction(id: string): Promise<ActionResult> {
   if (!user) return { ok: false, error: SESSION_EXPIRED };
 
   if (!canAction(user.role, "delete_coa")) return { ok: false, error: FORBIDDEN };
+
+  const idErr = assertUuid(id);
+  if (idErr) return { ok: false, error: idErr };
 
   const admin = createAdminClient();
 

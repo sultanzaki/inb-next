@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser, logAudit } from "@/lib/auth";
 import { canAction } from "@/lib/types";
+import { assertUuid } from "@/lib/actions/shared";
 
 /**
  * Server actions untuk semua mutasi Master Produk.
@@ -33,9 +34,6 @@ export interface SaveProdukPayload {
 }
 
 export type ActionResult = { ok: boolean; error?: string };
-
-// UUID v1-v8 (hex, dash-delimited 8-4-4-4-12), case-insensitive.
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const SESSION_EXPIRED = "Sesi berakhir. Muat ulang halaman.";
 const FORBIDDEN = "Anda tidak punya izin untuk aksi ini.";
@@ -103,8 +101,9 @@ export async function saveProdukAction(payload: SaveProdukPayload): Promise<Acti
   const actionKey = payload.id ? "update_produk" : "create_produk";
   if (!canAction(user.role, actionKey)) return { ok: false, error: FORBIDDEN };
 
-  if (payload.id && !UUID_RE.test(payload.id)) {
-    return { ok: false, error: "ID produk tidak valid." };
+  if (payload.id) {
+    const err = assertUuid(payload.id);
+    if (err) return { ok: false, error: err };
   }
 
   if (!payload.kode_produk?.trim() || !payload.nama_produk?.trim()) {
@@ -233,6 +232,9 @@ export async function deleteProdukAction(id: string): Promise<ActionResult> {
   if (!user) return { ok: false, error: SESSION_EXPIRED };
 
   if (!canAction(user.role, "delete_produk")) return { ok: false, error: FORBIDDEN };
+
+  const idErr = assertUuid(id);
+  if (idErr) return { ok: false, error: idErr };
 
   const admin = createAdminClient();
 
