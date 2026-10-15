@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# INBIONUSA — Quality Control System
 
-## Getting Started
+Sistem Manajemen Mutu dan Quality Control berbasis web, dibangun dengan Next.js + Supabase.
 
-First, run the development server:
+Migrasi dari Google Apps Script + Google Sheets ke arsitektur modern.
+
+## Stack
+
+- **Next.js 15** (App Router)
+- **Supabase** (PostgreSQL + Auth)
+- **shadcn/ui** + **Tailwind v4**
+- **TypeScript**
+
+## Fitur
+
+| Fitur | Deskripsi |
+|-------|-----------|
+| **Dashboard** | Ringkasan statistik: total produk, lot diuji, pass/fail, COA, dokumen |
+| **Master Produk** | CRUD produk dengan spesifikasi parameter uji dinamis |
+| **Inspeksi** | Input hasil uji per lot, auto PASS/FAIL evaluation |
+| **COA** | Terbitkan Certificate of Analysis untuk lot lulus QC |
+| **Arsip Dokumen** | Kelola dokumen mutu dengan masa berlaku |
+| **Audit Log** | Semua aktivitas tercatat otomatis |
+| **Role-based Access** | Admin QC, Administrator, QC Supervisor, Viewer |
+
+## Menjalankan
+
+1. Salin `.env.example` ke `.env` dan isi kredensial Supabase
+2. Jalankan `src/lib/db/schema.sql` di Supabase SQL Editor
+3. Jalankan development server:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Database
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+7 tabel utama PostgreSQL:
+- `users` — User authentication & roles
+- `master_produk` — Product master data
+- `spesifikasi` — Test parameters per product
+- `hasil_uji` — Inspection results per lot
+- `coa` — Certificate of Analysis
+- `dokumen_arsip` — Document archive
+- `audit_log` — Activity log
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Role Permissions
 
-## Learn More
+| Aksi | Role |
+|------|------|
+| Delete produk | Admin QC, Administrator |
+| Delete hasil uji | Admin QC, Administrator |
+| Delete COA | Admin QC, Administrator |
+| Issue/Update COA | Admin QC, Administrator, QC Supervisor |
+| View data | Semua role (termasuk Viewer) |
 
-To learn more about Next.js, take a look at the following resources:
+## Migrasi Data
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Untuk migrasi data dari Google Sheets:
+1. Export setiap sheet sebagai CSV
+2. Import ke tabel Supabase yang sesuai
+3. Password user perlu di-hash dengan salt `INBIO::` menggunakan SHA-256
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Dibangun dengan [Next.js](https://nextjs.org/) + [Supabase](https://supabase.com/)
