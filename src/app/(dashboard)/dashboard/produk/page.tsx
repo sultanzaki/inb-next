@@ -282,6 +282,10 @@ export default function ProdukPage() {
                 .insert(snap);
               if (rbErr) {
                 console.error("Gagal memulihkan spesifikasi lama:", rbErr);
+                toast.error(
+                  "Gagal menyimpan spesifikasi, dan pemulihan data lama GAGAL. Jangan tutup dialog; coba simpan lagi atau hubungi admin."
+                );
+                return;
               }
             }
             toast.error(
@@ -323,7 +327,7 @@ export default function ProdukPage() {
       resetForm();
       fetchData();
     } catch (err: any) {
-      toast.error(err.message || "Gagal menyimpan.");
+      toast.error(friendlyDbError(err));
     } finally {
       setSaving(false);
     }
