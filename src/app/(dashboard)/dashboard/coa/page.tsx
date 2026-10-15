@@ -6,6 +6,12 @@ import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
 import type { UserRole } from "@/lib/types";
 import { toast } from "sonner";
+import {
+  issueCoaAction,
+  updateCoaAction,
+  deleteCoaAction,
+  getNextNoCOAAction,
+} from "@/lib/actions/coa-actions";
 import { Search, Plus, Pencil, Trash2, Printer, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,45 +77,6 @@ function escapeOr(value: string): string {
     .replace(/"/g, '\\"')
     .replace(/%/g, "\\\\\\%")
     .replace(/_/g, "\\\\_");
-}
-
-// Next COA number derived from SERVER data, not the client list: the rendered
-// list is search-filtered, so its length says nothing about the real
-// sequence, and two concurrent issuers counting client-side would pick the
-// same number and collide on the unique constraint.
-async function nextNoCOA(): Promise<string> {
-  const year = new Date().getFullYear();
-  const { data, error } = await sb
-    .from("coa")
-    .select("no_coa")
-    .order("no_coa", { ascending: false })
-    .limit(1);
-  // A failed max-lookup must not fall through to seq 0001: that would burn
-  // insert retries against the real max with a misleading "No COA sudah
-  // digunakan" toast — surface the real error to the caller's catch instead.
-  if (error) throw error;
-  const last = (data as { no_coa: string }[] | null)?.[0]?.no_coa ?? "";
-  const m = last.match(/(\d+)$/);
-  const seq = (m ? parseInt(m[1], 10) : 0) + 1;
-  return `COA/IBN/${year}/${seq.toString().padStart(4, "0")}`;
-}
-
-async function logAudit(
-  sb: ReturnType<typeof createClient>,
-  user_name: string,
-  aksi: string,
-  referensi: string
-) {
-  try {
-    await sb.from("audit_log").insert({
-      waktu: new Date().toISOString(),
-      user_name,
-      aksi,
-      referensi,
-    });
-  } catch {
-    // silent — audit failure should not block the user
-  }
 }
 
 export default function COAPage() {
@@ -221,26 +188,25 @@ export default function COAPage() {
       }
       setSaving(true);
       try {
-        const { error } = await sb
-          .from("coa")
-          .update({
-            no_coa: form.no_coa,
-            tanggal_rilis: form.tanggal_rilis,
-            tanggal_expired: form.tanggal_expired,
-            mfg_date: form.mfg_date,
-            tanda_tangan_digital: form.tanda_tangan,
-          })
-          .eq("id", editingId);
-        if (error) throw error;
-
+        // Mutasi lewat server action: sesi + peran dicek server-side.
+        const res = await updateCoaAction({
+          id: editingId,
+          no_coa: form.no_coa,
+          tanggal_rilis: form.tanggal_rilis,
+          tanggal_expired: form.tanggal_expired,
+          mfg_date: form.mfg_date,
+          tanda_tangan: form.tanda_tangan,
+        });
+        if (!res.ok) {
+          toast.error(res.error ?? "Gagal menyimpan COA. Coba lagi.");
+          return;
+        }
         toast.success("COA diperbarui.");
-        await logAudit(sb, user?.nama_lengkap || user?.username || "system", `update_coa: ${form.no_coa}`, editingId);
-
         setDialogOpen(false);
         resetForm();
         fetchData();
-      } catch (err: any) {
-        toast.error(err.message || "Gagal menyimpan.");
+      } catch {
+        toast.error("Gagal terhubung ke server. Coba lagi.");
       } finally {
         setSaving(false);
       }
@@ -253,60 +219,28 @@ export default function COAPage() {
       return;
     }
     setSaving(true);
-
     try {
-      const selected = availableHasil.find(
-        (h: any) => h.id === form.id_hasil
-      );
-      if (!selected) throw new Error("Hasil uji tidak ditemukan.");
-
-      const snapshot = {
-        produk: selected.master_produk?.nama_produk || "",
-        ts: selected.tgl_sampling,
-        tu: selected.tgl_uji,
-        items: selected.hasil_detail ?? [],
-      };
-
-      // Collision-safe numbering: the number comes from the server-side max
-      // (not the search-filtered client list), and a 23505 unique violation —
-      // a concurrent issuer won the race for that number — is retried with a
-      // freshly generated one. A user-typed number is never regenerated: its
-      // collision is a duplicate of the user's own choosing, so it surfaces
-      // as an error instead.
-      const userNo = form.no_coa;
-      let no_coa = userNo || (await nextNoCOA());
-      for (let attempt = 1; ; attempt++) {
-        const { error } = await sb.from("coa").insert({
-          no_coa,
-          id_produk: selected.id_produk,
-          no_lot: selected.no_lot,
-          tanggal_rilis: form.tanggal_rilis,
-          tanggal_expired: form.tanggal_expired,
-          hasil_uji_snapshot: snapshot,
-          tanda_tangan_digital: form.tanda_tangan,
-          mfg_date: form.mfg_date,
-        });
-        if (!error) break;
-        if (error.code === "23505" && !userNo && attempt < 3) {
-          no_coa = await nextNoCOA();
-          continue;
-        }
-        throw error;
+      // Server action: nomor otomatis + snapshot + foreign key diturunkan
+      // dari baris hasil uji DI SERVER; 23505 race di-retry di sana.
+      const res = await issueCoaAction({
+        id_hasil: form.id_hasil,
+        no_coa: form.no_coa,
+        tanggal_rilis: form.tanggal_rilis,
+        tanggal_expired: form.tanggal_expired,
+        mfg_date: form.mfg_date,
+        tanda_tangan: form.tanda_tangan,
+      });
+      if (!res.ok) {
+        toast.error(res.error ?? "Gagal menerbitkan COA.");
+        return;
       }
-
       toast.success("COA berhasil diterbitkan.");
-      await logAudit(sb, user?.nama_lengkap || user?.username || "system", `terbit_coa: ${no_coa}`, `hasil_uji:${selected.id}`);
-
       setDialogOpen(false);
       resetForm();
       fetchData();
       fetchAvailableHasil();
-    } catch (err: any) {
-      toast.error(
-        err?.code === "23505"
-          ? "No COA sudah digunakan. Gunakan nomor lain."
-          : err.message || "Gagal menerbitkan COA."
-      );
+    } catch {
+      toast.error("Gagal terhubung ke server. Coba lagi.");
     } finally {
       setSaving(false);
     }
@@ -314,15 +248,19 @@ export default function COAPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("Hapus COA ini?")) return;
-    const target = coaList.find((c: any) => c.id === id);
-    const { error } = await sb.from("coa").delete().eq("id", id);
-    if (error) {
-      toast.error(error.message);
-    } else {
+
+    // Server action: role check server-side.
+    try {
+      const res = await deleteCoaAction(id);
+      if (!res.ok) {
+        toast.error(res.error ?? "Gagal menghapus COA. Coba lagi.");
+        return;
+      }
       toast.success("COA dihapus.");
-      await logAudit(sb, user?.nama_lengkap || user?.username || "system", `delete_coa: ${target?.no_coa || id}`, id);
       fetchData();
       fetchAvailableHasil();
+    } catch {
+      toast.error("Gagal terhubung ke server. Coba lagi.");
     }
   }
 
@@ -542,22 +480,22 @@ export default function COAPage() {
                         // Prefill from the server-side max, not the
                         // (search-filtered) client list length.
                         if (val && !form.no_coa) {
-                          nextNoCOA()
-                            .then((no) => {
+                          getNextNoCOAAction()
+                            .then((no: string) => {
                               setForm((prev) =>
                                 prev.id_hasil === val && !prev.no_coa
                                   ? { ...prev, no_coa: no }
                                   : prev
                               );
                             })
-                            .catch((err) => {
+                            .catch((err: unknown) => {
                               // Prefill is best-effort: leaving the field
                               // empty is fine (save regenerates the number
                               // from the server-side max). Warn only — no
                               // toast-spam on a background prefill.
                               console.warn(
                                 "Prefill No COA gagal:",
-                                err?.message || err
+                                err instanceof Error ? err.message : err
                               );
                             });
                         }
