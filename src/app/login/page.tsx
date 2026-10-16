@@ -1,58 +1,87 @@
-import type { Metadata } from 'next';
-import { FileCheck, History, ShieldCheck } from 'lucide-react';
-import { LoginForm } from './login-form';
-
+import type { Metadata } from "next";
+import Image from "next/image";
+import {
+  PackageCheck,
+  ClipboardCheck,
+  FileCheck2,
+  ArrowRight,
+  ShieldCheck,
+} from "lucide-react";
+import { LoginForm } from "./login-form";
 export const metadata: Metadata = {
-  title: 'Masuk — INBIONUSA',
-  description: 'Masuk ke Sistem Manajemen Mutu INBIONUSA.',
+  title: "Masuk — INBIONUSA",
+  description: "Ruang kerja pengendalian mutu INBIONUSA.",
 };
-
-// Specimen grid: 1px lines in --color-primary-ink (#022c22) at 8% opacity,
-// 24px cells — inline SVG data URI, no asset files.
-const GRID_PATTERN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cpath d='M0 .5H24M.5 0V24' fill='none' stroke='%23022c22' stroke-opacity='.08'/%3E%3C/svg%3E")`;
-
-const BRAND_FACTS = [
-  { icon: ShieldCheck, label: 'Kontrol Kualitas Terpusat' },
-  { icon: FileCheck, label: 'Terbitkan COA digital' },
-  { icon: History, label: 'Audit trail lengkap' },
-];
-
 export default function LoginPage() {
   return (
-    <div className="flex min-h-screen">
-      {/* Brand panel — deep emerald with specimen grid */}
-      <aside
-        className="relative hidden flex-col px-12 py-12 text-white lg:flex lg:w-[42%]"
-        style={{
-          backgroundColor: '#064e3b',
-          backgroundImage: `${GRID_PATTERN}, linear-gradient(180deg, #064e3b 0%, #022c22 100%)`,
-        }}
-      >
-        <div>
-          <p className="text-xl font-semibold tracking-tight">INBIONUSA</p>
-          <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/60">
-            QC System
-          </p>
-          <p className="mt-8 max-w-[280px] text-[15px] leading-relaxed text-white/85">
-            Sistem Manajemen Mutu
-          </p>
+    <div className="login-layout">
+      <aside className="login-story">
+        <div className="login-brand">
+          <span className="grid size-12 place-items-center rounded-xl bg-surface">
+            <Image
+              src="/logo.png"
+              alt="Logo INBIONUSA"
+              width={34}
+              height={34}
+              priority
+            />
+          </span>
+          <div>
+            <p className="text-base font-semibold tracking-tight">INBIONUSA</p>
+            <p className="mt-1 text-[10px] uppercase tracking-[.15em] text-primary-line">
+              Quality workspace
+            </p>
+          </div>
         </div>
-
-        <ul className="mt-auto divide-y divide-white/12">
-          {BRAND_FACTS.map(({ icon: Icon, label }) => (
-            <li
-              key={label}
-              className="flex items-center gap-3 py-3 text-[13px] text-white/80"
-            >
-              <Icon className="size-4 shrink-0 text-white/70" aria-hidden="true" />
-              {label}
-            </li>
-          ))}
-        </ul>
+        <div className="py-14">
+          <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-primary-line/20 bg-primary-deep px-3 py-1.5 text-[10px] font-medium tracking-wide text-primary-line">
+            <span className="size-1.5 rounded-full bg-primary-line" />
+            SISTEM MANAJEMEN MUTU
+          </div>
+          <h2 className="login-story-title">
+            Setiap detail berarti.
+            <br />
+            <span className="text-primary-line">Setiap kualitas terjaga.</span>
+          </h2>
+          <p className="login-story-copy">
+            Satukan standar produk, pengujian lot, dan sertifikasi dalam satu
+            alur kerja yang terarah.
+          </p>
+          <div className="login-flow">
+            <span className="login-flow-item">
+              <PackageCheck className="size-4 text-primary-line" />
+              Produk
+            </span>
+            <ArrowRight className="size-3 text-primary-line/60" />
+            <span className="login-flow-item">
+              <ClipboardCheck className="size-4 text-primary-line" />
+              Inspeksi
+            </span>
+            <ArrowRight className="size-3 text-primary-line/60" />
+            <span className="login-flow-item">
+              <FileCheck2 className="size-4 text-primary-line" />
+              COA
+            </span>
+          </div>
+          <div className="mt-12 flex items-center gap-3 border-t border-primary-line/15 pt-6">
+            <span className="grid size-10 place-items-center rounded-xl border border-primary-line/20">
+              <ShieldCheck className="size-5 text-primary-line" />
+            </span>
+            <div>
+              <p className="text-xs font-medium">
+                Kualitas yang bisa ditelusuri.
+              </p>
+              <p className="mt-1 text-[11px] text-primary-line">
+                Standar jelas. Pengujian tercatat. Keputusan terarah.
+              </p>
+            </div>
+          </div>
+        </div>
+        <p className="text-[10px] tracking-wide text-primary-line/80">
+          INBIONUSA · Quality Control System
+        </p>
       </aside>
-
-      {/* Form panel — floats on white, no card */}
-      <main className="flex flex-1 items-center justify-center bg-surface px-6 py-12">
+      <main className="login-form-panel">
         <LoginForm />
       </main>
     </div>

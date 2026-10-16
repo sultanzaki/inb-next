@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
+import { ConfirmProvider } from "@/components/workspace/confirm-provider";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -23,7 +24,7 @@ export default function RootLayout({
   return (
     <html lang="id" suppressHydrationWarning className={inter.variable}>
       <body className="min-h-screen font-sans">
-        {children}
+        <ConfirmProvider>{children}</ConfirmProvider>
         <Toaster position="top-right" richColors closeButton />
       </body>
     </html>

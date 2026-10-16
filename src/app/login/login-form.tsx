@@ -1,102 +1,120 @@
-'use client';
-
-import Image from 'next/image';
-import { useActionState, useState } from 'react';
-import { useFormStatus } from 'react-dom';
-import { Eye, EyeOff } from 'lucide-react';
-import { loginAction, type LoginState } from './actions';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Input } from '@/components/ui/input';
-
-const initialLoginState: LoginState = {};
-
+"use client";
+import Image from "next/image";
+import { useActionState, useState } from "react";
+import { useFormStatus } from "react-dom";
+import { Eye, EyeOff, ArrowRight, LockKeyhole, UserRound } from "lucide-react";
+import { loginAction, type LoginState } from "./actions";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+const initial: LoginState = {};
 function SubmitButton() {
   const { pending } = useFormStatus();
-
   return (
-    <button
+    <Button
       type="submit"
-      disabled={pending}
-      className="h-9 w-full rounded-md bg-primary text-[13.5px] font-medium text-primary-foreground
-        transition-colors duration-150 hover:bg-primary-dark
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30
-        active:translate-y-[0.5px]
-        disabled:pointer-events-none disabled:opacity-50"
+      loading={pending}
+      className="h-12 w-full justify-between px-4"
     >
-      {pending ? 'Memeriksa...' : 'Masuk'}
-    </button>
+      <span>{pending ? "Menghubungkan ke ruang kerja…" : "Masuk"}</span>
+      {!pending && <ArrowRight className="size-4" />}
+    </Button>
   );
 }
-
 export function LoginForm() {
-  const [state, formAction] = useActionState(loginAction, initialLoginState);
-  const [showPassword, setShowPassword] = useState(false);
-
+  const [state, action] = useActionState(loginAction, initial);
+  const [show, setShow] = useState(false);
   return (
-    <div className="w-full max-w-sm">
-      <Image
-        src="/logo.png"
-        alt="INBIONUSA"
-        width={32}
-        height={32}
-        onError={(e) => { e.currentTarget.style.display = 'none'; }}
-        className="mb-6 h-8 w-8 object-contain"
-      />
-      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-        Masuk
-      </p>
-      <h1 className="mt-2 text-2xl font-semibold tracking-tight">
+    <div className="login-form-card surface-enter">
+      <div className="mb-10 flex items-center gap-3 lg:hidden">
+        <Image
+          src="/logo.png"
+          alt="Logo INBIONUSA"
+          width={36}
+          height={36}
+          priority
+        />
+        <span className="text-sm font-bold tracking-tight text-primary-deep">
+          INBIONUSA
+        </span>
+      </div>
+      <span className="mb-5 grid size-11 place-items-center rounded-xl border border-primary-line bg-primary-soft text-primary">
+        <LockKeyhole className="size-5" />
+      </span>
+      <p className="mb-2 text-xs font-medium text-primary">
         Selamat datang kembali
+      </p>
+      <h1>
+        Ruang kerja mutu Anda,
+        <br />
+        siap dilanjutkan.
       </h1>
-
-      <form action={formAction} className="mt-8 space-y-4">
-        <div className="space-y-1">
-          <label htmlFor="username" className="text-xs font-medium">Username</label>
-          <Input
-            id="username"
-            name="username"
-            type="text"
-            required
-            autoFocus
-            placeholder="Masukkan username"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label htmlFor="password" className="text-xs font-medium">Password</label>
+      <p className="mt-4 text-[13px] leading-relaxed text-muted">
+        Masuk dengan akun Anda untuk mengelola kualitas dari satu tempat.
+      </p>
+      <form action={action} className="mt-9 space-y-5">
+        <div className="space-y-2">
+          <label htmlFor="username" className="text-xs font-semibold">
+            Username
+          </label>
           <div className="relative">
+            <UserRound className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
+            <Input
+              id="username"
+              name="username"
+              autoComplete="username"
+              required
+              maxLength={100}
+              placeholder="Masukkan username"
+              className="h-12 pl-11"
+            />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <label htmlFor="password" className="text-xs font-semibold">
+            Password
+          </label>
+          <div className="relative">
+            <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
             <Input
               id="password"
               name="password"
-              type={showPassword ? 'text' : 'password'}
+              type={show ? "text" : "password"}
+              autoComplete="current-password"
               required
+              maxLength={1024}
               placeholder="Masukkan password"
-              className="pr-10"
+              className="h-12 pl-11 pr-12"
             />
             <button
               type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
-              aria-pressed={showPassword}
-              className="absolute right-0 top-0 flex h-9 w-9 items-center justify-center text-faint
-                transition-colors duration-150 hover:text-foreground
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              onClick={() => setShow((v) => !v)}
+              className="absolute right-1.5 top-1/2 grid size-10 -translate-y-1/2 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-alt hover:text-primary"
+              aria-label={show ? "Sembunyikan password" : "Tampilkan password"}
+              aria-pressed={show}
             >
-              {showPassword
-                ? <EyeOff className="size-4" aria-hidden="true" />
-                : <Eye className="size-4" aria-hidden="true" />}
+              {show ? (
+                <EyeOff className="size-4" />
+              ) : (
+                <Eye className="size-4" />
+              )}
             </button>
           </div>
         </div>
-
-        {state.error ? (
+        {state.error && (
           <Alert variant="destructive">
-            <AlertDescription>{state.error}</AlertDescription>
+            <AlertDescription id="login-error">{state.error}</AlertDescription>
           </Alert>
-        ) : null}
-
-        <SubmitButton />
+        )}
+        <div className="pt-1">
+          <SubmitButton />
+        </div>
       </form>
+      <p className="login-footer">
+        Akses diberikan sesuai peran pengguna.
+        <br />
+        Butuh bantuan akun? Hubungi administrator internal Anda.
+      </p>
     </div>
   );
 }

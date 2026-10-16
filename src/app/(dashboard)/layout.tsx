@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { getSessionUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { UserContextProvider } from "./user-context";
-import { Topbar } from "@/components/topbar";
+import { AppShell } from "@/components/workspace/app-shell";
 
 /**
  * Next 16 (cacheComponents): akses runtime (cookies via getSessionUser)
@@ -19,10 +19,7 @@ async function SessionGate({ children }: { children: React.ReactNode }) {
 
   return (
     <UserContextProvider user={user}>
-      <div className="min-h-screen bg-[var(--canvas)]">
-        <Topbar />
-        <main className="pt-[58px] p-6 max-w-7xl mx-auto">{children}</main>
-      </div>
+      <AppShell>{children}</AppShell>
     </UserContextProvider>
   );
 }
@@ -30,9 +27,9 @@ async function SessionGate({ children }: { children: React.ReactNode }) {
 /** Shell statis yang tampil selama sesi divalidasi (tanpa teks, tanpa data). */
 function ShellFallback() {
   return (
-    <div className="min-h-screen bg-[var(--canvas)]">
-      <div className="h-[52px] border-b border-border bg-surface" />
-      <div className="pt-[58px] p-6 max-w-7xl mx-auto space-y-4" aria-hidden />
+    <div className="min-h-screen bg-page-bg" aria-label="Menyiapkan ruang kerja" role="status">
+      <div className="hidden fixed inset-y-0 left-0 w-[244px] border-r border-border bg-surface lg:block" />
+      <div className="lg:ml-[244px]"><div className="h-[72px] border-b border-border-soft bg-surface" /><div className="p-8"><div className="skeleton-shimmer h-7 w-48 rounded-lg" /><div className="mt-6 grid grid-cols-2 gap-4 xl:grid-cols-4">{[0,1,2,3].map(i => <div key={i} className="skeleton-shimmer h-36 rounded-2xl" />)}</div></div></div>
     </div>
   );
 }

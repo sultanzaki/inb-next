@@ -1,9 +1,32 @@
 "use client";
-
-import { useEffect, useState, useCallback, type ReactNode } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import {
+  Package,
+  ClipboardList,
+  FileCheck2,
+  ArrowUpRight,
+  ArrowRight,
+  CheckCheck,
+  RefreshCw,
+  FolderArchive,
+  AlertTriangle,
+  CalendarDays,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import type { HasilUjiRow, DashboardData } from "@/lib/types";
+import { businessDate } from "@/lib/domain/validation";
+import { useUser } from "../user-context";
+import type { DashboardData, HasilUjiRow } from "@/lib/types";
+import { PageHeader } from "@/components/workspace/page-ui";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Alert,
+  AlertTitle,
+  AlertDescription,
+  AlertAction,
+} from "@/components/ui/alert";
 import {
   Table,
   TableBody,
@@ -12,295 +35,31 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Alert,
-  AlertAction,
-  AlertDescription,
-  AlertTitle,
-} from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { AlertCircle, ArrowRight } from "lucide-react";
-
-// Local calendar date as YYYY-MM-DD. Built from the local getters with
-// padStart — NOT toISOString(), which yields the UTC date and disagrees with
-// arsip's local-date partition during 00:00–06:59 WIB (UTC+7).
-function localTodayStr(): string {
-  const now = new Date();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${m}-${d}`;
+function localTodayStr() {
+  return businessDate();
 }
-
-type StatKey =
-  | "total_produk"
-  | "total_lot"
-  | "lot_pass"
-  | "lot_fail"
-  | "total_coa"
-  | "dok_berlaku"
-  | "dok_expired";
-
-// One instrument row: each cell keeps its semantic accent for the 3px bar.
-const statCells: { key: StatKey; label: string; accent: string }[] = [
-  { key: "total_produk", label: "Total Produk", accent: "var(--color-success)" },
-  { key: "total_lot", label: "Lot Diuji", accent: "var(--color-info)" },
-  { key: "lot_pass", label: "Lot PASS", accent: "var(--color-success)" },
-  { key: "lot_fail", label: "Lot FAIL", accent: "var(--color-danger)" },
-  { key: "total_coa", label: "COA Terbit", accent: "var(--color-violet)" },
-  { key: "dok_berlaku", label: "Dokumen", accent: "var(--color-warning)" },
-  { key: "dok_expired", label: "Dok. Kadaluarsa", accent: "var(--color-danger)" },
-];
-
-type DotTone = "success" | "danger" | "warning";
-
-const dotTones: Record<DotTone, { chip: string; dot: string }> = {
-  success: { chip: "bg-success-bg text-success-dark", dot: "bg-success" },
-  danger: { chip: "bg-danger-bg text-danger-dark", dot: "bg-danger" },
-  warning: { chip: "bg-warning-bg text-warning-dark", dot: "bg-warning" },
-};
-
-// Status chip: 4px radius, 5px semantic dot + text, tinted bg, no border.
-function DotChip({
-  tone,
-  children,
-}: {
-  tone: DotTone;
-  children: ReactNode;
-}) {
-  const t = dotTones[tone];
-  return (
-    <span
-      className={`inline-flex items-center gap-2 rounded-[4px] px-2 py-1 text-[11.5px] font-medium leading-tight ${t.chip}`}
-    >
-      <span className={`size-[5px] rounded-full ${t.dot}`} aria-hidden="true" />
-      {children}
-    </span>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  return (
-    <DotChip tone={status === "PASS" ? "success" : "danger"}>{status}</DotChip>
-  );
-}
-
-function DonutChart({
-  passRate,
-  failRate,
-  passCount,
-  failCount,
-  failed,
-}: {
-  passRate: number;
-  failRate: number;
-  passCount: number;
-  failCount: number;
-  failed: boolean;
-}) {
-  const circumference = 2 * Math.PI * 42;
-
-  // PASS: full-length dash trimmed to passRate%, starting at 12 o'clock
-  // (the svg has -rotate-90 and a <circle> path starts at 3 o'clock).
-  // FAIL: dash segment of failRate% length, shifted forward by passRate%
-  // via a negative dashoffset, so it starts exactly where PASS ends.
-  // Sanity check: pass 90 / fail 10 => green covers 0-90% of the ring,
-  // red covers 90-100% (not 90% of the ring like the old math produced).
-  const passOffset = circumference - (passRate / 100) * circumference;
-  const failOffset = -(passRate / 100) * circumference;
-
-  return (
-    <div className="flex w-full flex-col items-center">
-      <div className="relative h-40 w-40">
-        <svg className="h-full w-full -rotate-90" viewBox="0 0 100 100">
-          <circle
-            cx="50"
-            cy="50"
-            r="42"
-            fill="none"
-            stroke="var(--color-border)"
-            strokeWidth="10"
-          />
-          {/* Arcs render only when BOTH lot_pass and lot_fail succeeded:
-              on a partial failure the surviving side would otherwise fill
-              the whole ring at a fake 100% (leave the neutral ring only). */}
-          {!failed && passRate > 0 && (
-            <circle
-              cx="50"
-              cy="50"
-              r="42"
-              fill="none"
-              stroke="var(--color-success)"
-              strokeWidth="10"
-              strokeDasharray={circumference}
-              strokeDashoffset={passOffset}
-              strokeLinecap="round"
-              className="transition-all duration-700 ease-out"
-            />
-          )}
-          {!failed && failRate > 0 && (
-            <circle
-              cx="50"
-              cy="50"
-              r="42"
-              fill="none"
-              stroke="var(--color-danger)"
-              strokeWidth="10"
-              strokeDasharray={`${(failRate / 100) * circumference} ${circumference}`}
-              strokeDashoffset={failOffset}
-              strokeLinecap="round"
-              className="transition-all duration-700 ease-out"
-            />
-          )}
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-[26px] font-bold leading-none tracking-[-0.01em] tabular-nums">
-            {failed ? "—" : `${passRate}%`}
-          </span>
-          <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-            PASS
-          </span>
-        </div>
-      </div>
-      <div className="mt-4 w-full space-y-2">
-        <div className="flex items-center justify-between">
-          <DotChip tone="success">PASS</DotChip>
-          <span className="font-data text-[13px]">
-            {failed ? "—" : passCount}
-          </span>
-        </div>
-        <div className="flex items-center justify-between">
-          <DotChip tone="danger">FAIL</DotChip>
-          <span className="font-data text-[13px]">
-            {failed ? "—" : failCount}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Shared header anatomy: micro-label + 24px title left, date/greeting right.
-function PageHeaderSkeleton() {
-  return (
-    <div className="flex flex-wrap items-end justify-between gap-4">
-      <div className="space-y-2">
-        <Skeleton className="h-3 w-20" />
-        <Skeleton className="h-6 w-40" />
-      </div>
-      <Skeleton className="h-11 w-44" />
-    </div>
-  );
-}
-
-function KpiStripSkeleton() {
-  return (
-    <div className="overflow-hidden rounded-lg border border-border bg-surface">
-      <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-4 xl:grid-cols-7">
-        {Array.from({ length: 7 }).map((_, i) => (
-          <div key={i} className="bg-surface p-4">
-            <Skeleton className="h-3 w-16" />
-            <Skeleton className="mt-2 h-7 w-12" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function TableSkeleton() {
-  return (
-    <div className="overflow-hidden rounded-lg border border-border bg-surface">
-      <div className="border-b border-border px-4 py-3">
-        <Skeleton className="h-3 w-32" />
-      </div>
-      <div className="flex h-11 items-center gap-4 bg-surface-alt px-3">
-        <Skeleton className="h-3 w-16" />
-        <Skeleton className="h-3 w-28" />
-        <Skeleton className="h-3 w-20" />
-        <Skeleton className="ml-auto h-3 w-14" />
-      </div>
-      <div className="divide-y divide-border-soft">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex h-11 items-center gap-4 px-3">
-            <Skeleton className="h-3.5 w-24" />
-            <Skeleton className="h-3.5 w-40" />
-            <Skeleton className="ml-auto h-3.5 w-20" />
-            <Skeleton className="h-5 w-14" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function RightColumnSkeleton() {
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="rounded-lg border border-border bg-surface p-4">
-        <Skeleton className="h-3 w-28" />
-        <div className="mt-4 flex justify-center">
-          <Skeleton className="size-40 rounded-full" />
-        </div>
-        <div className="mt-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <Skeleton className="h-5 w-14" />
-            <Skeleton className="h-3.5 w-8" />
-          </div>
-          <div className="flex items-center justify-between">
-            <Skeleton className="h-5 w-14" />
-            <Skeleton className="h-3.5 w-8" />
-          </div>
-        </div>
-      </div>
-      <div className="rounded-lg border border-border bg-surface p-4">
-        <Skeleton className="h-3 w-20" />
-        <div className="mt-4 grid grid-cols-2">
-          <div className="pr-4">
-            <Skeleton className="h-5 w-16" />
-            <Skeleton className="mt-2 h-7 w-12" />
-          </div>
-          <div className="border-l border-border-soft pl-4">
-            <Skeleton className="h-5 w-20" />
-            <Skeleton className="mt-2 h-7 w-12" />
-          </div>
-        </div>
-        <Skeleton className="mt-4 h-3.5 w-28" />
-      </div>
-    </div>
-  );
-}
-
 export default function DashboardPage() {
+  const { user } = useUser();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [failedKeys, setFailedKeys] = useState<string[]>([]);
-  const [greeting, setGreeting] = useState("");
-  const [todayLabel, setTodayLabel] = useState("");
-
+  const [dateLabel, setDateLabel] = useState("");
   useEffect(() => {
-    const timer = setTimeout(() => {
-    const now = new Date();
-    const h = now.getHours();
-    if (h < 12) setGreeting("Selamat Pagi");
-    else if (h < 15) setGreeting("Selamat Siang");
-    else if (h < 18) setGreeting("Selamat Sore");
-    else setGreeting("Selamat Malam");
-    // Date label computed inside the effect: `new Date()` during render is an
-    // unstable value and fails Cache Components prerender validation.
-    setTodayLabel(
-      new Intl.DateTimeFormat("id-ID", {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      }).format(now)
+    const timer = setTimeout(
+      () =>
+        setDateLabel(
+          new Intl.DateTimeFormat("id-ID", {
+            timeZone: "Asia/Jakarta",
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          }).format(new Date()),
+        ),
+      0,
     );
-    }, 0);
     return () => clearTimeout(timer);
   }, []);
-
   const fetchData = useCallback(async () => {
     const sb = createClient();
     setLoading(true);
@@ -398,187 +157,361 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => { void fetchData(); }, 0);
+    const timer = setTimeout(() => {
+      void fetchData();
+    }, 0);
     return () => clearTimeout(timer);
   }, [fetchData]);
 
-  if (loading || !data) {
+  if (!data)
     return (
-      <div className="space-y-6">
-        <PageHeaderSkeleton />
-        <KpiStripSkeleton />
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[2fr_1fr]">
-          <TableSkeleton />
-          <RightColumnSkeleton />
+      <div className="page-stack" role="status" aria-label="Memuat dashboard">
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-36" />
+          <Skeleton className="h-9 w-64" />
+          <Skeleton className="h-4 w-80 max-w-full" />
         </div>
+        <div className="stat-grid">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-40 rounded-2xl" />
+          ))}
+        </div>
+        <Skeleton className="h-96 w-full rounded-2xl" />
       </div>
     );
-  }
-
-  const total = data.lot_pass + data.lot_fail;
-  const passRate = total > 0 ? Math.round((data.lot_pass / total) * 100) : 0;
-  const failRate = total > 0 ? Math.round((data.lot_fail / total) * 100) : 0;
-  const lotFailed =
+  const resultFailed =
     failedKeys.includes("lot_pass") || failedKeys.includes("lot_fail");
-
-  const dokBerlaku = failedKeys.includes("dok_berlaku")
-    ? "—"
-    : data.dok_berlaku.toLocaleString();
-  const dokExpired = failedKeys.includes("dok_expired")
-    ? "—"
-    : data.dok_expired.toLocaleString();
-
+  const total = data.lot_pass + data.lot_fail;
+  const passRate = total ? Math.round((data.lot_pass / total) * 1000) / 10 : 0;
+  const metrics = [
+    {
+      key: "total_produk",
+      label: "Total produk",
+      value: data.total_produk,
+      note: "Katalog produk terdaftar",
+      icon: Package,
+      href: "/dashboard/produk",
+    },
+    {
+      key: "total_lot",
+      label: "Lot diuji",
+      value: data.total_lot,
+      note: "Seluruh hasil inspeksi",
+      icon: ClipboardList,
+      href: "/dashboard/inspeksi",
+    },
+    {
+      key: "lot_pass",
+      label: "Tingkat kelulusan",
+      value: resultFailed ? "—" : total ? `${passRate}%` : "—",
+      note: resultFailed
+        ? "Data belum tersedia"
+        : `${data.lot_pass} lot memenuhi standar`,
+      icon: CheckCheck,
+      href: "/dashboard/inspeksi",
+    },
+    {
+      key: "total_coa",
+      label: "COA diterbitkan",
+      value: data.total_coa,
+      note: "Sertifikat analisis tercatat",
+      icon: FileCheck2,
+      href: "/dashboard/coa",
+    },
+  ];
   return (
-    <div className="space-y-6">
-      {/* Page header: micro-label + title left, date/greeting right */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="micro-label">RINGKASAN</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-            Dashboard
-          </h1>
-        </div>
-        <div className="text-right">
-          {greeting ? (
-            <>
-              <p className="text-sm font-medium">{greeting}</p>
-              <p className="mt-1 text-[13px] text-muted">{todayLabel}</p>
-            </>
-          ) : (
-            <div
-              className="ml-auto h-11 w-44 rounded-[4px] bg-chip-bg"
-              aria-hidden="true"
-            />
-          )}
-        </div>
-      </div>
-
-      {/* Error banner */}
+    <div className="page-stack">
+      <PageHeader
+        eyebrow="Ringkasan ruang kerja"
+        title="Dashboard"
+        description={`Selamat datang${user?.nama_lengkap ? `, ${user.nama_lengkap.split(" ")[0]}` : ""}. Berikut gambaran pengendalian mutu Anda.`}
+      >
+        <span className="mr-2 hidden items-center gap-2 text-xs text-muted xl:inline-flex">
+          <CalendarDays className="size-3.5" />
+          {dateLabel}
+        </span>
+        <Button
+          variant="outline"
+          loading={loading}
+          onClick={() => void fetchData()}
+        >
+          <RefreshCw className="size-3.5" />
+          Perbarui
+        </Button>
+      </PageHeader>
       {loadError && (
         <Alert variant="destructive">
-          <AlertCircle />
-          <AlertTitle>Gagal memuat data dashboard</AlertTitle>
+          <AlertTriangle />
+          <AlertTitle>Beberapa data belum tersedia</AlertTitle>
           <AlertDescription>
-            Beberapa data tidak berhasil dimuat dari server. Angka bertanda
-            &ldquo;&mdash;&rdquo; tidak tersedia.
+            Angka bertanda — belum berhasil dimuat. Coba muat ulang.
           </AlertDescription>
           <AlertAction>
-            <Button variant="outline" size="sm" onClick={() => fetchData()}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void fetchData()}
+            >
               Coba Lagi
             </Button>
           </AlertAction>
         </Alert>
       )}
-
-      {/* KPI instrument strip: one card, cells split by vertical hairlines */}
-      <div className="overflow-hidden rounded-lg border border-border bg-surface">
-        <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-4 xl:grid-cols-7">
-          {statCells.map((s) => {
-            const value = data[s.key];
-            const failed = failedKeys.includes(s.key);
-            return (
-              <div key={s.key} className="relative bg-surface p-4">
-                <div
-                  className="absolute inset-y-0 left-0 w-[3px]"
-                  style={{ backgroundColor: s.accent }}
-                  aria-hidden="true"
-                />
-                <p className="micro-label">{s.label}</p>
-                <p className="mt-2 text-[28px] font-bold leading-none tracking-[-0.01em] tabular-nums">
-                  {failed ? "—" : value.toLocaleString()}
+      <div className="stat-grid">
+        {metrics.map(({ key, label, value, note, icon: Icon, href }) => (
+          <Link href={href} key={key} className="stat-card">
+            <div className="stat-card-head">
+              <span className="stat-label">{label}</span>
+              <span className="stat-icon">
+                <Icon className="size-[18px]" />
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="stat-value">
+                {failedKeys.includes(key)
+                  ? "—"
+                  : typeof value === "number"
+                    ? value.toLocaleString("id-ID")
+                    : value}
+              </span>
+              <ArrowUpRight className="size-4 text-faint" />
+            </div>
+            <p className="stat-note">{note}</p>
+          </Link>
+        ))}
+      </div>
+      <div className="dashboard-grid">
+        <div className="space-y-5">
+          <section className="data-card">
+            <div className="data-card-header">
+              <div>
+                <h2 className="data-card-title">Inspeksi terbaru</h2>
+                <p className="data-card-description">
+                  Delapan pengujian terakhir di ruang kerja Anda.
                 </p>
               </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Two-column zone: recent inspections (dominant) + right stack */}
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[2fr_1fr]">
-        {/* Inspeksi Terbaru */}
-        <section className="overflow-hidden rounded-lg border border-border bg-surface">
-          <div className="border-b border-border px-4 py-3">
-            <p className="micro-label">INSPEKSI TERBARU</p>
-          </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>No Lot</TableHead>
-                <TableHead>Produk</TableHead>
-                <TableHead className="text-right">Tanggal</TableHead>
-                <TableHead className="text-right">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.recent_inspeksi.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell className="font-data">{row.no_lot}</TableCell>
-                  <TableCell className="text-muted">
-                    {row.master_produk?.nama_produk || "-"}
-                  </TableCell>
-                  <TableCell className="font-data text-right">
-                    {row.tgl_uji}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <StatusBadge status={row.status} />
-                  </TableCell>
-                </TableRow>
-              ))}
-              {(failedKeys.includes("recent_inspeksi") ||
-                data.recent_inspeksi.length === 0) && (
+              <Link
+                href="/dashboard/inspeksi"
+                className="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold text-primary"
+              >
+                Lihat semua
+                <ArrowUpRight className="size-3.5" />
+              </Link>
+            </div>
+            <Table className="dashboard-recent-table">
+              <TableHeader>
                 <TableRow>
-                  <TableCell
-                    colSpan={4}
-                    className="py-8 text-center text-muted"
-                  >
-                    {failedKeys.includes("recent_inspeksi")
-                      ? "Gagal memuat data inspeksi."
-                      : "Belum ada data inspeksi."}
-                  </TableCell>
+                  <TableHead>Nomor lot</TableHead>
+                  <TableHead>Produk</TableHead>
+                  <TableHead>Tanggal uji</TableHead>
+                  <TableHead className="text-right">Hasil</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </section>
-
-        {/* Right stack: pass-rate ring + documents */}
-        <div className="flex flex-col gap-6">
-          <section className="rounded-lg border border-border bg-surface p-4">
-            <p className="micro-label">TINGKAT KELULUSAN</p>
-            <div className="mt-4">
-              <DonutChart
-                passRate={passRate}
-                failRate={failRate}
-                passCount={data.lot_pass}
-                failCount={data.lot_fail}
-                failed={lotFailed}
-              />
+              </TableHeader>
+              <TableBody>
+                {data.recent_inspeksi.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell>
+                      <div className="entity-cell">
+                        <span className="entity-icon">
+                          <ClipboardList className="size-4" />
+                        </span>
+                        <span
+                          className="min-w-0 truncate font-data text-xs"
+                          title={row.no_lot}
+                        >
+                          {row.no_lot}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <p
+                        className="truncate text-xs font-medium"
+                        title={row.master_produk?.nama_produk}
+                      >
+                        {row.master_produk?.nama_produk || "—"}
+                      </p>
+                      <p
+                        className="mt-1 truncate text-[10px] text-muted"
+                        title={row.master_produk?.kode_produk}
+                      >
+                        {row.master_produk?.kode_produk}
+                      </p>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted">
+                      {row.tgl_uji}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge
+                        variant={
+                          row.status === "PASS" ? "default" : "destructive"
+                        }
+                      >
+                        {row.status}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {(failedKeys.includes("recent_inspeksi") ||
+                  !data.recent_inspeksi.length) && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="!h-52 text-center">
+                      <ClipboardList className="mx-auto mb-3 size-7 text-primary" />
+                      <p className="text-sm font-medium">
+                        {failedKeys.includes("recent_inspeksi")
+                          ? "Data inspeksi belum tersedia"
+                          : "Belum ada inspeksi"}
+                      </p>
+                      <p className="mt-2 text-xs text-muted">
+                        Mulai dari produk dan spesifikasi, lalu catat pengujian
+                        lot pertama.
+                      </p>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </section>
+          <section className="data-card">
+            <div className="data-card-header">
+              <div>
+                <h2 className="data-card-title">
+                  Satu alur, kualitas terjaga.
+                </h2>
+                <p className="data-card-description">
+                  Lanjutkan pekerjaan dari tahap yang Anda butuhkan.
+                </p>
+              </div>
+            </div>
+            <div className="grid gap-3 p-5 sm:grid-cols-3">
+              {[
+                {
+                  href: "/dashboard/produk",
+                  icon: Package,
+                  label: "Standar produk",
+                  copy: "Tentukan spesifikasi uji.",
+                },
+                {
+                  href: "/dashboard/inspeksi",
+                  icon: ClipboardList,
+                  label: "Pengujian lot",
+                  copy: "Catat dan evaluasi hasil.",
+                },
+                {
+                  href: "/dashboard/coa",
+                  icon: FileCheck2,
+                  label: "Sertifikasi",
+                  copy: "Terbitkan hasil yang lulus.",
+                },
+              ].map(({ href, icon: Icon, label, copy }, i) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className="quick-link !items-start !gap-2.5"
+                >
+                  <span className="mt-0.5 text-[11px] font-semibold text-primary">
+                    0{i + 1}
+                  </span>
+                  <div>
+                    <Icon className="mb-3 size-4 text-primary" />
+                    <p className="text-xs font-semibold">{label}</p>
+                    <p className="mt-1 text-[10px] leading-relaxed text-muted">
+                      {copy}
+                    </p>
+                  </div>
+                </Link>
+              ))}
             </div>
           </section>
-
-          <section className="rounded-lg border border-border bg-surface p-4">
-            <p className="micro-label">DOKUMEN</p>
-            <div className="mt-4 grid grid-cols-2">
-              <div className="pr-4">
-                <DotChip tone="warning">Berlaku</DotChip>
-                <p className="mt-2 text-[28px] font-bold leading-none tracking-[-0.01em] tabular-nums">
-                  {dokBerlaku}
+        </div>
+        <div className="space-y-5">
+          <section className="data-card">
+            <div className="data-card-header">
+              <div>
+                <h2 className="data-card-title">Distribusi hasil uji</h2>
+                <p className="data-card-description">
+                  Gambaran kelulusan seluruh lot.
                 </p>
               </div>
-              <div className="border-l border-border-soft pl-4">
-                <DotChip tone="danger">Kadaluarsa</DotChip>
-                <p className="mt-2 text-[28px] font-bold leading-none tracking-[-0.01em] tabular-nums">
-                  {dokExpired}
-                </p>
-              </div>
+              <CheckCheck className="size-4 text-muted" />
             </div>
-            <Link
-              href="/dashboard/arsip"
-              className="mt-4 inline-flex items-center gap-2 rounded-[4px] text-[13px] font-medium text-muted transition-colors duration-150 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-            >
-              Kelola dokumen
-              <ArrowRight className="size-3.5" aria-hidden="true" />
-            </Link>
+            <div className="flex flex-col items-center px-6 py-7">
+              <div
+                className="quality-ring"
+                style={{
+                  background:
+                    resultFailed || !total
+                      ? "var(--color-chip-bg)"
+                      : `conic-gradient(var(--color-primary) 0% ${passRate}%, var(--color-danger) ${passRate}% 100%)`,
+                }}
+                role="img"
+                aria-label={
+                  resultFailed
+                    ? "Data hasil uji belum tersedia"
+                    : `${data.lot_pass} lot PASS dan ${data.lot_fail} lot FAIL`
+                }
+              >
+                <div className="quality-ring-value">
+                  <span className="text-[30px] font-semibold tracking-[-.05em]">
+                    {resultFailed || !total ? "—" : `${passRate}%`}
+                  </span>
+                  <span className="mt-1 text-[10px] text-muted">
+                    Tingkat kelulusan
+                  </span>
+                </div>
+              </div>
+              <div className="mt-7 w-full space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-2 text-muted">
+                    <span className="size-2 rounded-full bg-primary" />
+                    Lulus / PASS
+                  </span>
+                  <strong className="font-data">
+                    {resultFailed ? "—" : data.lot_pass.toLocaleString("id-ID")}
+                  </strong>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-2 text-muted">
+                    <span className="size-2 rounded-full bg-danger" />
+                    Tidak lulus / FAIL
+                  </span>
+                  <strong className="font-data">
+                    {resultFailed ? "—" : data.lot_fail.toLocaleString("id-ID")}
+                  </strong>
+                </div>
+              </div>
+              {!total && !resultFailed && (
+                <p className="mt-5 text-center text-xs text-muted">
+                  Distribusi akan muncul setelah inspeksi pertama.
+                </p>
+              )}
+            </div>
+          </section>
+          <section className="data-card">
+            <div className="data-card-header">
+              <h2 className="data-card-title">Dokumen & kepatuhan</h2>
+              <FolderArchive className="size-4 text-muted" />
+            </div>
+            <div className="space-y-4 p-5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted">Dokumen berlaku</span>
+                <Badge>
+                  {failedKeys.includes("dok_berlaku") ? "—" : data.dok_berlaku}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted">Perlu ditinjau</span>
+                <Badge variant={data.dok_expired ? "destructive" : "secondary"}>
+                  {failedKeys.includes("dok_expired") ? "—" : data.dok_expired}
+                </Badge>
+              </div>
+              <Link
+                href="/dashboard/arsip"
+                className="mt-3 flex items-center justify-between border-t border-border-soft pt-4 text-xs font-medium text-primary"
+              >
+                Kelola arsip dokumen
+                <ArrowRight className="size-3.5" />
+              </Link>
+            </div>
           </section>
         </div>
       </div>
