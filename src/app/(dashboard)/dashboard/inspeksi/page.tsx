@@ -1,4 +1,17 @@
 "use client";
+import {
+  PageHeader,
+  DataToolbar,
+  DataPagination,
+  EmptyState,
+  FilterTabs,
+} from "@/components/workspace/page-ui";
+import { DomainDialog } from "@/components/workspace/domain-dialog";
+import { DomainForm, Field } from "@/components/workspace/domain-form";
+import { ResultTable } from "@/components/workspace/result-table";
+import { useConfirm } from "@/components/workspace/confirm-provider";
+import { inspectionSchema } from "@/lib/domain/validation";
+
 import { businessDate, evaluateParam } from "@/lib/domain/validation";
 
 import { useEffect, useState, useCallback, useRef } from "react";
@@ -6,15 +19,17 @@ import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
 import type {
-  HasilUjiItem,
   HasilUjiRow,
   MasterProduk,
   SpesifikasiItem,
   UserRole,
 } from "@/lib/types";
 import { toast } from "sonner";
-import { saveInspeksiAction, deleteInspeksiAction } from "@/lib/actions/inspeksi-actions";
-import { Search, Plus, Pencil, Trash2, Eye, FlaskConical } from "lucide-react";
+import {
+  saveInspeksiAction,
+  deleteInspeksiAction,
+} from "@/lib/actions/inspeksi-actions";
+import { Plus, Pencil, Trash2, Eye, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TableSkeleton } from "@/components/table-skeleton";
@@ -32,6 +47,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
@@ -42,14 +58,11 @@ const sb = createClient();
 
 // Monotonic counter used to ignore stale list-fetch responses.
 
-
 // Monotonic counter used to ignore stale spesifikasi fetches (openEdit race,
 // rapid product switches).
 
-
 // Monotonic counter used to ignore stale openEdit resolutions (clicking
 // Edit(A) then Edit(B), or opening the new-form dialog, while A is in flight).
-
 
 // Escape a raw search term for a PostgREST .or() ilike filter. The PostgREST
 // v12 quoted-value parser strips ONE backslash from EVERY "\X" pair
@@ -76,7 +89,6 @@ function StatusBadge({ status }: { status: string }) {
   if (status === "PASS") return <Badge>PASS</Badge>;
   return <Badge variant="destructive">{status}</Badge>;
 }
-
 
 interface UjiForm {
   id_produk: string;
@@ -107,6 +119,9 @@ const textareaClass =
   "min-h-16 w-full rounded-md border border-input bg-surface px-2.5 py-1.5 text-sm transition-colors duration-150 outline-none";
 
 export default function InspeksiPage() {
+  const confirm = useConfirm();
+  const [filter, setFilter] = useState("all");
+  const [order, setOrder] = useState("default");
   const requestSeq = useRef(0);
   const specSeq = useRef(0);
   const editSeq = useRef(0);
@@ -160,15 +175,15 @@ export default function InspeksiPage() {
         .select("*, master_produk!inner(kode_produk, nama_produk)", {
           count: "exact",
         })
-        .order("created_at", { ascending: false }).order("id")
+        .order("created_at", { ascending: order === "oldest" })
+        .order("id")
         .range(start, start + pageSize - 1);
+      if (filter !== "all") q = q.eq("status", filter);
       if (search) {
         // Quoted values (via escapeOr): commas/parens stay literal and the
         // escaped %/_ reach Postgres LIKE as literals, not wildcards.
         const term = escapeOr(search);
-        q = q.or(
-          `no_lot.ilike."%${term}%",product_name.ilike."%${term}%"`
-        );
+        q = q.or(`no_lot.ilike."%${term}%",product_name.ilike."%${term}%"`);
       }
       const { data: raw, count, error } = await q;
       if (seq !== requestSeq.current) {
@@ -197,7 +212,7 @@ export default function InspeksiPage() {
       setLoadingMore(false);
       setLoading(false);
     },
-    [search, pageSize]
+    [search, pageSize, filter, order],
   );
 
   // Fresh fetch: page 0 replaces any accumulated rows and resets the offset
@@ -228,9 +243,12 @@ export default function InspeksiPage() {
   // Pure loader: only fills spesifikasi state, never touches hasilValues.
   const fetchSpesifikasi = useCallback(async (id_produk: string) => {
     const seq = ++specSeq.current;
-    setSpecProductId(null); setSpesifikasi([]); setSpecLoading(true);
+    setSpecProductId(null);
+    setSpesifikasi([]);
+    setSpecLoading(true);
     if (!id_produk) {
-      setSpesifikasi([]); setSpecLoading(false);
+      setSpesifikasi([]);
+      setSpecLoading(false);
       return false;
     }
     const { data, error } = await sb
@@ -242,17 +260,26 @@ export default function InspeksiPage() {
     if (error) {
       setSpesifikasi([]);
       toast.error("Gagal memuat data. Coba lagi.");
-      setSpecLoading(false); return false;
+      setSpecLoading(false);
+      return false;
     }
-    setSpecProductId(id_produk); setSpecLoading(false);
+    setSpecProductId(id_produk);
+    setSpecLoading(false);
     setSpesifikasi((data as SpesifikasiItem[]) ?? []);
     return true;
   }, []);
 
   useEffect(() => {
     const sequence = requestSeq;
-    const timer = setTimeout(() => { void fetchData(); void fetchProduk(); }, 0);
-    return () => { clearTimeout(timer); sequence.current++; appending.current = false; };
+    const timer = setTimeout(() => {
+      void fetchData();
+      void fetchProduk();
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      sequence.current++;
+      appending.current = false;
+    };
   }, [fetchData, fetchProduk]);
 
   // Clear the pending debounce timer on unmount.
@@ -264,7 +291,7 @@ export default function InspeksiPage() {
 
   function changeProduct(id: string) {
     editSeq.current++;
-    setForm(prev => ({ ...prev, id_produk: id }));
+    setForm((prev) => ({ ...prev, id_produk: id }));
     setHasilValues({});
     void fetchSpesifikasi(id);
   }
@@ -276,8 +303,15 @@ export default function InspeksiPage() {
   }
 
   function resetForm() {
-    specSeq.current++; editSeq.current++; setSpecProductId(null); setSpecLoading(false);
-    setForm({ ...emptyForm, tgl_sampling: businessDate(), tgl_uji: businessDate() });
+    specSeq.current++;
+    editSeq.current++;
+    setSpecProductId(null);
+    setSpecLoading(false);
+    setForm({
+      ...emptyForm,
+      tgl_sampling: businessDate(),
+      tgl_uji: businessDate(),
+    });
     setSpesifikasi([]);
     setHasilValues({});
     setEditingId(null);
@@ -324,7 +358,7 @@ export default function InspeksiPage() {
   function computeOverallStatus(): "PASS" | "FAIL" | null {
     if (spesifikasi.length === 0) return null;
     const hasAnyValue = spesifikasi.some(
-      (sp) => (hasilValues[sp.parameter_uji] ?? "") !== ""
+      (sp) => (hasilValues[sp.parameter_uji] ?? "") !== "",
     );
     if (!hasAnyValue) return null;
     for (const sp of spesifikasi) {
@@ -350,8 +384,15 @@ export default function InspeksiPage() {
   }
 
   async function handleSave() {
-    if (specLoading || specProductId !== form.id_produk || spesifikasi.length === 0) {
-      toast.error("Spesifikasi belum siap. Pilih produk dan tunggu pemuatan selesai."); return;
+    if (
+      specLoading ||
+      specProductId !== form.id_produk ||
+      spesifikasi.length === 0
+    ) {
+      toast.error(
+        "Spesifikasi belum siap. Pilih produk dan tunggu pemuatan selesai.",
+      );
+      return;
     }
     if (!form.id_produk || !form.no_lot) {
       toast.error("Produk dan No Lot wajib diisi.");
@@ -379,7 +420,9 @@ export default function InspeksiPage() {
         toast.error(res.error ?? "Gagal menyimpan hasil uji. Coba lagi.");
         return;
       }
-      toast.success(editingId ? "Hasil uji diperbarui." : "Hasil uji ditambahkan.");
+      toast.success(
+        editingId ? "Hasil uji diperbarui." : "Hasil uji ditambahkan.",
+      );
       setDialogOpen(false);
       resetForm();
       fetchData();
@@ -391,7 +434,15 @@ export default function InspeksiPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Hapus hasil uji ini?")) return;
+    if (
+      !(await confirm({
+        title: "Hapus hasil uji ini?",
+        description:
+          "Data yang dihapus tidak dapat dipulihkan melalui aplikasi. Pastikan data tidak lagi diperlukan.",
+        confirmLabel: "Ya, hapus data",
+      }))
+    )
+      return;
 
     // Server action: role check server-side.
     try {
@@ -414,193 +465,257 @@ export default function InspeksiPage() {
   const overallStatus = computeOverallStatus();
 
   return (
-    <div className="space-y-6">
-      {/* Page header: micro-label + title left, primary action right */}
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <p className="micro-label">PENGUJIAN</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Inspeksi</h1>
-          <p className="mt-1 text-[13px] text-muted">
-            Kelola data pengujian dan inspeksi produk.
-          </p>
-        </div>
-        <Dialog open={dialogOpen} onOpenChange={(v) => { if (v) { editSeq.current++; if (!editingId) resetForm(); } setDialogOpen(v); if (!v) resetForm(); }}>
+    <div className="page-stack">
+      <PageHeader
+        eyebrow="Pengendalian mutu"
+        title="Inspeksi"
+        description="Catat pengujian setiap lot. Evaluasi yang jelas, dari sampling hingga keputusan akhir."
+      >
+        <DomainDialog
+          dirtyValue={{ form, hasilValues }}
+          busy={saving}
+          open={dialogOpen}
+          onOpenChange={(v) => {
+            if (v) {
+              editSeq.current++;
+              if (!editingId) resetForm();
+            }
+            setDialogOpen(v);
+            if (!v) resetForm();
+          }}
+        >
           {canCreate && (
-            <DialogTrigger render={<Button><Plus className="size-4" /> Input Uji Baru</Button>} />
+            <DialogTrigger
+              render={
+                <Button>
+                  <Plus className="size-4" /> Input Uji Baru
+                </Button>
+              }
+            />
           )}
 
-          <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+          <DialogContent className="flex max-h-[90svh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
             <DialogHeader className="gap-1 border-b border-border-soft px-6 py-4 pr-14">
               <p className="micro-label">PENGUJIAN</p>
               <DialogTitle className="text-2xl font-semibold tracking-tight">
                 {editingId ? "Edit Hasil Uji" : "Input Hasil Uji Baru"}
               </DialogTitle>
+              <DialogDescription className="mt-2 text-xs leading-relaxed">
+                Pilih produk, lengkapi informasi lot, lalu isi hasil untuk
+                setiap parameter.
+              </DialogDescription>
             </DialogHeader>
-
-            {/* Scrollable body; the footer stays pinned below it. */}
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-              <div className="space-y-6">
-                {/* Uji fields: two-column grid */}
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5 sm:col-span-2">
-                    <label className="text-xs font-medium">Produk *</label>
-                    <select
-                      className={selectClass}
-                      value={form.id_produk}
-                      onChange={(e) => changeProduct(e.target.value)}
+            <DomainForm
+              value={{
+                ...form,
+                id: editingId,
+                hasil_detail: buildHasilDetail(),
+              }}
+              schema={inspectionSchema}
+              onSubmit={handleSave}
+            >
+              {/* Scrollable body; the footer stays pinned below it. */}
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                <div className="space-y-6">
+                  {/* Uji fields: two-column grid */}
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <Field
+                      label="Produk *"
+                      name="id_produk"
+                      className="sm:col-span-2"
+                      required
                     >
-                      <option value="">Pilih produk…</option>
-                      {produkList.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.kode_produk} — {p.nama_produk}
-                        </option>
-                      ))}
-                    </select>
+                      <select
+                        className={selectClass}
+                        value={form.id_produk}
+                        onChange={(e) => changeProduct(e.target.value)}
+                      >
+                        <option value="">Pilih produk…</option>
+                        {produkList.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.kode_produk} — {p.nama_produk}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="No Lot *" name="no_lot" required>
+                      <Input
+                        value={form.no_lot}
+                        onChange={(e) =>
+                          setForm({ ...form, no_lot: e.target.value })
+                        }
+                        placeholder="LOT-001"
+                      />
+                    </Field>
+                    <Field label="Inspector" name="inspector" required>
+                      <Input
+                        value={form.inspector}
+                        onChange={(e) =>
+                          setForm({ ...form, inspector: e.target.value })
+                        }
+                        placeholder="Nama inspector"
+                      />
+                    </Field>
+                    <Field label="Tgl Sampling" name="tgl_sampling" required>
+                      <Input
+                        type="date"
+                        value={form.tgl_sampling}
+                        onChange={(e) =>
+                          setForm({ ...form, tgl_sampling: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field label="Tgl Uji" name="tgl_uji" required>
+                      <Input
+                        type="date"
+                        value={form.tgl_uji}
+                        onChange={(e) =>
+                          setForm({ ...form, tgl_uji: e.target.value })
+                        }
+                      />
+                    </Field>
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium">No Lot *</label>
-                    <Input
-                      value={form.no_lot}
-                      onChange={(e) => setForm({ ...form, no_lot: e.target.value })}
-                      placeholder="LOT-001"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium">Inspector</label>
-                    <Input
-                      value={form.inspector}
-                      onChange={(e) => setForm({ ...form, inspector: e.target.value })}
-                      placeholder="Nama inspector"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium">Tgl Sampling</label>
-                    <Input
-                      type="date"
-                      value={form.tgl_sampling}
-                      onChange={(e) => setForm({ ...form, tgl_sampling: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium">Tgl Uji</label>
-                    <Input
-                      type="date"
-                      value={form.tgl_uji}
-                      onChange={(e) => setForm({ ...form, tgl_uji: e.target.value })}
-                    />
-                  </div>
-                </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium">Catatan</label>
-                  <textarea
-                    className={textareaClass}
-                    value={form.catatan}
-                    onChange={(e) => setForm({ ...form, catatan: e.target.value })}
-                    placeholder="Catatan (opsional)"
-                  />
-                </div>
+                  <Field label="Catatan" name="catatan">
+                    <textarea
+                      className={textareaClass}
+                      value={form.catatan}
+                      onChange={(e) =>
+                        setForm({ ...form, catatan: e.target.value })
+                      }
+                      placeholder="Catatan (opsional)"
+                    />
+                  </Field>
 
-                {/* Dynamic hasil input */}
-                {spesifikasi.length > 0 && (
-                  <div className="border-t border-border pt-5">
-                    <div className="mb-4 flex items-center justify-between gap-3">
-                      <span className="micro-label">Hasil Pengujian</span>
-                    </div>
+                  {/* Dynamic hasil input */}
+                  {spesifikasi.length > 0 && (
+                    <div className="border-t border-border pt-5">
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <span className="micro-label">Hasil Pengujian</span>
+                      </div>
 
-                    <div className="space-y-2">
-                      {spesifikasi.map((sp) => {
-                        const val = hasilValues[sp.parameter_uji] ?? "";
-                        const res =
-                          val !== "" ? evaluateParam(sp, val) : null;
-                        return (
-                          <div
-                            key={sp.id}
-                            className="flex items-center gap-3 rounded-md border border-border bg-surface-alt p-3"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <span className="text-sm font-medium">
-                                {sp.parameter_uji}
-                              </span>
-                              {sp.tipe_batas !== "TEXT" && (
-                                <span className="font-data ml-2 text-[11px] text-muted">
-                                  ({sp.tipe_batas}: {sp.tipe_batas === "MAX" ? sp.nilai_maks : sp.nilai_min}
-                                  {sp.tipe_batas === "RANGE" && ` — ${sp.nilai_maks}`}
-                                  {sp.satuan && ` ${sp.satuan}`})
+                      <div className="space-y-2">
+                        {spesifikasi.map((sp) => {
+                          const val = hasilValues[sp.parameter_uji] ?? "";
+                          const res =
+                            val !== "" ? evaluateParam(sp, val) : null;
+                          return (
+                            <div key={sp.id} className="inspection-parameter">
+                              <div className="min-w-0 flex-1">
+                                <span className="text-sm font-medium">
+                                  {sp.parameter_uji}
                                 </span>
+                                {sp.tipe_batas !== "TEXT" && (
+                                  <span className="font-data ml-2 text-[11px] text-muted">
+                                    ({sp.tipe_batas}:{" "}
+                                    {sp.tipe_batas === "MAX"
+                                      ? sp.nilai_maks
+                                      : sp.nilai_min}
+                                    {sp.tipe_batas === "RANGE" &&
+                                      ` — ${sp.nilai_maks}`}
+                                    {sp.satuan && ` ${sp.satuan}`})
+                                  </span>
+                                )}
+                              </div>
+                              <Input
+                                className="w-full"
+                                aria-label={`Hasil ${sp.parameter_uji}`}
+                                inputMode={
+                                  sp.tipe_batas === "TEXT" ? "text" : "decimal"
+                                }
+                                placeholder={
+                                  sp.tipe_batas === "TEXT" ? "Nilai" : "0"
+                                }
+                                value={val}
+                                onChange={(e) => {
+                                  setHasilValues({
+                                    ...hasilValues,
+                                    [sp.parameter_uji]: e.target.value,
+                                  });
+                                }}
+                              />
+                              {res && (
+                                <Badge
+                                  variant={
+                                    res === "PASS" ? "default" : "destructive"
+                                  }
+                                >
+                                  {res}
+                                </Badge>
                               )}
                             </div>
-                            <Input
-                              className="w-28"
-                              placeholder={sp.tipe_batas === "TEXT" ? "Nilai" : "0"}
-                              value={val}
-                              onChange={(e) => {
-                                setHasilValues({
-                                  ...hasilValues,
-                                  [sp.parameter_uji]: e.target.value,
-                                });
-                              }}
-                            />
-                            {res && (
-                              <Badge
-                                variant={res === "PASS" ? "default" : "destructive"}
-                              >
-                                {res}
-                              </Badge>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
 
-                    <div className="mt-4 flex items-center gap-2">
-                      <span className="text-xs font-medium">Status Final:</span>
-                      {overallStatus === null ? (
-                        <Badge variant="secondary">Belum diisi</Badge>
-                      ) : (
-                        <StatusBadge status={overallStatus} />
-                      )}
+                      <div className="mt-4 flex items-center gap-2">
+                        <span className="text-xs font-medium">
+                          Status Final:
+                        </span>
+                        {overallStatus === null ? (
+                          <Badge variant="secondary">Belum diisi</Badge>
+                        ) : (
+                          <StatusBadge status={overallStatus} />
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
-                {form.id_produk && spesifikasi.length === 0 && (
-                  <p className="text-[13px] text-muted">
-                    Produk ini belum memiliki spesifikasi pengujian.
-                  </p>
-                )}
+                  )}
+                  {form.id_produk && spesifikasi.length === 0 && (
+                    <p className="text-[13px] text-muted">
+                      Produk ini belum memiliki spesifikasi pengujian.
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
 
-            <DialogFooter className="m-0 flex-row items-center justify-between gap-2 rounded-b-lg px-6 py-4 sm:justify-between">
-              <DialogClose render={<Button variant="outline">Batal</Button>} />
-              <Button onClick={handleSave} disabled={saving || specLoading || specProductId !== form.id_produk || spesifikasi.length === 0}>
-                {saving ? "Menyimpan…" : editingId ? "Simpan" : "Tambah"}
-              </Button>
-            </DialogFooter>
+              <DialogFooter className="m-0 flex-row items-center justify-between gap-2 rounded-b-lg px-6 py-4 sm:justify-between">
+                <DialogClose
+                  render={<Button variant="outline">Batal</Button>}
+                />
+                <Button
+                  type="submit"
+                  loading={saving}
+                  disabled={
+                    saving ||
+                    specLoading ||
+                    specProductId !== form.id_produk ||
+                    spesifikasi.length === 0
+                  }
+                >
+                  {saving ? "Menyimpan…" : editingId ? "Simpan" : "Tambah"}
+                </Button>
+              </DialogFooter>
+            </DomainForm>
           </DialogContent>
-        </Dialog>
-      </div>
+        </DomainDialog>
+      </PageHeader>
 
-      {/* Toolbar: search left, result meta right */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="relative w-60 max-w-full">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-faint" />
-          <Input
-            placeholder="Cari no lot atau produk…"
-            value={searchInput}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-8"
-          />
-        </div>
-        <p className="shrink-0 text-[13px] text-muted">
-          <span className="font-data text-text">{data.length}</span> dari{" "}
-          <span className="font-data text-text">{totalCount}</span> data
-        </p>
+      <div>
+        <FilterTabs
+          label="Filter inspeksi"
+          value={filter}
+          onChange={setFilter}
+          items={[
+            { value: "all", label: "Semua hasil" },
+            { value: "PASS", label: "Lulus / PASS" },
+            { value: "FAIL", label: "Tidak lulus / FAIL" },
+          ]}
+        />
+        <DataToolbar
+          search={searchInput}
+          onSearch={onSearchChange}
+          placeholder="Cari no lot atau produk…"
+          total={totalCount}
+          loading={loading}
+          onRefresh={() => void fetchData()}
+          order={order}
+          onOrder={setOrder}
+        />
       </div>
 
       {/* Table card: hairline border, radius 8, header micro-labels on surface-alt */}
-      <div className="overflow-hidden rounded-lg border border-border bg-surface">
-        <Table>
+      <div className="data-card">
+        <Table data-actions>
           <TableHeader>
             <TableRow className="hover:bg-surface-alt">
               <TableHead className="pl-4">No Lot</TableHead>
@@ -616,9 +731,12 @@ export default function InspeksiPage() {
             {loading && <TableSkeleton rows={5} cols={7} />}
             {!loading && loadError && (
               <TableRow>
-                <TableCell colSpan={7} className="px-4 py-12">
-                  <div className="flex items-center justify-center gap-3 text-[13px] text-muted">
-                    Gagal memuat data.
+                <TableCell colSpan={7} className="!p-0">
+                  <EmptyState
+                    error
+                    title="Data belum berhasil dimuat"
+                    description="Koneksi mungkin terputus. Muat ulang untuk mencoba kembali."
+                  >
                     <Button
                       variant="outline"
                       size="sm"
@@ -626,27 +744,49 @@ export default function InspeksiPage() {
                     >
                       Coba Lagi
                     </Button>
-                  </div>
+                  </EmptyState>
                 </TableCell>
               </TableRow>
             )}
             {!loading && !loadError && data.length === 0 && (
               <TableRow className="hover:bg-surface">
-                <TableCell colSpan={7} className="px-4 py-12">
-                  <div className="flex flex-col items-center gap-4 text-center">
-                    <div className="flex size-10 items-center justify-center rounded-full border border-border text-faint">
+                <TableCell colSpan={7} className="!p-0">
+                  <div className="empty-state">
+                    <div className="empty-icon">
                       <FlaskConical className="size-4" />
                     </div>
-                    <p className="micro-label">
-                      {search ? "TIDAK ADA HASIL" : "TIDAK ADA DATA UJI"}
+                    <p className="text-base font-semibold tracking-tight">
+                      {search || filter !== "all"
+                        ? "Tidak ada hasil yang cocok"
+                        : "TIDAK ADA DATA UJI"}
                     </p>
-                    {!search && canCreate && (
+                    <p className="text-xs text-muted">
+                      {search || filter !== "all"
+                        ? "Coba kata kunci lain atau hapus pencarian Anda."
+                        : "Mulai dengan menambahkan data pertama ke ruang kerja ini."}
+                    </p>
+                    {!search && filter === "all" && canCreate && (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => { resetForm(); setDialogOpen(true); }}
+                        onClick={() => {
+                          resetForm();
+                          setDialogOpen(true);
+                        }}
                       >
                         <Plus className="size-3.5" /> Input Uji Baru
+                      </Button>
+                    )}
+                    {(search || filter !== "all") && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          onSearchChange("");
+                          setFilter("all");
+                        }}
+                      >
+                        Reset filter
                       </Button>
                     )}
                   </div>
@@ -655,98 +795,95 @@ export default function InspeksiPage() {
             )}
             {!loading &&
               data.map((row) => (
-              <TableRow
-                key={row.id}
-                className="cursor-pointer"
-                onClick={() => openDetail(row)}
-              >
-                <TableCell className="pl-4">
-                  <div className="font-data">{row.no_lot}</div>
-                </TableCell>
-                <TableCell className="text-muted">
-                  {row.master_produk?.nama_produk || "-"}
-                </TableCell>
-                <TableCell className="font-data text-right text-muted">
-                  {row.tgl_sampling}
-                </TableCell>
-                <TableCell className="font-data text-right text-muted">
-                  {row.tgl_uji}
-                </TableCell>
-                <TableCell>{row.inspector || "-"}</TableCell>
-                <TableCell>
-                  <StatusBadge status={row.status} />
-                </TableCell>
-                <TableCell className="pr-4" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center gap-1">
-                    <button
-                      className="rounded-md p-1.5 text-muted outline-none transition-colors duration-150 hover:bg-surface-alt hover:text-text focus-visible:ring-2 focus-visible:ring-primary/30"
-                      onClick={() => openDetail(row)}
-                      title="Detail"
-                    >
-                      <Eye className="size-3.5" />
-                    </button>
-                    {canUpdate && (
+                <TableRow
+                  key={row.id}
+                  className="cursor-pointer"
+                  onClick={() => openDetail(row)}
+                >
+                  <TableCell className="pl-4">
+                    <div className="font-data">{row.no_lot}</div>
+                  </TableCell>
+                  <TableCell className="text-muted">
+                    {row.master_produk?.nama_produk || "-"}
+                  </TableCell>
+                  <TableCell className="font-data text-right text-muted">
+                    {row.tgl_sampling}
+                  </TableCell>
+                  <TableCell className="font-data text-right text-muted">
+                    {row.tgl_uji}
+                  </TableCell>
+                  <TableCell>{row.inspector || "-"}</TableCell>
+                  <TableCell>
+                    <StatusBadge status={row.status} />
+                  </TableCell>
+                  <TableCell
+                    className="pr-4"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="row-actions">
                       <button
-                        className="rounded-md p-1.5 text-muted outline-none transition-colors duration-150 hover:bg-surface-alt hover:text-text focus-visible:ring-2 focus-visible:ring-primary/30"
-                        onClick={() => openEdit(row)}
-                        title="Edit"
+                        type="button"
+                        className="row-action"
+                        onClick={() => openDetail(row)}
+                        title="Detail"
                       >
-                        <Pencil className="size-3.5" />
+                        <Eye className="size-3.5" />
                       </button>
-                    )}
-                    {canDelete && (
-                      <button
-                        className="rounded-md p-1.5 text-danger outline-none transition-colors duration-150 hover:bg-danger-bg focus-visible:ring-2 focus-visible:ring-danger/20"
-                        onClick={() => handleDelete(row.id)}
-                        title="Hapus"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
+                      {canUpdate && (
+                        <button
+                          type="button"
+                          className="row-action"
+                          onClick={() => openEdit(row)}
+                          title="Edit"
+                        >
+                          <Pencil className="size-3.5" />
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          type="button"
+                          className="row-action"
+                          data-tone="danger"
+                          onClick={() => handleDelete(row.id)}
+                          title="Hapus"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
           </TableBody>
         </Table>
       </div>
 
-      {/* Pagination: load-more + counter */}
       {!loading && !loadError && data.length > 0 && (
-        <div className="space-y-3">
-          {data.length < totalCount && (
-            <Button
-              variant="outline"
-              className="w-full"
-              disabled={loadingMore}
-              onClick={() => loadMore()}
-            >
-              {loadingMore
-                ? "Memuat…"
-                : `Muat lagi (${totalCount - data.length} tersisa)`}
-            </Button>
-          )}
-          <p className="text-center text-[13px] text-muted">
-            Menampilkan <span className="font-data text-text">{data.length}</span> dari{" "}
-            <span className="font-data text-text">{totalCount}</span> data
-          </p>
-        </div>
+        <DataPagination
+          count={data.length}
+          total={totalCount}
+          loading={loadingMore}
+          onMore={() => void loadMore()}
+        />
       )}
 
       {/* Detail dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+        <DialogContent className="flex max-h-[90svh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
           <DialogHeader className="gap-1 border-b border-border-soft px-6 py-4 pr-14">
             <p className="micro-label">PENGUJIAN</p>
             <DialogTitle className="text-2xl font-semibold tracking-tight">
               Detail Hasil Uji
             </DialogTitle>
+            <DialogDescription>
+              Identitas lot, observasi, dan evaluasi terhadap standar pengujian.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
             {detailItem && (
               <div className="space-y-5">
-                <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+                <div className="detail-metadata grid grid-cols-1 gap-5 rounded-xl border border-border-soft bg-surface-alt p-5 sm:grid-cols-2">
                   <div>
                     <span className="text-xs text-muted">No Lot</span>
                     <p className="font-data text-sm">{detailItem.no_lot}</p>
@@ -759,7 +896,9 @@ export default function InspeksiPage() {
                   </div>
                   <div>
                     <span className="text-xs text-muted">Tgl Sampling</span>
-                    <p className="font-data text-sm">{detailItem.tgl_sampling}</p>
+                    <p className="font-data text-sm">
+                      {detailItem.tgl_sampling}
+                    </p>
                   </div>
                   <div>
                     <span className="text-xs text-muted">Tgl Uji</span>
@@ -787,26 +926,7 @@ export default function InspeksiPage() {
                 {detailItem.hasil_detail?.length > 0 && (
                   <div className="border-t border-border-soft pt-4">
                     <p className="micro-label mb-3">Hasil Detail</p>
-                    <table className="w-full text-[13px]">
-                      <thead>
-                        <tr className="border-b border-border">
-                          <th className="py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Parameter</th>
-                          <th className="py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Nilai</th>
-                          <th className="py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {detailItem.hasil_detail.map((h: HasilUjiItem, i: number) => (
-                          <tr key={i} className="border-b border-border-soft last:border-0">
-                            <td className="py-2">{h.p}</td>
-                            <td className="font-data py-2 text-right">{h.val}</td>
-                            <td className="py-2 text-right">
-                              <span className={`font-data ${h.st === "PASS" ? "text-success-dark" : "text-danger-dark"}`}>{h.st}</span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <ResultTable items={detailItem.hasil_detail} />
                   </div>
                 )}
               </div>

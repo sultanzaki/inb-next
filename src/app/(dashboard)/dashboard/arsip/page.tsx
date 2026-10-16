@@ -1,4 +1,15 @@
 "use client";
+import {
+  PageHeader,
+  DataToolbar,
+  DataPagination,
+  EmptyState,
+  FilterTabs,
+} from "@/components/workspace/page-ui";
+import { DomainDialog } from "@/components/workspace/domain-dialog";
+import { DomainForm, Field } from "@/components/workspace/domain-form";
+import { useConfirm } from "@/components/workspace/confirm-provider";
+import { documentSchema } from "@/lib/domain/validation";
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -6,8 +17,11 @@ import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
 import type { DokumenArsip, UserRole } from "@/lib/types";
 import { toast } from "sonner";
-import { uploadDokumenAction, deleteDokumenAction } from "@/lib/actions/arsip-actions";
-import { Search, Plus, Trash2, ExternalLink, FileSearch } from "lucide-react";
+import {
+  uploadDokumenAction,
+  deleteDokumenAction,
+} from "@/lib/actions/arsip-actions";
+import { Plus, Trash2, ExternalLink, FileSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TableSkeleton } from "@/components/table-skeleton";
@@ -20,11 +34,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog,
   DialogTrigger,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
@@ -34,7 +48,6 @@ const sb = createClient();
 
 // Monotonic counter used to ignore stale list-fetch responses (fast typing
 // through the debounced search).
-
 
 const kategoriDocList = [
   "Sertifikat Halal",
@@ -105,7 +118,10 @@ function StatusDocBadge({ expired }: { expired: boolean }) {
   if (expired) {
     return (
       <span className="inline-flex items-center gap-2 rounded-[4px] bg-danger-bg px-2 py-1 text-[11.5px] font-medium leading-tight text-danger-dark">
-        <span className="size-[5px] rounded-full bg-danger" aria-hidden="true" />
+        <span
+          className="size-[5px] rounded-full bg-danger"
+          aria-hidden="true"
+        />
         Kadaluarsa
       </span>
     );
@@ -124,6 +140,9 @@ const selectClass =
   "h-9 w-full rounded-md border border-input bg-surface px-2.5 text-sm transition-colors duration-150 outline-none";
 
 export default function DokumenPage() {
+  const confirm = useConfirm();
+  const [filter, setFilter] = useState("all");
+  const [order, setOrder] = useState("default");
   const requestSeq = useRef(0);
   const appending = useRef(false);
   const { user } = useUser();
@@ -159,13 +178,14 @@ export default function DokumenPage() {
       let q = sb
         .from("dokumen_arsip")
         .select("*", { count: "exact" })
-        .order("created_at", { ascending: false }).order("id")
+        .order("created_at", { ascending: order === "oldest" })
+        .order("id")
         .range(start, start + pageSize - 1);
+      if (filter === "active") q = q.gte("masa_kadaluarsa", localTodayStr());
+      if (filter === "expired") q = q.lt("masa_kadaluarsa", localTodayStr());
       if (search) {
         const term = escapeOr(search);
-        q = q.or(
-          `judul_dokumen.ilike."%${term}%",kategori.ilike."%${term}%"`
-        );
+        q = q.or(`judul_dokumen.ilike."%${term}%",kategori.ilike."%${term}%"`);
       }
       const { data, count, error } = await q;
       if (seq !== requestSeq.current) {
@@ -194,7 +214,7 @@ export default function DokumenPage() {
       setLoadingMore(false);
       setLoading(false);
     },
-    [search, pageSize]
+    [search, pageSize, filter, order],
   );
 
   // Fresh fetch: page 0 replaces any accumulated rows and resets the offset
@@ -211,8 +231,14 @@ export default function DokumenPage() {
 
   useEffect(() => {
     const sequence = requestSeq;
-    const timer = setTimeout(() => { void fetchData(); }, 0);
-    return () => { clearTimeout(timer); sequence.current++; appending.current = false; };
+    const timer = setTimeout(() => {
+      void fetchData();
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      sequence.current++;
+      appending.current = false;
+    };
   }, [fetchData]);
 
   // Clear the pending debounce timer on unmount.
@@ -266,7 +292,15 @@ export default function DokumenPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Hapus dokumen ini?")) return;
+    if (
+      !(await confirm({
+        title: "Hapus dokumen ini?",
+        description:
+          "Data yang dihapus tidak dapat dipulihkan melalui aplikasi. Pastikan data tidak lagi diperlukan.",
+        confirmLabel: "Ya, hapus data",
+      }))
+    )
+      return;
 
     // Server action: role check server-side.
     try {
@@ -304,17 +338,15 @@ export default function DokumenPage() {
   const canUpload = canAction(role, "create_doc");
 
   return (
-    <div className="space-y-6">
-      {/* Page header: micro-label + title left, primary action right */}
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <p className="micro-label">DOKUMEN</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Arsip Dokumen</h1>
-          <p className="mt-1 text-[13px] text-muted">
-            Kelola dokumen mutu dan sertifikasi.
-          </p>
-        </div>
-        <Dialog
+    <div className="page-stack">
+      <PageHeader
+        eyebrow="Dokumen mutu"
+        title="Arsip Dokumen"
+        description="Dokumen penting, tersimpan rapi. Pantau masa berlaku tanpa kehilangan konteks."
+      >
+        <DomainDialog
+          dirtyValue={form}
+          busy={saving}
           open={dialogOpen}
           onOpenChange={(v) => {
             if (v) resetForm();
@@ -323,112 +355,138 @@ export default function DokumenPage() {
           }}
         >
           {canUpload && (
-            <DialogTrigger render={<Button><Plus className="size-4" /> Upload Dokumen</Button>} />
+            <DialogTrigger
+              render={
+                <Button>
+                  <Plus className="size-4" /> Tambah Dokumen
+                </Button>
+              }
+            />
           )}
 
-          <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+          <DialogContent className="flex max-h-[90svh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
             <DialogHeader className="gap-1 border-b border-border-soft px-6 py-4 pr-14">
               <p className="micro-label">DOKUMEN</p>
               <DialogTitle className="text-2xl font-semibold tracking-tight">
                 Tambah Dokumen
               </DialogTitle>
+              <DialogDescription className="mt-2 text-xs leading-relaxed">
+                Simpan informasi dokumen dan tautan berkas agar mudah ditemukan
+                kembali.
+              </DialogDescription>
             </DialogHeader>
-
-            {/* Scrollable body; the footer stays pinned below it. */}
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium">Judul Dokumen *</label>
-                  <Input
-                    value={form.judul_dokumen}
-                    onChange={(e) =>
-                      setForm({ ...form, judul_dokumen: e.target.value })
-                    }
-                    placeholder="Nama dokumen"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium">Kategori *</label>
-                  <select
-                    className={selectClass}
-                    value={form.kategori}
-                    onChange={(e) =>
-                      setForm({ ...form, kategori: e.target.value })
-                    }
-                  >
-                    <option value="">Pilih kategori…</option>
-                    {kategoriDocList.map((k) => (
-                      <option key={k} value={k}>
-                        {k}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium">Tanggal Berlaku</label>
+            <DomainForm
+              value={form}
+              schema={documentSchema}
+              onSubmit={handleSave}
+            >
+              {/* Scrollable body; the footer stays pinned below it. */}
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                <div className="space-y-4">
+                  <Field label="Judul Dokumen *" name="judul_dokumen" required>
                     <Input
-                      type="date"
-                      value={form.tanggal_berlaku}
+                      value={form.judul_dokumen}
                       onChange={(e) =>
-                        setForm({ ...form, tanggal_berlaku: e.target.value })
+                        setForm({ ...form, judul_dokumen: e.target.value })
                       }
+                      placeholder="Nama dokumen"
                     />
+                  </Field>
+                  <Field label="Kategori *" name="kategori" required>
+                    <select
+                      className={selectClass}
+                      value={form.kategori}
+                      onChange={(e) =>
+                        setForm({ ...form, kategori: e.target.value })
+                      }
+                    >
+                      <option value="">Pilih kategori…</option>
+                      {kategoriDocList.map((k) => (
+                        <option key={k} value={k}>
+                          {k}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <Field
+                      label="Tanggal Berlaku"
+                      name="tanggal_berlaku"
+                      required
+                    >
+                      <Input
+                        type="date"
+                        value={form.tanggal_berlaku}
+                        onChange={(e) =>
+                          setForm({ ...form, tanggal_berlaku: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field
+                      label="Masa Kadaluarsa"
+                      name="masa_kadaluarsa"
+                      required
+                    >
+                      <Input
+                        type="date"
+                        value={form.masa_kadaluarsa}
+                        onChange={(e) =>
+                          setForm({ ...form, masa_kadaluarsa: e.target.value })
+                        }
+                      />
+                    </Field>
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium">Masa Kadaluarsa</label>
+                  <Field label="Link Drive" name="link_drive">
                     <Input
-                      type="date"
-                      value={form.masa_kadaluarsa}
+                      value={form.link_drive}
                       onChange={(e) =>
-                        setForm({ ...form, masa_kadaluarsa: e.target.value })
+                        setForm({ ...form, link_drive: e.target.value })
                       }
+                      placeholder="https://drive.google.com/..."
                     />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium">Link Drive</label>
-                  <Input
-                    value={form.link_drive}
-                    onChange={(e) =>
-                      setForm({ ...form, link_drive: e.target.value })
-                    }
-                    placeholder="https://drive.google.com/..."
-                  />
+                  </Field>
                 </div>
               </div>
-            </div>
 
-            <DialogFooter className="m-0 flex-row items-center justify-between gap-2 rounded-b-lg px-6 py-4 sm:justify-between">
-              <DialogClose render={<Button variant="outline">Batal</Button>} />
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? "Menyimpan…" : "Tambah"}
-              </Button>
-            </DialogFooter>
+              <DialogFooter className="m-0 flex-row items-center justify-between gap-2 rounded-b-lg px-6 py-4 sm:justify-between">
+                <DialogClose
+                  render={<Button variant="outline">Batal</Button>}
+                />
+                <Button type="submit" loading={saving} disabled={saving}>
+                  {saving ? "Menyimpan…" : "Tambah"}
+                </Button>
+              </DialogFooter>
+            </DomainForm>
           </DialogContent>
-        </Dialog>
-      </div>
+        </DomainDialog>
+      </PageHeader>
 
-      {/* Toolbar: search left, result meta right */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="relative w-60 max-w-full">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-faint" />
-          <Input
-            placeholder="Cari dokumen…"
-            value={searchInput}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-8"
-          />
-        </div>
-        <p className="shrink-0 text-[13px] text-muted">
-          <span className="font-data text-text">{dokumenList.length}</span> dari{" "}
-          <span className="font-data text-text">{totalCount}</span> data
-        </p>
+      <div>
+        <FilterTabs
+          label="Filter arsip"
+          value={filter}
+          onChange={setFilter}
+          items={[
+            { value: "all", label: "Semua dokumen" },
+            { value: "active", label: "Berlaku" },
+            { value: "expired", label: "Kedaluwarsa" },
+          ]}
+        />
+        <DataToolbar
+          search={searchInput}
+          onSearch={onSearchChange}
+          placeholder="Cari dokumen…"
+          total={totalCount}
+          loading={loading}
+          onRefresh={() => void fetchData()}
+          order={order}
+          onOrder={setOrder}
+        />
       </div>
 
       {/* Table card: hairline border, radius 8, header micro-labels on surface-alt */}
-      <div className="overflow-hidden rounded-lg border border-border bg-surface">
-        <Table>
+      <div className="data-card">
+        <Table data-actions>
           <TableHeader>
             <TableRow className="hover:bg-surface-alt">
               <TableHead className="pl-4">Dokumen</TableHead>
@@ -443,9 +501,12 @@ export default function DokumenPage() {
             {loading && <TableSkeleton rows={5} cols={6} />}
             {!loading && loadError && (
               <TableRow>
-                <TableCell colSpan={6} className="px-4 py-12">
-                  <div className="flex items-center justify-center gap-3 text-[13px] text-muted">
-                    Gagal memuat data.
+                <TableCell colSpan={6} className="!p-0">
+                  <EmptyState
+                    error
+                    title="Data belum berhasil dimuat"
+                    description="Koneksi mungkin terputus. Muat ulang untuk mencoba kembali."
+                  >
                     <Button
                       variant="outline"
                       size="sm"
@@ -453,107 +514,119 @@ export default function DokumenPage() {
                     >
                       Coba Lagi
                     </Button>
-                  </div>
+                  </EmptyState>
                 </TableCell>
               </TableRow>
             )}
             {!loading && !loadError && dokumenList.length === 0 && (
               <TableRow className="hover:bg-surface">
-                <TableCell colSpan={6} className="px-4 py-12">
-                  <div className="flex flex-col items-center gap-4 text-center">
-                    <div className="flex size-10 items-center justify-center rounded-full border border-border text-faint">
+                <TableCell colSpan={6} className="!p-0">
+                  <div className="empty-state">
+                    <div className="empty-icon">
                       <FileSearch className="size-4" />
                     </div>
-                    <p className="micro-label">
-                      {search ? "TIDAK ADA HASIL" : "TIDAK ADA DOKUMEN"}
+                    <p className="text-base font-semibold tracking-tight">
+                      {search || filter !== "all"
+                        ? "Tidak ada hasil yang cocok"
+                        : "Belum ada dokumen"}
                     </p>
-                    {!search && canUpload && (
+                    <p className="text-xs text-muted">
+                      {search || filter !== "all"
+                        ? "Coba kata kunci lain atau hapus pencarian Anda."
+                        : "Mulai dengan menambahkan data pertama ke ruang kerja ini."}
+                    </p>
+                    {!search && filter === "all" && canUpload && (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => { resetForm(); setDialogOpen(true); }}
+                        onClick={() => {
+                          resetForm();
+                          setDialogOpen(true);
+                        }}
                       >
-                        <Plus className="size-3.5" /> Upload Dokumen
+                        <Plus className="size-3.5" /> Tambah Dokumen
+                      </Button>
+                    )}
+                    {(search || filter !== "all") && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          onSearchChange("");
+                          setFilter("all");
+                        }}
+                      >
+                        Reset filter
                       </Button>
                     )}
                   </div>
                 </TableCell>
               </TableRow>
             )}
-            {dokumenList.map((doc) => {
-              const expired = isExpired(doc);
-              const link = safeHref(doc.link_drive ?? "");
-              return (
-                <TableRow key={doc.id}>
-                  <TableCell className="pl-4">
-                    <div className="font-medium">{doc.judul_dokumen}</div>
-                    <div className="font-data text-xs text-muted">
-                      {doc.id.slice(0, 8)}...
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-muted">{doc.kategori}</TableCell>
-                  <TableCell className="font-data text-muted text-right">
-                    {doc.tanggal_berlaku}
-                  </TableCell>
-                  <TableCell className="font-data text-muted text-right">
-                    {doc.masa_kadaluarsa || "—"}
-                  </TableCell>
-                  <TableCell>
-                    <StatusDocBadge expired={expired} />
-                  </TableCell>
-                  <TableCell className="pr-4">
-                    <div className="flex items-center gap-1">
-                      {link && (
-                        <a
-                          href={link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="rounded-md p-1.5 text-muted outline-none transition-colors duration-150 hover:bg-surface-alt hover:text-text focus-visible:ring-2 focus-visible:ring-primary/30"
-                          title="Buka link"
-                          aria-label="Buka link dokumen"
-                        >
-                          <ExternalLink className="size-3.5" />
-                        </a>
-                      )}
-                      {canDelete && (
-                        <button
-                          className="rounded-md p-1.5 text-danger outline-none transition-colors duration-150 hover:bg-danger-bg focus-visible:ring-2 focus-visible:ring-danger/20"
-                          onClick={() => handleDelete(doc.id)}
-                          title="Hapus"
-                          aria-label="Hapus dokumen"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
+            {!loading &&
+              dokumenList.map((doc) => {
+                const expired = isExpired(doc);
+                const link = safeHref(doc.link_drive ?? "");
+                return (
+                  <TableRow key={doc.id}>
+                    <TableCell className="pl-4">
+                      <div className="font-medium">{doc.judul_dokumen}</div>
+                      <div className="font-data text-xs text-muted">
+                        {doc.id.slice(0, 8)}...
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted">{doc.kategori}</TableCell>
+                    <TableCell className="font-data text-muted text-right">
+                      {doc.tanggal_berlaku}
+                    </TableCell>
+                    <TableCell className="font-data text-muted text-right">
+                      {doc.masa_kadaluarsa || "—"}
+                    </TableCell>
+                    <TableCell>
+                      <StatusDocBadge expired={expired} />
+                    </TableCell>
+                    <TableCell className="pr-4">
+                      <div className="row-actions">
+                        {link && (
+                          <a
+                            href={link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="row-action"
+                            title="Buka link"
+                            aria-label="Buka link dokumen"
+                          >
+                            <ExternalLink className="size-3.5" />
+                          </a>
+                        )}
+                        {canDelete && (
+                          <button
+                            type="button"
+                            className="row-action"
+                            data-tone="danger"
+                            onClick={() => handleDelete(doc.id)}
+                            title="Hapus"
+                            aria-label="Hapus dokumen"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
           </TableBody>
         </Table>
       </div>
 
-      {/* Pagination: load-more + counter (logic unchanged, restyled) */}
       {!loading && !loadError && dokumenList.length > 0 && (
-        <div className="space-y-3">
-          {dokumenList.length < totalCount && (
-            <Button
-              variant="outline"
-              className="w-full"
-              disabled={loadingMore}
-              onClick={() => loadMore()}
-            >
-              {loadingMore
-                ? "Memuat…"
-                : `Muat lagi (${totalCount - dokumenList.length} tersisa)`}
-            </Button>
-          )}
-          <p className="text-center text-[13px] text-muted">
-            Menampilkan <span className="font-data text-text">{dokumenList.length}</span> dari{" "}
-            <span className="font-data text-text">{totalCount}</span> data
-          </p>
-        </div>
+        <DataPagination
+          count={dokumenList.length}
+          total={totalCount}
+          loading={loadingMore}
+          onMore={() => void loadMore()}
+        />
       )}
     </div>
   );
