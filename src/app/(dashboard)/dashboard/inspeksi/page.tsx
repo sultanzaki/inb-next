@@ -469,7 +469,7 @@ export default function InspeksiPage() {
       <PageHeader
         eyebrow="Pengendalian mutu"
         title="Inspeksi"
-        description="Catat pengujian setiap lot. Evaluasi yang jelas, dari sampling hingga keputusan akhir."
+        description="Hasil pengujian, parameter, dan status setiap lot."
       >
         <DomainDialog
           dirtyValue={{ form, hasilValues }}

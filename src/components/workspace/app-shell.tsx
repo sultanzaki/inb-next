@@ -18,9 +18,7 @@ import {
   ChevronsUpDown,
   LogOut,
   LifeBuoy,
-  ArrowUpRight,
   Keyboard,
-  ShieldCheck,
   Loader2,
   X,
 } from "lucide-react";
@@ -247,7 +245,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           />
           <div className="sidebar-label">
             <div className="workspace-brand-name">INBIONUSA</div>
-            <div className="workspace-brand-caption">Quality workspace</div>
+            <div className="workspace-brand-caption">Quality Control</div>
           </div>
         </Link>
         <div className="mx-5 mb-4 h-px bg-border-soft" />
@@ -269,22 +267,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="workspace-sidebar-foot">
-          <div className="workspace-help">
-            <div className="flex items-center gap-2 text-xs font-semibold">
-              <ShieldCheck className="size-4 text-primary" />
-              Kualitas, dalam kendali.
-            </div>
-            <p className="mt-2 text-[11px] leading-relaxed text-muted">
-              Satu ruang kerja untuk setiap tahap pengendalian mutu.
-            </p>
-            <button
-              onClick={() => setHelpOpen(true)}
-              className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-semibold text-primary"
-            >
-              Kenali ruang kerja
-              <ArrowUpRight className="size-3" />
-            </button>
-          </div>
+          <button className="sidebar-guide" onClick={() => setHelpOpen(true)}>
+            <LifeBuoy className="size-4" />
+            <span className="sidebar-label">Panduan & pintasan</span>
+          </button>
           <div className="mb-3 h-px bg-border-soft" />
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -446,9 +432,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span className="entity-icon mb-3">
               <Keyboard className="size-5" />
             </span>
-            <DialogTitle>Ruang kerja, lebih mudah.</DialogTitle>
+            <DialogTitle>Panduan ruang kerja</DialogTitle>
             <DialogDescription>
-              Navigasi cepat agar Anda bisa fokus pada kualitas.
+              Pintasan keyboard dan alur pengendalian mutu.
             </DialogDescription>
           </DialogHeader>
           <div className="my-5 space-y-3">

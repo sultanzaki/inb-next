@@ -43,3 +43,14 @@ test('password verification handles scrypt, malformed hashes and legacy migratio
  assert.equal(await verifyPassword('INBIONUSA', legacy('INBIONUSA')), false);
  assert.equal(await verifyPassword('INBIONUSA', await hashPassword('INBIONUSA')), false);
 });
+
+
+test('pass-rate display reserves 100 percent for complete compliance', async () => {
+  const { formatPassRate } = await import('../src/lib/format');
+  assert.equal(formatPassRate(0, 0), '—');
+  assert.equal(formatPassRate(0, 10), '0');
+  assert.equal(formatPassRate(10, 10), '100');
+  assert.equal(formatPassRate(12, 13), '92,31');
+  assert.equal(formatPassRate(2020, 2021), '99,95');
+  assert.equal(formatPassRate(99999, 100000), '<100');
+});

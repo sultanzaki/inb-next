@@ -405,7 +405,7 @@ export default function ProdukPage() {
       <PageHeader
         eyebrow="Master data"
         title="Master Produk"
-        description="Standar yang konsisten dimulai dari produk yang tertata. Kelola katalog dan spesifikasi pengujian Anda."
+        description="Katalog produk dan spesifikasi pengujian."
       >
         <DomainDialog
           dirtyValue={{ form, spesifikasi }}
