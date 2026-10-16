@@ -2,7 +2,7 @@
 import Image from "next/image";
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { Eye, EyeOff, ArrowRight, LockKeyhole, UserRound } from "lucide-react";
+import { Eye, EyeOff, ArrowRight } from "lucide-react";
 import { loginAction, type LoginState } from "./actions";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
@@ -38,19 +38,10 @@ export function LoginForm() {
           INBIONUSA
         </span>
       </div>
-      <span className="mb-5 grid size-11 place-items-center rounded-xl border border-primary-line bg-primary-soft text-primary">
-        <LockKeyhole className="size-5" />
-      </span>
-      <p className="mb-2 text-xs font-medium text-primary">
-        Selamat datang kembali
-      </p>
-      <h1>
-        Ruang kerja mutu Anda,
-        <br />
-        siap dilanjutkan.
-      </h1>
+      <p className="mb-3 text-xs font-medium text-muted">Akun INBIONUSA</p>
+      <h1>Masuk.</h1>
       <p className="mt-4 text-[13px] leading-relaxed text-muted">
-        Masuk dengan akun Anda untuk mengelola kualitas dari satu tempat.
+        Lanjutkan ke ruang kerja pengendalian mutu.
       </p>
       <form action={action} className="mt-9 space-y-5">
         <div className="space-y-2">
@@ -58,7 +49,6 @@ export function LoginForm() {
             Username
           </label>
           <div className="relative">
-            <UserRound className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
             <Input
               id="username"
               name="username"
@@ -66,7 +56,7 @@ export function LoginForm() {
               required
               maxLength={100}
               placeholder="Masukkan username"
-              className="h-12 pl-11"
+              className="h-12 px-3.5"
             />
           </div>
         </div>
@@ -75,7 +65,6 @@ export function LoginForm() {
             Password
           </label>
           <div className="relative">
-            <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
             <Input
               id="password"
               name="password"
@@ -84,7 +73,7 @@ export function LoginForm() {
               required
               maxLength={1024}
               placeholder="Masukkan password"
-              className="h-12 pl-11 pr-12"
+              className="h-12 pl-3.5 pr-12"
             />
             <button
               type="button"
@@ -111,9 +100,7 @@ export function LoginForm() {
         </div>
       </form>
       <p className="login-footer">
-        Akses diberikan sesuai peran pengguna.
-        <br />
-        Butuh bantuan akun? Hubungi administrator internal Anda.
+        Butuh akses? Hubungi administrator internal Anda.
       </p>
     </div>
   );

@@ -651,7 +651,7 @@ export default function COAPage() {
       <PageHeader
         eyebrow="Sertifikasi"
         title="Certificate of Analysis"
-        description="Dari hasil yang terverifikasi menjadi sertifikat yang siap dibagikan."
+        description="Penerbitan dan riwayat Certificate of Analysis."
       >
         <DomainDialog
           dirtyValue={form}

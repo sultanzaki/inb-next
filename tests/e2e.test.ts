@@ -180,9 +180,11 @@ test(
       const runtimeErrors: string[] = [];
       page.on("pageerror", (e) => runtimeErrors.push(e.message));
       const artifacts =
-        process.env.TEST_ARTIFACT_DIR ?? "/workspace/redesign-review";
+        process.env.TEST_ARTIFACT_DIR ?? "/workspace/redesign-apple-review";
       mkdirSync(artifacts, { recursive: true });
       async function capture(name: string) {
+        if (name === "03-produk-desktop")
+          await page.evaluate(() => window.scrollTo(0, 0));
         await page.screenshot({
           path: `${artifacts}/${name}.png`,
           fullPage: name.includes("dashboard") || name.includes("login"),
@@ -232,7 +234,7 @@ test(
       await page.locator("[name=password]").fill(password);
       await page.getByRole("button", { name: "Masuk", exact: true }).click();
       await page.waitForURL("**/dashboard");
-      await page.locator(".quality-ring").waitFor();
+      await page.locator(".quality-summary").waitFor();
       await capture("02-dashboard-desktop");
       await accessible();
       await page.getByRole("button", { name: "Ringkas sidebar" }).click();
@@ -462,7 +464,12 @@ test(
       await printPage.close();
       await page.goto(origin + "/dashboard/arsip");
       await page.locator(".data-toolbar").waitFor();
-        await page.waitForFunction(() => !document.querySelector<HTMLButtonElement>('button[aria-label="Muat ulang data"]')?.disabled);
+      await page.waitForFunction(
+        () =>
+          !document.querySelector<HTMLButtonElement>(
+            'button[aria-label="Muat ulang data"]',
+          )?.disabled,
+      );
       await page
         .getByRole("button", { name: "Tambah Dokumen", exact: true })
         .first()
@@ -491,14 +498,23 @@ test(
       for (const width of [768, 375, 320]) {
         await page.setViewportSize({ width, height: 900 });
         await page.goto(origin + "/dashboard");
-        await page.locator(".quality-ring").waitFor();
+        await page.locator(".quality-summary").waitFor();
+        await capture(`09-dashboard-${width}`);
         assert.ok(
           await page.evaluate(
             () => document.documentElement.scrollWidth <= innerWidth,
           ),
-          `no dashboard overflow at ${width}`,
+          `no dashboard overflow at ${width}: ` +
+            (await page.evaluate(() =>
+              [...document.querySelectorAll("*")]
+                .filter(
+                  (el) => el.getBoundingClientRect().right > innerWidth + 1,
+                )
+                .slice(0, 8)
+                .map((el) => el.tagName + "." + el.className)
+                .join(", "),
+            )),
         );
-        await capture(`09-dashboard-${width}`);
         await accessible();
         await page.getByRole("button", { name: "Buka menu navigasi" }).click();
         await page
@@ -507,7 +523,12 @@ test(
           .click();
         await page.waitForURL("**/dashboard/produk");
         await page.locator(".data-toolbar").waitFor();
-        await page.waitForFunction(() => !document.querySelector<HTMLButtonElement>('button[aria-label="Muat ulang data"]')?.disabled);
+        await page.waitForFunction(
+          () =>
+            !document.querySelector<HTMLButtonElement>(
+              'button[aria-label="Muat ulang data"]',
+            )?.disabled,
+        );
         assert.ok(
           await page.evaluate(
             () => document.documentElement.scrollWidth <= innerWidth,
@@ -537,7 +558,12 @@ test(
       ]) {
         await page.goto(origin + "/dashboard/" + route);
         await page.locator(".data-toolbar").waitFor();
-        await page.waitForFunction(() => !document.querySelector<HTMLButtonElement>('button[aria-label="Muat ulang data"]')?.disabled);
+        await page.waitForFunction(
+          () =>
+            !document.querySelector<HTMLButtonElement>(
+              'button[aria-label="Muat ulang data"]',
+            )?.disabled,
+        );
         assert.ok(
           await page.evaluate(
             () => document.documentElement.scrollWidth <= innerWidth,

@@ -1,6 +1,6 @@
 # Enterprise workspace redesign
 
-Arah desain: modern enterprise, desktop/laptop sebagai prioritas, dengan seluruh fungsi tetap tersedia pada layar kecil.
+Arah desain diperbarui berdasarkan referensi Apple: kanvas terang, hierarki tipografi yang tegas, ruang kosong yang terukur, dan sedikit kontainer dekoratif. Desktop/laptop menjadi prioritas; seluruh fungsi tetap tersedia pada layar kecil.
 
 ## Cakupan
 
@@ -41,6 +41,11 @@ Database dan PostgREST untuk pengujian berjalan dalam container lokal yang terpi
 
 Browser E2E memakai build produksi dan Chromium. Cakupannya mencakup paginasi 120 baris, pembuatan produk dan parameter, inspeksi dengan desimal koma, penerbitan COA dengan sumber melewati 500 baris, ketahanan snapshot, pembuatan dokumen, penanganan kegagalan, logout, validasi form, konfirmasi discard, keyboard, sidebar, viewer, cetak, serta lebar 1440/768/375/320 piksel. Axe memeriksa aturan WCAG A/AA pada halaman dan keadaan yang dikunjungi; ini bukan sertifikasi aksesibilitas atau pengujian perangkat Safari/iOS fisik.
 
-Screenshot review disimpan oleh E2E di `/workspace/redesign-review` (atau direktori `TEST_ARTIFACT_DIR` bila diatur). Isinya fixture pengujian lokal, bukan data produksi. Pengujian tidak melakukan deployment atau menerapkan migrasi Supabase produksi. Kebutuhan migrasi dari perbaikan sebelumnya tetap mengikuti `DEPLOYMENT.md`.
+Screenshot review disimpan oleh E2E di `/workspace/redesign-apple-review` (atau direktori `TEST_ARTIFACT_DIR` bila diatur). Isinya fixture pengujian lokal, bukan data produksi. Pengujian tidak melakukan deployment atau menerapkan migrasi Supabase produksi. Kebutuhan migrasi dari perbaikan sebelumnya tetap mengikuti `DEPLOYMENT.md`.
 
-Hasil verifikasi 16 Oktober 2026: build produksi, TypeScript, dan ESLint lolos; 7 pengujian domain/brand, 22 database, 3 HTTP, dan 1 rangkaian E2E browser lolos. Pemeriksaan Axe tidak menemukan pelanggaran pada keadaan yang diuji. Palet literal dan hash logo sesuai baseline sebelum redesign.
+Hasil verifikasi 16 Oktober 2026: build produksi, TypeScript, dan ESLint lolos; 8 pengujian domain/brand, 22 database, 3 HTTP, dan 1 rangkaian E2E browser lolos. Pemeriksaan Axe tidak menemukan pelanggaran pada keadaan yang diuji. Palet literal dan hash logo sesuai baseline sebelum redesign.
+
+
+## Revisi visual berdasarkan feedback
+
+Dashboard menampilkan satu ringkasan kelulusan dengan bar horizontal dan metrik pendukung berbentuk baris. Kartu statistik berulang, grafik cincin, kotak ikon pastel, serta kartu promosi dihapus. Tabel dan ringkasan dokumen dipisahkan oleh garis sederhana. Sidebar lebih ringkas, filter memakai garis penanda aktif, dan copy halaman menjelaskan fungsi secara langsung. Login memakai komposisi tipografi besar pada panel netral. Logo, palet, otorisasi, validasi, dan interaksi yang sudah diuji tetap dipertahankan.

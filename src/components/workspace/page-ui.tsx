@@ -27,7 +27,6 @@ export function PageHeader({
     <div className="page-header">
       <div>
         <p className="page-eyebrow">
-          <span className="size-1.5 rounded-full bg-primary" />
           {eyebrow}
         </p>
         <h1 className="page-title">{title}</h1>

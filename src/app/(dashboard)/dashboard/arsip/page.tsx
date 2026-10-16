@@ -342,7 +342,7 @@ export default function DokumenPage() {
       <PageHeader
         eyebrow="Dokumen mutu"
         title="Arsip Dokumen"
-        description="Dokumen penting, tersimpan rapi. Pantau masa berlaku tanpa kehilangan konteks."
+        description="Dokumen pendukung dan masa berlakunya."
       >
         <DomainDialog
           dirtyValue={form}

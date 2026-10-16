@@ -12,3 +12,12 @@ export function escapeHtml(s: string): string {
   };
   return String(s ?? "").replace(/[&<>"']/g, (ch) => map[ch]);
 }
+
+// Keep a rounded display from claiming complete compliance when a lot failed.
+export function formatPassRate(passed: number, total: number): string {
+  if (total <= 0) return "—";
+  const value = new Intl.NumberFormat("id-ID", {
+    maximumFractionDigits: 2,
+  }).format((passed / total) * 100);
+  return passed < total && value === "100" ? "<100" : value;
+}
