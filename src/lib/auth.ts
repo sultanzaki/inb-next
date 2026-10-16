@@ -1,64 +1,9 @@
 import { createAdminClient } from './supabase/admin';
 import { cookies } from 'next/headers';
 import { User } from '@/lib/types';
-import {
-  createHash,
-  randomBytes,
-  scrypt as nodeScrypt,
-  timingSafeEqual,
-} from 'node:crypto';
-import { promisify } from 'node:util';
-
-const LEGACY_PREFIX = 'INBIO::';
-const SESSION_TTL = 60 * 60 * 6; // 6 jam
-const SCRYPT_SALT_BYTES = 16;
-const SCRYPT_KEY_BYTES = 64;
-
-const scrypt = promisify(nodeScrypt) as (
-  password: string,
-  salt: Buffer,
-  keylen: number,
-) => Promise<Buffer>;
-
-/**
- * Hash password baru: scrypt (parameter default Node) dengan salt acak 16 byte
- * dan key 64 byte. Format tersimpan: `scrypt$<saltHex>$<hashHex>`.
- * Password TIDAK di-trim: karakter apa pun yang diketik pengguna ikut di-hash.
- */
-export async function hashPassword(password: string): Promise<string> {
-  const salt = randomBytes(SCRYPT_SALT_BYTES);
-  const derived = await scrypt(password, salt, SCRYPT_KEY_BYTES);
-  return `scrypt$${salt.toString('hex')}$${derived.toString('hex')}`;
-}
-
-/**
- * Verifikasi password terhadap hash tersimpan.
- * - Format scrypt: bandingkan pakai timingSafeEqual (konstanta waktu).
- * - Legacy (sha256 'INBIO::' + password): dicoba apa adanya, lalu varian
- *   trimmed (baris lama pernah dibuat dari input yang di-trim).
- */
-export async function verifyPassword(
-  password: string,
-  stored: string,
-): Promise<boolean> {
-  if (stored.startsWith('scrypt$')) {
-    const [, saltHex, hashHex] = stored.split('$');
-    if (!saltHex || !hashHex) return false;
-
-    const salt = Buffer.from(saltHex, 'hex');
-    const expected = Buffer.from(hashHex, 'hex');
-    if (expected.length === 0) return false;
-
-    const derived = await scrypt(password, salt, expected.length);
-    if (derived.length !== expected.length) return false;
-    return timingSafeEqual(derived, expected);
-  }
-
-  const legacyHash = (pw: string) =>
-    createHash('sha256').update(LEGACY_PREFIX + pw).digest('hex');
-
-  return legacyHash(password) === stored || legacyHash(password.trim()) === stored;
-}
+import { hashPassword } from './password';
+export { hashPassword, verifyPassword } from './password';
+const SESSION_TTL = 60 * 60 * 6;
 
 /**
  * Upgrade transparan: setelah verifikasi legacy berhasil, simpan ulang hash
@@ -99,7 +44,7 @@ export async function createSession(userId: string): Promise<string> {
 export async function getSessionUser(): Promise<User | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get('session_token')?.value;
-  if (!token) return null;
+  if (!token || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token)) return null;
 
   const admin = createAdminClient();
 
@@ -131,7 +76,8 @@ export async function clearSession(): Promise<void> {
   const token = cookieStore.get('session_token')?.value;
   if (token) {
     const admin = createAdminClient();
-    await admin.from('sessions').delete().eq('token', token);
+    const { error } = await admin.from('sessions').delete().eq('token', token);
+    if (error) throw new Error('Gagal mencabut sesi. Coba keluar lagi.');
   }
   cookieStore.delete('session_token');
 }
@@ -165,7 +111,8 @@ export async function requireUser(): Promise<{ user: User } | null> {
 export async function purgeExpiredSessions(): Promise<void> {
   try {
     const admin = createAdminClient();
-    await admin.from('sessions').delete().lt('expires_at', 'now');
+    const { error } = await admin.from('sessions').delete().lt('expires_at', 'now');
+    if (error) console.error('[sessions] cleanup gagal', { code: error.code });
   } catch {
     // housekeeping saja — jangan ganggu alur utama
   }
@@ -174,12 +121,14 @@ export async function purgeExpiredSessions(): Promise<void> {
 export async function logAudit(userName: string, aksi: string, referensi: string = ''): Promise<void> {
   try {
     const admin = createAdminClient();
-    await admin.from('audit_log').insert({
+    const { error } = await admin.from('audit_log').insert({
       user_name: userName,
       aksi,
       referensi,
     });
+    if (error) console.error('[audit] gagal dicatat', { code: error.code });
   } catch {
-    // jangan gagalkan aksi utama
+    console.error('[audit] database tidak dapat dihubungi');
+    // Business mutations have transactional SQL audit; login audit is best effort.
   }
 }

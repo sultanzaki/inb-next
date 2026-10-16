@@ -41,7 +41,7 @@ import { escapeOrTerm } from "@/lib/filter-utils";
 const sb = createClient();
 
 // Monotonic counter used to ignore stale list-fetch responses.
-let requestSeq = 0;
+
 
 const kategoriList = [
   "Bahan Baku",
@@ -91,6 +91,9 @@ const selectClass =
   "h-9 w-full rounded-md border border-input bg-surface px-2.5 text-sm transition-colors duration-150 outline-none";
 
 export default function ProdukPage() {
+  const requestSeq = useRef(0);
+  const editSeq = useRef(0);
+  const appending = useRef(false);
   const { user } = useUser();
 
   const [searchInput, setSearchInput] = useState("");
@@ -119,13 +122,15 @@ export default function ProdukPage() {
   // mutation); append=true fetches the page starting at `start` and appends.
   const runQuery = useCallback(
     async (start: number, append: boolean) => {
-      const seq = ++requestSeq;
+      if (append && appending.current) return;
+      appending.current = append;
+      const seq = ++requestSeq.current;
       if (append) setLoadingMore(true);
       else setLoading(true);
       let q = sb
         .from("master_produk")
         .select("*", { count: "exact" })
-        .order("nama_produk")
+        .order("nama_produk").order("id")
         .range(start, start + pageSize - 1);
       if (search) {
         // Quoted values (via escapeOrTerm): commas/parens stay literal and the
@@ -136,7 +141,7 @@ export default function ProdukPage() {
         );
       }
       const { data, count, error } = await q;
-      if (seq !== requestSeq) {
+      if (seq !== requestSeq.current) {
         // Superseded by a newer request: release the loading flag this
         // request owned (the newer one manages its own).
         if (append) setLoadingMore(false);
@@ -156,10 +161,11 @@ export default function ProdukPage() {
         setLoadError(false);
         setProdukList((prev) => (append ? [...prev, ...rows] : rows));
         setTotalCount(count ?? 0);
-        if (append) setOffset(start + rows.length);
+        setOffset(start + rows.length);
       }
-      if (append) setLoadingMore(false);
-      else setLoading(false);
+      appending.current = false;
+      setLoadingMore(false);
+      setLoading(false);
     },
     [search, pageSize]
   );
@@ -177,7 +183,9 @@ export default function ProdukPage() {
   }, [runQuery, offset]);
 
   useEffect(() => {
-    fetchData();
+    const sequence = requestSeq;
+    const timer = setTimeout(() => { void fetchData(); }, 0);
+    return () => { clearTimeout(timer); sequence.current++; appending.current = false; };
   }, [fetchData]);
 
   // Clear the pending debounce timer on unmount.
@@ -194,12 +202,14 @@ export default function ProdukPage() {
   }
 
   function resetForm() {
+    editSeq.current++;
     setForm(emptyForm);
     setSpesifikasi([]);
     setEditingId(null);
   }
 
   async function openEdit(produk: MasterProduk) {
+    const seq = ++editSeq.current;
     // Load spesifikasi first: if it fails, don't open the edit dialog at all
     // (saving from a dialog with an empty spec list would wipe real rows).
     const { data: sp, error: spErr } = await sb
@@ -207,6 +217,7 @@ export default function ProdukPage() {
       .select("*")
       .eq("id_produk", produk.id)
       .order("urutan");
+    if (seq !== editSeq.current) return;
     if (spErr) {
       toast.error("Gagal memuat data. Coba lagi.");
       return;

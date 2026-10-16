@@ -33,6 +33,7 @@ export interface SpesifikasiItem {
 }
 
 export interface HasilUjiItem {
+  spec_id?: string;
   p: string;
   t: 'RANGE' | 'MIN' | 'MAX' | 'TEXT';
   mn: string;
@@ -86,6 +87,7 @@ export interface COA {
   tanggal_expired: string;
   hasil_uji_snapshot: {
     produk: string;
+    kode_produk?: string;
     ts: string;
     tu: string;
     items: HasilUjiItem[];
@@ -145,7 +147,7 @@ export const ROLE_ALLOW: Record<string, UserRole[]> = {
 
 export function canAction(role: UserRole, action: string): boolean {
   const allowed = ROLE_ALLOW[action];
-  if (!allowed) return true; // not restricted
+  if (!allowed) return false; // Unknown actions fail closed.
   return allowed.includes(role);
 }
 

@@ -4,12 +4,13 @@ import type { NextRequest } from 'next/server';
 // session_token dibuat via crypto.randomUUID() -> UUID 36 karakter.
 const SESSION_TOKEN_RE = /^[0-9a-f-]{36}$/i;
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Halaman login & aset statis dilewati.
   if (
     pathname === '/login' ||
+    pathname.startsWith('/api/data/') ||
     pathname.startsWith('/_next') ||
     pathname === '/favicon.ico'
   ) {

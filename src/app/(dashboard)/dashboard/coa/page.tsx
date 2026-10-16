@@ -1,16 +1,16 @@
 "use client";
+import { businessDate } from "@/lib/domain/validation";
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
-import type { CoaRow, COA, HasilUjiItem, HasilUjiRow, UserRole } from "@/lib/types";
+import type { CoaRow, HasilUjiItem, HasilUjiRow, UserRole } from "@/lib/types";
 import { toast } from "sonner";
 import {
   issueCoaAction,
   updateCoaAction,
   deleteCoaAction,
-  getNextNoCOAAction,
 } from "@/lib/actions/coa-actions";
 import { Search, Plus, Pencil, Trash2, Printer, Eye, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -48,7 +48,7 @@ interface COAForm {
 const emptyForm: COAForm = {
   id_hasil: "",
   no_coa: "",
-  tanggal_rilis: new Date().toISOString().split("T")[0],
+  tanggal_rilis: "",
   tanggal_expired: "",
   mfg_date: "",
   tanda_tangan: "Terverifikasi Digital",
@@ -58,7 +58,7 @@ const emptyForm: COAForm = {
 const sb = createClient();
 
 // Monotonic counter used to ignore stale list-fetch responses.
-let requestSeq = 0;
+
 
 // Escape a raw search term for a PostgREST .or() ilike filter. The PostgREST
 // v12 quoted-value parser strips ONE backslash from EVERY "\X" pair
@@ -106,6 +106,8 @@ function coaStatusBadge(tanggalExpired: string) {
 }
 
 export default function COAPage() {
+  const requestSeq = useRef(0);
+  const appending = useRef(false);
   const { user } = useUser();
 
   const [searchInput, setSearchInput] = useState("");
@@ -136,7 +138,9 @@ export default function COAPage() {
   // mutation); append=true fetches the page starting at `start` and appends.
   const runQuery = useCallback(
     async (start: number, append: boolean) => {
-      const seq = ++requestSeq;
+      if (append && appending.current) return;
+      appending.current = append;
+      const seq = ++requestSeq.current;
       if (append) setLoadingMore(true);
       else setLoading(true);
       let q = sb
@@ -144,18 +148,18 @@ export default function COAPage() {
         .select("*, master_produk!inner(kode_produk, nama_produk)", {
           count: "exact",
         })
-        .order("created_at", { ascending: false })
+        .order("created_at", { ascending: false }).order("id")
         .range(start, start + pageSize - 1);
       if (search) {
         // Quoted values (via escapeOr): commas/parens stay literal and the
         // escaped %/_ reach Postgres LIKE as literals, not wildcards.
         const term = escapeOr(search);
         q = q.or(
-          `no_coa.ilike."%${term}%",master_produk.nama_produk.ilike."%${term}%"`
+          `no_coa.ilike."%${term}%",product_name.ilike."%${term}%"`
         );
       }
       const { data: raw, count, error } = await q;
-      if (seq !== requestSeq) {
+      if (seq !== requestSeq.current) {
         // Superseded by a newer request: release the loading flag this
         // request owned (the newer one manages its own).
         if (append) setLoadingMore(false);
@@ -175,10 +179,11 @@ export default function COAPage() {
         setLoadError(false);
         setCoaList((prev) => (append ? [...prev, ...rows] : rows));
         setTotalCount(count ?? 0);
-        if (append) setOffset(start + rows.length);
+        setOffset(start + rows.length);
       }
-      if (append) setLoadingMore(false);
-      else setLoading(false);
+      appending.current = false;
+      setLoadingMore(false);
+      setLoading(false);
     },
     [search, pageSize]
   );
@@ -195,46 +200,35 @@ export default function COAPage() {
     return runQuery(offset, true);
   }, [runQuery, offset]);
 
+  const [availableError, setAvailableError] = useState(false);
+  const [availableLoading, setAvailableLoading] = useState(true);
+  const availableSeq = useRef(0);
   const fetchAvailableHasil = useCallback(async () => {
-    // Get PASS hasil_uji rows that don't have a COA yet. Both queries select
-    // only the columns the diff/option list actually needs (id_produk, no_lot
-    // for the dedupe keys; id, hasil_detail + the joined product name for the
-    // picker/preview) and are capped at .limit(500). That cap is safe because
-    // COA issuance is manual and low-volume: the set of ever-issued COAs — and
-    // the PASS rows a new COA can be issued from — stays far below 500 in
-    // practice; the limit only guarantees these queries can never degrade
-    // into unbounded full-table fetches.
-    const { data: coaIds } = await sb
-      .from("coa")
-      .select("id_produk, no_lot")
-      .limit(500);
-    const coaKeys = (coaIds ?? []) as Pick<COA, "id_produk" | "no_lot">[];
-    const existing = new Set(
-      coaKeys.map((c) => `${c.id_produk}::${c.no_lot}`)
-    );
-
-    const { data: hasil } = await sb
-      .from("hasil_uji")
-      .select(
-        "id, no_lot, id_produk, hasil_detail, master_produk!inner(kode_produk, nama_produk)"
-      )
-      .eq("status", "PASS")
-      .order("created_at", { ascending: false })
-      .limit(500);
-
-    // Untyped client: PostgREST returns the !inner embed as a single object,
-    // but supabase-js's default (schema-less) select parsing assumes an
-    // array, hence the double cast.
-    const hasilRows = (hasil ?? []) as unknown as HasilUjiRow[];
-    const filtered = hasilRows.filter(
-      (h) => !existing.has(`${h.id_produk}::${h.no_lot}`)
-    );
-    setAvailableHasil(filtered);
+    const seq = ++availableSeq.current;
+    setAvailableLoading(true);
+    setAvailableError(false);
+    const rows: HasilUjiRow[] = [];
+    for (let start = 0; ; start += 500) {
+      const { data, error } = await sb.from("available_hasil_uji")
+        .select("id, no_lot, id_produk, hasil_detail, master_produk!inner(kode_produk, nama_produk)")
+        .order("created_at", { ascending: false }).order("id").range(start, start + 499);
+      if (seq !== availableSeq.current) return;
+      if (error) {
+        setAvailableError(true); setAvailableHasil([]); setAvailableLoading(false);
+        return;
+      }
+      const batch = (data ?? []) as unknown as HasilUjiRow[];
+      rows.push(...batch);
+      if (batch.length < 500) break;
+    }
+    setAvailableHasil(rows); setAvailableLoading(false);
   }, []);
 
   useEffect(() => {
-    fetchData();
-    fetchAvailableHasil();
+    const sequence = requestSeq;
+    const sources = availableSeq;
+    const timer = setTimeout(() => { void fetchData(); void fetchAvailableHasil(); }, 0);
+    return () => { clearTimeout(timer); sequence.current++; sources.current++; appending.current = false; };
   }, [fetchData, fetchAvailableHasil]);
 
   // Clear the pending debounce timer on unmount.
@@ -251,7 +245,7 @@ export default function COAPage() {
   }
 
   function resetForm() {
-    setForm(emptyForm);
+    setForm({ ...emptyForm, tanggal_rilis: businessDate() });
     setEditingId(null);
   }
 
@@ -511,11 +505,11 @@ export default function COAPage() {
     <div class="meta-col">
       <div class="m-row">
         <div class="micro">Nama Produk</div>
-        <div class="m-val">${escapeHtml(coa.master_produk?.nama_produk || "-")}</div>
+        <div class="m-val">${escapeHtml(snapshot.produk || "-")}</div>
       </div>
       <div class="m-row">
         <div class="micro">Kode Produk</div>
-        <div class="m-val num">${escapeHtml(coa.master_produk?.kode_produk || "-")}</div>
+        <div class="m-val num">${escapeHtml(snapshot.kode_produk || "-")}</div>
       </div>
       <div class="m-row">
         <div class="micro">MFG Date</div>
@@ -557,7 +551,7 @@ export default function COAPage() {
     </thead>
     <tbody>
       ${items.map((item) => {
-        const specText = item.t === "TEXT" ? "Teks" : item.t === "MIN" ? "> " + item.mn : item.t === "MAX" ? "< " + item.mx : (item.mn || "-") + " — " + (item.mx || "-");
+        const specText = item.t === "TEXT" ? "Teks" : item.t === "MIN" ? "≥ " + item.mn : item.t === "MAX" ? "≤ " + item.mx : (item.mn || "-") + " — " + (item.mx || "-");
         return `<tr><td>${escapeHtml(item.p)}</td><td>${escapeHtml(specText)}</td><td class="num">${escapeHtml(item.val || "-")}${item.u ? '<span class="unit">' + escapeHtml(item.u) + "</span>" : ""}</td><td>${item.st === "PASS" ? '<span class="chip chip-pass">PASS</span>' : '<span class="chip chip-fail">FAIL</span>'}</td></tr>`;
       }).join("")}
     </tbody>
@@ -613,6 +607,7 @@ export default function COAPage() {
         <Dialog
           open={dialogOpen}
           onOpenChange={(v) => {
+            if (v && !editingId) resetForm();
             setDialogOpen(v);
             if (!v) resetForm();
           }}
@@ -640,35 +635,10 @@ export default function COAPage() {
                     <select
                       className={selectClass}
                       value={form.id_hasil}
-                      disabled={!canWrite}
+                      disabled={!canWrite || availableLoading || availableError}
                       onChange={(e) => {
                         const val = e.target.value;
-                        // One functional update; the async prefill below is
-                        // guarded so a stale resolution never overwrites a
-                        // newer selection or a manually typed number.
                         setForm((prev) => ({ ...prev, id_hasil: val }));
-                        // Prefill from the server-side max, not the
-                        // (search-filtered) client list length.
-                        if (val && !form.no_coa) {
-                          getNextNoCOAAction()
-                            .then((no: string) => {
-                              setForm((prev) =>
-                                prev.id_hasil === val && !prev.no_coa
-                                  ? { ...prev, no_coa: no }
-                                  : prev
-                              );
-                            })
-                            .catch((err: unknown) => {
-                              // Prefill is best-effort: leaving the field
-                              // empty is fine (save regenerates the number
-                              // from the server-side max). Warn only — no
-                              // toast-spam on a background prefill.
-                              console.warn(
-                                "Prefill No COA gagal:",
-                                err instanceof Error ? err.message : err
-                              );
-                            });
-                        }
                       }}
                     >
                       <option value="">Pilih hasil uji…</option>
@@ -679,7 +649,9 @@ export default function COAPage() {
                         </option>
                       ))}
                     </select>
-                    {availableHasil.length === 0 && (
+                    {availableError && (<p role="alert">Gagal memuat hasil uji. <button type="button" onClick={() => void fetchAvailableHasil()}>Coba Lagi</button></p>)}
+                    {availableLoading && <p>Memuat hasil uji…</p>}
+                    {!availableError && !availableLoading && availableHasil.length === 0 && (
                       <p className="text-[13px] text-muted">
                         Tidak ada hasil uji PASS yang tersedia.
                       </p>
@@ -779,7 +751,7 @@ export default function COAPage() {
             <DialogFooter className="m-0 flex-row items-center justify-between gap-2 rounded-b-lg px-6 py-4 sm:justify-between">
               <DialogClose render={<Button variant="outline">Batal</Button>} />
               {canWrite && (
-                <Button onClick={handleSave} disabled={saving}>
+                <Button onClick={handleSave} disabled={saving || (!editingId && (availableLoading || availableError))}>
                   {saving
                     ? "Menyimpan…"
                     : editingId
@@ -855,7 +827,7 @@ export default function COAPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setDialogOpen(true)}
+                        onClick={() => { resetForm(); setDialogOpen(true); }}
                       >
                         <Plus className="size-3.5" /> Terbitkan COA
                       </Button>
@@ -871,10 +843,10 @@ export default function COAPage() {
                 </TableCell>
                 <TableCell>
                   <div className="font-medium">
-                    {coa.master_produk?.nama_produk || "-"}
+                    {coa.hasil_uji_snapshot?.produk || "-"}
                   </div>
                   <div className="font-data text-xs text-muted">
-                    {coa.master_produk?.kode_produk || "-"}
+                    {coa.hasil_uji_snapshot?.kode_produk || "-"}
                   </div>
                 </TableCell>
                 <TableCell className="font-data text-muted">
@@ -972,7 +944,7 @@ export default function COAPage() {
                   <div>
                     <p className="micro-label">Produk</p>
                     <p className="mt-0.5 text-sm font-medium">
-                      {detailItem.master_produk?.nama_produk || "-"}
+                      {detailItem.hasil_uji_snapshot?.produk || "-"}
                     </p>
                   </div>
                   <div>

@@ -1,4 +1,5 @@
 "use client";
+import { businessDate, evaluateParam } from "@/lib/domain/validation";
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -40,15 +41,15 @@ import { Badge } from "@/components/ui/badge";
 const sb = createClient();
 
 // Monotonic counter used to ignore stale list-fetch responses.
-let requestSeq = 0;
+
 
 // Monotonic counter used to ignore stale spesifikasi fetches (openEdit race,
 // rapid product switches).
-let specSeq = 0;
+
 
 // Monotonic counter used to ignore stale openEdit resolutions (clicking
 // Edit(A) then Edit(B), or opening the new-form dialog, while A is in flight).
-let editSeq = 0;
+
 
 // Escape a raw search term for a PostgREST .or() ilike filter. The PostgREST
 // v12 quoted-value parser strips ONE backslash from EVERY "\X" pair
@@ -76,18 +77,6 @@ function StatusBadge({ status }: { status: string }) {
   return <Badge variant="destructive">{status}</Badge>;
 }
 
-function evaluateParam(sp: SpesifikasiItem, val: string): "PASS" | "FAIL" {
-  if (!val) return "FAIL";
-  if (sp.tipe_batas === "TEXT") return "PASS";
-  const num = parseFloat(val);
-  if (isNaN(num)) return "FAIL";
-  const min = sp.nilai_min ? parseFloat(sp.nilai_min) : -Infinity;
-  const max = sp.nilai_maks ? parseFloat(sp.nilai_maks) : Infinity;
-  if (sp.tipe_batas === "MIN" && num >= min) return "PASS";
-  if (sp.tipe_batas === "MAX" && num <= max) return "PASS";
-  if (sp.tipe_batas === "RANGE" && num >= min && num <= max) return "PASS";
-  return "FAIL";
-}
 
 interface UjiForm {
   id_produk: string;
@@ -101,8 +90,8 @@ interface UjiForm {
 const emptyForm: UjiForm = {
   id_produk: "",
   no_lot: "",
-  tgl_sampling: new Date().toISOString().split("T")[0],
-  tgl_uji: new Date().toISOString().split("T")[0],
+  tgl_sampling: "",
+  tgl_uji: "",
   inspector: "",
   catatan: "",
 };
@@ -118,6 +107,12 @@ const textareaClass =
   "min-h-16 w-full rounded-md border border-input bg-surface px-2.5 py-1.5 text-sm transition-colors duration-150 outline-none";
 
 export default function InspeksiPage() {
+  const requestSeq = useRef(0);
+  const specSeq = useRef(0);
+  const editSeq = useRef(0);
+  const [specProductId, setSpecProductId] = useState<string | null>(null);
+  const [specLoading, setSpecLoading] = useState(false);
+  const appending = useRef(false);
   const { user } = useUser();
 
   const [searchInput, setSearchInput] = useState("");
@@ -149,14 +144,15 @@ export default function InspeksiPage() {
   // while the selected product is unchanged; any product switch wipes them,
   // because parameter names collide across products and stale values would
   // be saved under the wrong product's parameters.
-  const valuesProductIdRef = useRef<string | null>(null);
 
   // Bounded query runner shared by the fresh fetch and load-more.
   // append=false swaps the accumulated list (mount, search, retry, after a
   // mutation); append=true fetches the page starting at `start` and appends.
   const runQuery = useCallback(
     async (start: number, append: boolean) => {
-      const seq = ++requestSeq;
+      if (append && appending.current) return;
+      appending.current = append;
+      const seq = ++requestSeq.current;
       if (append) setLoadingMore(true);
       else setLoading(true);
       let q = sb
@@ -164,18 +160,18 @@ export default function InspeksiPage() {
         .select("*, master_produk!inner(kode_produk, nama_produk)", {
           count: "exact",
         })
-        .order("created_at", { ascending: false })
+        .order("created_at", { ascending: false }).order("id")
         .range(start, start + pageSize - 1);
       if (search) {
         // Quoted values (via escapeOr): commas/parens stay literal and the
         // escaped %/_ reach Postgres LIKE as literals, not wildcards.
         const term = escapeOr(search);
         q = q.or(
-          `no_lot.ilike."%${term}%",master_produk.nama_produk.ilike."%${term}%"`
+          `no_lot.ilike."%${term}%",product_name.ilike."%${term}%"`
         );
       }
       const { data: raw, count, error } = await q;
-      if (seq !== requestSeq) {
+      if (seq !== requestSeq.current) {
         // Superseded by a newer request: release the loading flag this
         // request owned (the newer one manages its own).
         if (append) setLoadingMore(false);
@@ -195,10 +191,11 @@ export default function InspeksiPage() {
         setLoadError(false);
         setData((prev) => (append ? [...prev, ...rows] : rows));
         setTotalCount(count ?? 0);
-        if (append) setOffset(start + rows.length);
+        setOffset(start + rows.length);
       }
-      if (append) setLoadingMore(false);
-      else setLoading(false);
+      appending.current = false;
+      setLoadingMore(false);
+      setLoading(false);
     },
     [search, pageSize]
   );
@@ -230,28 +227,32 @@ export default function InspeksiPage() {
 
   // Pure loader: only fills spesifikasi state, never touches hasilValues.
   const fetchSpesifikasi = useCallback(async (id_produk: string) => {
-    const seq = ++specSeq;
+    const seq = ++specSeq.current;
+    setSpecProductId(null); setSpesifikasi([]); setSpecLoading(true);
     if (!id_produk) {
-      setSpesifikasi([]);
-      return;
+      setSpesifikasi([]); setSpecLoading(false);
+      return false;
     }
     const { data, error } = await sb
       .from("spesifikasi")
       .select("*")
       .eq("id_produk", id_produk)
       .order("urutan");
-    if (seq !== specSeq) return; // superseded by a newer fetch
+    if (seq !== specSeq.current) return; // superseded by a newer fetch
     if (error) {
       setSpesifikasi([]);
       toast.error("Gagal memuat data. Coba lagi.");
-      return;
+      setSpecLoading(false); return false;
     }
+    setSpecProductId(id_produk); setSpecLoading(false);
     setSpesifikasi((data as SpesifikasiItem[]) ?? []);
+    return true;
   }, []);
 
   useEffect(() => {
-    fetchData();
-    fetchProduk();
+    const sequence = requestSeq;
+    const timer = setTimeout(() => { void fetchData(); void fetchProduk(); }, 0);
+    return () => { clearTimeout(timer); sequence.current++; appending.current = false; };
   }, [fetchData, fetchProduk]);
 
   // Clear the pending debounce timer on unmount.
@@ -261,16 +262,12 @@ export default function InspeksiPage() {
     };
   }, []);
 
-  useEffect(() => {
-    fetchSpesifikasi(form.id_produk);
-    // Keep hasil values only while they belong to the currently selected
-    // product. On any product change — fresh form or a product switch while
-    // editing — wipe them: parameter names collide across products, so
-    // retaining values would prefill/save them under the wrong parameters.
-    if (form.id_produk !== valuesProductIdRef.current) {
-      setHasilValues({});
-    }
-  }, [form.id_produk, fetchSpesifikasi]);
+  function changeProduct(id: string) {
+    editSeq.current++;
+    setForm(prev => ({ ...prev, id_produk: id }));
+    setHasilValues({});
+    void fetchSpesifikasi(id);
+  }
 
   function onSearchChange(value: string) {
     setSearchInput(value);
@@ -279,16 +276,16 @@ export default function InspeksiPage() {
   }
 
   function resetForm() {
-    setForm(emptyForm);
+    specSeq.current++; editSeq.current++; setSpecProductId(null); setSpecLoading(false);
+    setForm({ ...emptyForm, tgl_sampling: businessDate(), tgl_uji: businessDate() });
     setSpesifikasi([]);
     setHasilValues({});
     setEditingId(null);
   }
 
   async function openEdit(item: HasilUjiRow) {
-    const seq = ++editSeq;
+    const seq = ++editSeq.current;
     setEditingId(item.id);
-    valuesProductIdRef.current = item.id_produk;
     setForm({
       id_produk: item.id_produk,
       no_lot: item.no_lot,
@@ -300,11 +297,12 @@ export default function InspeksiPage() {
 
     // Load spesifikasi first, THEN populate hasil values, so no code path
     // can wipe the values after they are set.
-    await fetchSpesifikasi(item.id_produk);
+    const loaded = await fetchSpesifikasi(item.id_produk);
+    if (!loaded) return;
 
     // A newer Edit click (or a new-form dialog open) superseded this one;
     // applying A's resolved values under B's form would corrupt row B on save.
-    if (seq !== editSeq) return;
+    if (seq !== editSeq.current) return;
 
     const vals: Record<string, string> = {};
     if (item.hasil_detail) {
@@ -339,6 +337,7 @@ export default function InspeksiPage() {
 
   function buildHasilDetail() {
     return spesifikasi.map((sp) => ({
+      spec_id: sp.id,
       p: sp.parameter_uji,
       t: sp.tipe_batas,
       mn: sp.nilai_min ?? "",
@@ -351,6 +350,9 @@ export default function InspeksiPage() {
   }
 
   async function handleSave() {
+    if (specLoading || specProductId !== form.id_produk || spesifikasi.length === 0) {
+      toast.error("Spesifikasi belum siap. Pilih produk dan tunggu pemuatan selesai."); return;
+    }
     if (!form.id_produk || !form.no_lot) {
       toast.error("Produk dan No Lot wajib diisi.");
       return;
@@ -422,7 +424,7 @@ export default function InspeksiPage() {
             Kelola data pengujian dan inspeksi produk.
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(v) => { if (v) editSeq++; setDialogOpen(v); if (!v) resetForm(); }}>
+        <Dialog open={dialogOpen} onOpenChange={(v) => { if (v) { editSeq.current++; if (!editingId) resetForm(); } setDialogOpen(v); if (!v) resetForm(); }}>
           {canCreate && (
             <DialogTrigger render={<Button><Plus className="size-4" /> Input Uji Baru</Button>} />
           )}
@@ -445,7 +447,7 @@ export default function InspeksiPage() {
                     <select
                       className={selectClass}
                       value={form.id_produk}
-                      onChange={(e) => setForm({ ...form, id_produk: e.target.value })}
+                      onChange={(e) => changeProduct(e.target.value)}
                     >
                       <option value="">Pilih produk…</option>
                       {produkList.map((p) => (
@@ -522,7 +524,7 @@ export default function InspeksiPage() {
                               </span>
                               {sp.tipe_batas !== "TEXT" && (
                                 <span className="font-data ml-2 text-[11px] text-muted">
-                                  ({sp.tipe_batas}: {sp.nilai_min}
+                                  ({sp.tipe_batas}: {sp.tipe_batas === "MAX" ? sp.nilai_maks : sp.nilai_min}
                                   {sp.tipe_batas === "RANGE" && ` — ${sp.nilai_maks}`}
                                   {sp.satuan && ` ${sp.satuan}`})
                                 </span>
@@ -533,7 +535,6 @@ export default function InspeksiPage() {
                               placeholder={sp.tipe_batas === "TEXT" ? "Nilai" : "0"}
                               value={val}
                               onChange={(e) => {
-                                valuesProductIdRef.current = form.id_produk;
                                 setHasilValues({
                                   ...hasilValues,
                                   [sp.parameter_uji]: e.target.value,
@@ -572,7 +573,7 @@ export default function InspeksiPage() {
 
             <DialogFooter className="m-0 flex-row items-center justify-between gap-2 rounded-b-lg px-6 py-4 sm:justify-between">
               <DialogClose render={<Button variant="outline">Batal</Button>} />
-              <Button onClick={handleSave} disabled={saving}>
+              <Button onClick={handleSave} disabled={saving || specLoading || specProductId !== form.id_produk || spesifikasi.length === 0}>
                 {saving ? "Menyimpan…" : editingId ? "Simpan" : "Tambah"}
               </Button>
             </DialogFooter>
@@ -643,7 +644,7 @@ export default function InspeksiPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setDialogOpen(true)}
+                        onClick={() => { resetForm(); setDialogOpen(true); }}
                       >
                         <Plus className="size-3.5" /> Input Uji Baru
                       </Button>

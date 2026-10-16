@@ -1,8 +1,9 @@
-import { createBrowserClient } from '@supabase/ssr';
+import { PostgrestClient } from '@supabase/postgrest-js';
 
+/** All browser reads pass through the session-authorized, read-only gateway. */
 export function createClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const origin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin;
+  return new PostgrestClient(`${origin}/api/data`, {
+    fetch: (input, init) => fetch(input, { ...init, credentials: 'same-origin', cache: 'no-store' }),
+  });
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { Eye, EyeOff } from 'lucide-react';
@@ -33,7 +34,7 @@ export function LoginForm() {
 
   return (
     <div className="w-full max-w-sm">
-      <img
+      <Image
         src="/logo.png"
         alt="INBIONUSA"
         width={32}
