@@ -34,7 +34,7 @@ const sb = createClient();
 
 // Monotonic counter used to ignore stale list-fetch responses (fast typing
 // through the debounced search).
-let requestSeq = 0;
+
 
 const kategoriDocList = [
   "Sertifikat Halal",
@@ -88,7 +88,7 @@ interface DocForm {
 const emptyForm: DocForm = {
   judul_dokumen: "",
   kategori: "",
-  tanggal_berlaku: localTodayStr(),
+  tanggal_berlaku: "",
   masa_kadaluarsa: "",
   link_drive: "",
 };
@@ -124,6 +124,8 @@ const selectClass =
   "h-9 w-full rounded-md border border-input bg-surface px-2.5 text-sm transition-colors duration-150 outline-none";
 
 export default function DokumenPage() {
+  const requestSeq = useRef(0);
+  const appending = useRef(false);
   const { user } = useUser();
 
   const [search, setSearch] = useState("");
@@ -149,13 +151,15 @@ export default function DokumenPage() {
   // mutation); append=true fetches the page starting at `start` and appends.
   const runQuery = useCallback(
     async (start: number, append: boolean) => {
-      const seq = ++requestSeq;
+      if (append && appending.current) return;
+      appending.current = append;
+      const seq = ++requestSeq.current;
       if (append) setLoadingMore(true);
       else setLoading(true);
       let q = sb
         .from("dokumen_arsip")
         .select("*", { count: "exact" })
-        .order("created_at", { ascending: false })
+        .order("created_at", { ascending: false }).order("id")
         .range(start, start + pageSize - 1);
       if (search) {
         const term = escapeOr(search);
@@ -164,7 +168,7 @@ export default function DokumenPage() {
         );
       }
       const { data, count, error } = await q;
-      if (seq !== requestSeq) {
+      if (seq !== requestSeq.current) {
         // Superseded by a newer request: release the loading flag this
         // request owned (the newer one manages its own).
         if (append) setLoadingMore(false);
@@ -184,10 +188,11 @@ export default function DokumenPage() {
         setLoadError(false);
         setDokumenList((prev) => (append ? [...prev, ...rows] : rows));
         setTotalCount(count ?? 0);
-        if (append) setOffset(start + rows.length);
+        setOffset(start + rows.length);
       }
-      if (append) setLoadingMore(false);
-      else setLoading(false);
+      appending.current = false;
+      setLoadingMore(false);
+      setLoading(false);
     },
     [search, pageSize]
   );
@@ -205,7 +210,9 @@ export default function DokumenPage() {
   }, [runQuery, offset]);
 
   useEffect(() => {
-    fetchData();
+    const sequence = requestSeq;
+    const timer = setTimeout(() => { void fetchData(); }, 0);
+    return () => { clearTimeout(timer); sequence.current++; appending.current = false; };
   }, [fetchData]);
 
   // Clear the pending debounce timer on unmount.
@@ -222,7 +229,7 @@ export default function DokumenPage() {
   }
 
   function resetForm() {
-    setForm(emptyForm);
+    setForm({ ...emptyForm, tanggal_berlaku: localTodayStr() });
   }
 
   async function handleSave() {
@@ -310,6 +317,7 @@ export default function DokumenPage() {
         <Dialog
           open={dialogOpen}
           onOpenChange={(v) => {
+            if (v) resetForm();
             setDialogOpen(v);
             if (!v) resetForm();
           }}
@@ -463,7 +471,7 @@ export default function DokumenPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setDialogOpen(true)}
+                        onClick={() => { resetForm(); setDialogOpen(true); }}
                       >
                         <Plus className="size-3.5" /> Upload Dokumen
                       </Button>

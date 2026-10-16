@@ -6,8 +6,8 @@ Migrasi dari Google Apps Script + Google Sheets ke arsitektur modern.
 
 ## Stack
 
-- **Next.js 15** (App Router)
-- **Supabase** (PostgreSQL + Auth)
+- **Next.js 16.4** (App Router)
+- **Supabase** (PostgreSQL; sesi aplikasi diverifikasi server)
 - **shadcn/ui** + **Tailwind v4**
 - **TypeScript**
 
@@ -25,14 +25,28 @@ Migrasi dari Google Apps Script + Google Sheets ke arsitektur modern.
 
 ## Menjalankan
 
-1. Salin `.env.example` ke `.env` dan isi kredensial Supabase
-2. Jalankan `src/lib/db/schema.sql` di Supabase SQL Editor
-3. Jalankan development server:
+1. Salin `.env.example` ke `.env.local` dan isi credential server Supabase melalui konfigurasi aman. Browser tidak lagi memerlukan anon key.
+2. Untuk database baru: jalankan `src/lib/db/schema.sql`, lalu migrasi `001_private_access.sql` dan `002_integrity.sql` di `src/lib/db/migrations/`. Untuk database yang sudah ada: ikuti [panduan penerapan](docs/DEPLOYMENT.md), jangan membuat ulang tabel atau menghapus histori.
+3. `npm ci` lalu `npm run dev`.
+4. Tidak ada password admin bawaan. Bootstrap akun bernama dengan `npm run bootstrap:admin` dan environment aman seperti dijelaskan di panduan penerapan.
+
+## Pengujian
 
 ```bash
-npm install
-npm run dev
+npm test
+npm run lint
+npm run typecheck
+bash scripts/test-services.sh start
+npm run test:db
+npm run test:http
+npm run build
+npm run test:e2e
+bash scripts/test-services.sh stop
 ```
+
+Docker diperlukan untuk PostgreSQL/PostgREST lokal yang terisolasi. Test database hanya menerima loopback port 55432 dan mereset schema disposable tersebut; jangan hubungkan ke database aktif. Browser test memakai Chromium sistem (`/usr/bin/chromium`) atau `TEST_CHROMIUM_PATH`; jika tidak tersedia, install Chromium Playwright dengan `npx playwright install chromium`.
+
+[Status perbaikan lima fase](docs/FIX-STATUS.md) · [Migrasi dan keterbatasan deployment](docs/DEPLOYMENT.md)
 
 ## Database
 
@@ -60,7 +74,7 @@ npm run dev
 Untuk migrasi data dari Google Sheets:
 1. Export setiap sheet sebagai CSV
 2. Import ke tabel Supabase yang sesuai
-3. Password user perlu di-hash dengan salt `INBIO::` menggunakan SHA-256
+3. Gunakan hash scrypt untuk password baru; kompatibilitas hash legacy hanya untuk migrasi dan ditingkatkan saat login. Password bootstrap publik lama ditolak.
 
 ---
 

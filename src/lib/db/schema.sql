@@ -42,7 +42,7 @@ create table if not exists public.spesifikasi (
   created_at timestamptz not null default now()
 );
 
-create index idx_spesifikasi_id_produk on public.spesifikasi(id_produk);
+create index if not exists idx_spesifikasi_id_produk on public.spesifikasi(id_produk);
 
 -- 4. HASIL UJI
 create table if not exists public.hasil_uji (
@@ -61,9 +61,9 @@ create table if not exists public.hasil_uji (
   unique(id_produk, no_lot)
 );
 
-create index idx_hasil_uji_id_produk on public.hasil_uji(id_produk);
-create index idx_hasil_uji_status on public.hasil_uji(status);
-create index idx_hasil_uji_created_at on public.hasil_uji(created_at desc);
+create index if not exists idx_hasil_uji_id_produk on public.hasil_uji(id_produk);
+create index if not exists idx_hasil_uji_status on public.hasil_uji(status);
+create index if not exists idx_hasil_uji_created_at on public.hasil_uji(created_at desc);
 
 -- 5. COA (Certificate of Analysis)
 create table if not exists public.coa (
@@ -80,8 +80,8 @@ create table if not exists public.coa (
   updated_at timestamptz not null default now()
 );
 
-create index idx_coa_id_produk on public.coa(id_produk);
-create index idx_coa_created_at on public.coa(created_at desc);
+create index if not exists idx_coa_id_produk on public.coa(id_produk);
+create index if not exists idx_coa_created_at on public.coa(created_at desc);
 
 -- 6. DOKUMEN ARSIP
 create table if not exists public.dokumen_arsip (
@@ -106,7 +106,7 @@ create table if not exists public.audit_log (
   created_at timestamptz not null default now()
 );
 
-create index idx_audit_log_waktu on public.audit_log(waktu desc);
+create index if not exists idx_audit_log_waktu on public.audit_log(waktu desc);
 
 -- 8. SESSIONS (for token-based auth like the original)
 create table if not exists public.sessions (
@@ -117,8 +117,8 @@ create table if not exists public.sessions (
   created_at timestamptz not null default now()
 );
 
-create index idx_sessions_token on public.sessions(token);
-create index idx_sessions_user_id on public.sessions(user_id);
+create index if not exists idx_sessions_token on public.sessions(token);
+create index if not exists idx_sessions_user_id on public.sessions(user_id);
 
 -- Row Level Security
 alter table public.users enable row level security;
@@ -130,7 +130,5 @@ alter table public.dokumen_arsip enable row level security;
 alter table public.audit_log enable row level security;
 alter table public.sessions enable row level security;
 
--- Seed default admin (password: INBIONUSA)
-insert into public.users (username, password_hash, role, nama_lengkap)
-values ('INBIONUSA', encode(sha256(('INBIO::INBIONUSA')::bytea), 'hex'), 'administrator inbionusa', 'Administrator INBIONUSA')
-on conflict (username) do nothing;
+-- No default administrator/password is seeded. Bootstrap a named account with
+-- scripts/create-admin.ts and a securely supplied password after migrations.

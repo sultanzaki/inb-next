@@ -8,64 +8,31 @@ import {
   createSession,
   setSessionCookie,
   logAudit,
-  purgeExpiredSessions,
+  clearSession,
 } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 
 export type LoginState = { error?: string };
 
-// Rate limit in-process per username: blokir setelah 5 kegagalan / 15 menit.
-const MAX_ATTEMPTS = 5;
-const WINDOW_MS = 15 * 60 * 1000;
-const MAX_ENTRIES = 10_000; // batasi ukuran Map: cegah memory DoS via flooding username unik
-const attempts = new Map<string, { count: number; resetAt: number }>();
-
-function isRateLimited(username: string): boolean {
-  const entry = attempts.get(username);
-  if (!entry) return false;
-  if (Date.now() > entry.resetAt) {
-    attempts.delete(username);
-    return false;
-  }
-  return entry.count >= MAX_ATTEMPTS;
-}
-
-function recordFailure(username: string): void {
-  const now = Date.now();
-  const entry = attempts.get(username);
-  if (!entry || now > entry.resetAt) {
-    // Evict entri tertua (urutan insert) saat Map penuh, agar tetap bounded.
-    if (!attempts.has(username) && attempts.size >= MAX_ENTRIES) {
-      const oldest = attempts.keys().next().value;
-      if (oldest !== undefined) attempts.delete(oldest);
-    }
-    attempts.set(username, { count: 1, resetAt: now + WINDOW_MS });
-  } else {
-    entry.count += 1;
-  }
-}
+import { createHash } from 'node:crypto';
 
 export async function loginAction(
   _prevState: LoginState,
   formData: FormData,
 ): Promise<LoginState> {
-  const username = (formData.get('username') as string | null)?.trim() ?? '';
-  // Password tidak di-trim: hash apa adanya sesuai input pengguna.
-  const password = (formData.get('password') as string | null) ?? '';
-
-  // Housekeeping: bersihkan sesi kedaluwarsa sekali per percobaan login
-  // (bukan di render path — lihat purgeExpiredSessions).
-  await purgeExpiredSessions();
-
-  if (!username || !password) {
-    return { error: 'Username dan password wajib diisi.' };
-  }
-
-  if (isRateLimited(username)) {
-    return { error: 'Terlalu banyak percobaan. Coba lagi nanti.' };
-  }
-
+  const rawUsername = formData.get('username');
+  const rawPassword = formData.get('password');
+  if (typeof rawUsername !== 'string' || typeof rawPassword !== 'string') return { error: 'Username dan password wajib diisi.' };
+  const username = rawUsername.trim();
+  const password = rawPassword;
+  if (!username || username.length > 100 || !password || password.length > 1024) return { error: 'Username atau password tidak valid.' };
   const admin = createAdminClient();
+  // Reserve atomically BEFORE database lookup/hash work; shared across instances.
+  const { data: allowed, error: limitError } = await admin.rpc('qc_reserve_login', {
+    p_key: createHash('sha256').update(username.toLowerCase()).digest('hex'),
+  });
+  if (limitError) return { error: 'Layanan login belum tersedia. Coba lagi nanti.' };
+  if (!allowed) return { error: 'Terlalu banyak percobaan. Coba lagi nanti.' };
 
   const { data: users, error: userError } = await admin
     .from('users')
@@ -84,7 +51,6 @@ export async function loginAction(
   }
 
   if (userError || !user || !valid) {
-    recordFailure(username);
     await logAudit(username, 'login_failed', userError ? 'db_error' : 'invalid_credentials');
     // Pesan seragam: jangan bocorkan apakah username ada / DB bermasalah.
     return { error: 'Username atau password salah.' };
@@ -96,7 +62,6 @@ export async function loginAction(
   }
 
   const token = await createSession(user.id);
-  attempts.delete(username);
   await setSessionCookie(token);
   await logAudit(user.nama_lengkap, 'LOGIN', username);
 
@@ -104,15 +69,6 @@ export async function loginAction(
 }
 
 export async function logoutAction() {
-  const { cookies } = await import('next/headers');
-  const cookieStore = await cookies();
-  const token = cookieStore.get('session_token')?.value;
-
-  if (token) {
-    const admin = createAdminClient();
-    await admin.from('sessions').delete().eq('token', token);
-  }
-
-  cookieStore.delete('session_token');
+  await clearSession();
   redirect('/login');
 }

@@ -280,6 +280,7 @@ export default function DashboardPage() {
   const [todayLabel, setTodayLabel] = useState("");
 
   useEffect(() => {
+    const timer = setTimeout(() => {
     const now = new Date();
     const h = now.getHours();
     if (h < 12) setGreeting("Selamat Pagi");
@@ -296,6 +297,8 @@ export default function DashboardPage() {
         year: "numeric",
       }).format(now)
     );
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -395,7 +398,8 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    fetchData();
+    const timer = setTimeout(() => { void fetchData(); }, 0);
+    return () => clearTimeout(timer);
   }, [fetchData]);
 
   if (loading || !data) {
