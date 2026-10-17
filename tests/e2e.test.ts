@@ -1362,6 +1362,11 @@ test(
       await page
         .getByText("Could not sign out. Retry.", { exact: true })
         .waitFor();
+      const logoutNotice = page
+        .locator('[data-sonner-toast][data-removed="false"]')
+        .filter({ hasText: "Could not sign out. Retry." });
+      // Pause the notification's normal auto-dismiss while checking server state.
+      await logoutNotice.hover();
       assert.equal(
         (await db.query("select from sessions where user_id=$1", [user.id]))
           .rowCount,
@@ -1371,12 +1376,21 @@ test(
         (await context.cookies()).some((c) => c.name === "session_token"),
       );
       failRevoke = false;
-      await page
-        .getByRole("button", { name: "Open account menu" })
-        .click({ trial: true });
-      await page
-        .locator("[data-sonner-toast]")
-        .filter({ hasText: "Could not sign out. Retry." })
+      assert.ok(
+        await page
+          .getByRole("button", { name: "Open account menu" })
+          .evaluate((el) => {
+            const rect = el.getBoundingClientRect();
+            return el.contains(
+              document.elementFromPoint(
+                rect.x + rect.width / 2,
+                rect.y + rect.height / 2,
+              ),
+            );
+          }),
+        "logout failure never covers the account controls",
+      );
+      await logoutNotice
         .getByRole("button", { name: "Retry", exact: true })
         .click();
       await page.waitForURL("**/login");
