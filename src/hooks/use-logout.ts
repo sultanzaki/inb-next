@@ -23,7 +23,11 @@ export function useLogout() {
       unstable_rethrow(error);
       pending.current = false;
       setLoggingOut(false);
-      toast.error("Could not sign out. Retry.", { id: "workspace-signout" });
+      toast.error("Could not sign out. Retry.", {
+        id: "workspace-signout",
+        position: "bottom-right",
+        action: { label: "Retry", onClick: () => void logout() },
+      });
     }
   }
   return { logout, loggingOut };

@@ -1249,9 +1249,13 @@ test(
         (await context.cookies()).some((c) => c.name === "session_token"),
       );
       failRevoke = false;
-      await page.getByRole("button", { name: "Open account menu" }).click();
       await page
-        .getByRole("menuitem", { name: "Sign out", exact: true })
+        .getByRole("button", { name: "Open account menu" })
+        .click({ trial: true });
+      await page
+        .locator("[data-sonner-toast]")
+        .filter({ hasText: "Could not sign out. Retry." })
+        .getByRole("button", { name: "Retry", exact: true })
         .click();
       await page.waitForURL("**/login");
       assert.equal(
