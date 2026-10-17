@@ -241,7 +241,86 @@ test(
           .count(),
         0,
       );
+      const analytics = page.getByRole("region", { name: "Quality analytics" });
+      await analytics.locator(".analytics-stage").waitFor();
+      const analyticsResponse = await page.request.get(
+        origin + "/api/dashboard/analytics?period=30",
+      );
+      assert.equal(analyticsResponse.status(), 200);
+      assert.equal(
+        analyticsResponse.headers()["cache-control"],
+        "private, no-store",
+      );
+      const analyticsPayload = await analyticsResponse.json();
+      assert.equal(analyticsPayload.buckets.length, 6);
+      const expectedCounts = (
+        await db.query(
+          "select count(*) filter(where status='PASS')::int passed, count(*) filter(where status='FAIL')::int failed from hasil_uji where tgl_uji between $1 and $2",
+          [analyticsPayload.from, analyticsPayload.to],
+        )
+      ).rows[0];
+      assert.equal(
+        analyticsPayload.buckets.reduce(
+          (n: number, b: { passed: number }) => n + b.passed,
+          0,
+        ),
+        expectedCounts.passed,
+      );
+      assert.equal(
+        analyticsPayload.buckets.reduce(
+          (n: number, b: { failed: number }) => n + b.failed,
+          0,
+        ),
+        expectedCounts.failed,
+      );
+      assert.equal(
+        (
+          await page.request.get(origin + "/api/dashboard/analytics?period=365")
+        ).status(),
+        400,
+      );
       await capture("02-dashboard-desktop");
+      for (const name of ["Quality", "COAs", "Documents", "Activity"]) {
+        await analytics.getByRole("tab", { name, exact: true }).click();
+        await capture("30-analytics-desktop-" + name.toLowerCase());
+        await accessible();
+      }
+      await analytics.getByLabel("Analytics period").selectOption("90");
+      await page.waitForFunction(
+        () => document.querySelector(".analytics-stage") !== null,
+      );
+      await analytics
+        .getByRole("button", { name: /passed,.*failed/ })
+        .first()
+        .click();
+      assert.equal(
+        await analytics
+          .getByRole("button", { name: /passed,.*failed/ })
+          .first()
+          .getAttribute("aria-pressed"),
+        "true",
+      );
+      await analytics.getByLabel("Analytics period").selectOption("30");
+      await analytics.locator(".analytics-stage").waitFor();
+      await page.route("**/api/dashboard/analytics?*", (route) =>
+        route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: '{"message":"test failure"}',
+        }),
+      );
+      await page.reload();
+      await analytics
+        .getByRole("button", { name: "Retry analytics" })
+        .waitFor();
+      assert.equal(
+        await analytics.locator(".analytics-number").count(),
+        0,
+        "a failed count is never displayed as zero",
+      );
+      await page.unroute("**/api/dashboard/analytics?*");
+      await analytics.getByRole("button", { name: "Retry analytics" }).click();
+      await analytics.locator(".analytics-stage").waitFor();
       await accessible();
       assert.equal(await page.locator(".app-sidebar").count(), 0);
       await page.keyboard.press("Control+k");
@@ -477,8 +556,16 @@ test(
         .filter({ hasText: browserLot })
         .waitFor({ state: "attached" });
       await page.locator("[role=dialog] select").first().selectOption(h.id);
-      const dates = page.locator("[role=dialog] input[type=date]");
-      await dates.nth(1).fill("2027-12-31");
+      assert.equal(
+        await page.locator("[role=dialog] input[type=date]").count(),
+        2,
+      );
+      await page.locator("input[name=mfg_date]").fill("2026-10-01");
+      await page.locator("input[name=tanggal_rilis]").fill("2026-10-17");
+      assert.equal(
+        await page.getByLabel("Expiry date", { exact: true }).textContent(),
+        "2027-10-01",
+      );
       await page
         .getByRole("button", { name: "Preview COA", exact: true })
         .click();
@@ -493,6 +580,15 @@ test(
         (await db.query("select * from coa where id_hasil_uji=$1", [h.id]))
           .rowCount,
         1,
+      );
+      assert.equal(
+        (
+          await db.query(
+            "select tanggal_expired::text from coa where id_hasil_uji=$1",
+            [h.id],
+          )
+        ).rows[0].tanggal_expired,
+        "2027-10-01",
       );
       await db.query("update master_produk set nama_produk=$1 where id=$2", [
         "Master renamed after certification",
@@ -594,6 +690,32 @@ test(
         await page.setViewportSize({ width, height: 900 });
         await page.goto(origin + "/dashboard");
         await page.locator(".quality-summary").waitFor();
+        const mobileAnalytics = page.getByRole("region", {
+          name: "Quality analytics",
+        });
+        await mobileAnalytics.locator(".analytics-stage").waitFor();
+        const totalsY = await page
+          .locator(".overview-totals strong")
+          .evaluateAll((els) =>
+            els.map((el) => el.getBoundingClientRect().top),
+          );
+        if (width < 768)
+          assert.ok(
+            Math.max(...totalsY) - Math.min(...totalsY) < 2,
+            "KPI numbers share a baseline",
+          );
+        for (const name of ["Quality", "COAs", "Documents", "Activity"]) {
+          await mobileAnalytics.getByRole("tab", { name, exact: true }).click();
+          assert.ok(
+            await mobileAnalytics.evaluate(
+              (el) => el.scrollWidth <= el.clientWidth + 1,
+            ),
+          );
+          await mobileAnalytics.scrollIntoViewIfNeeded();
+          await capture(`31-analytics-${name.toLowerCase()}-${width}`);
+          await accessible();
+        }
+        await page.evaluate(() => window.scrollTo(0, 0));
         await capture(`09-dashboard-${width}`);
         assert.ok(
           await page.evaluate(
@@ -1240,6 +1362,11 @@ test(
       await page
         .getByText("Could not sign out. Retry.", { exact: true })
         .waitFor();
+      const logoutNotice = page
+        .locator('[data-sonner-toast][data-removed="false"]')
+        .filter({ hasText: "Could not sign out. Retry." });
+      // Pause the notification's normal auto-dismiss while checking server state.
+      await logoutNotice.hover();
       assert.equal(
         (await db.query("select from sessions where user_id=$1", [user.id]))
           .rowCount,
@@ -1249,12 +1376,21 @@ test(
         (await context.cookies()).some((c) => c.name === "session_token"),
       );
       failRevoke = false;
-      await page
-        .getByRole("button", { name: "Open account menu" })
-        .click({ trial: true });
-      await page
-        .locator("[data-sonner-toast]")
-        .filter({ hasText: "Could not sign out. Retry." })
+      assert.ok(
+        await page
+          .getByRole("button", { name: "Open account menu" })
+          .evaluate((el) => {
+            const rect = el.getBoundingClientRect();
+            return el.contains(
+              document.elementFromPoint(
+                rect.x + rect.width / 2,
+                rect.y + rect.height / 2,
+              ),
+            );
+          }),
+        "logout failure never covers the account controls",
+      );
+      await logoutNotice
         .getByRole("button", { name: "Retry", exact: true })
         .click();
       await page.waitForURL("**/login");
@@ -1277,6 +1413,10 @@ test(
       );
       assert.equal(
         (await page.request.get(origin + "/api/data/master_produk")).status(),
+        401,
+      );
+      assert.equal(
+        (await page.request.get(origin + "/api/dashboard/analytics")).status(),
         401,
       );
       await page.setViewportSize({ width: 375, height: 900 });

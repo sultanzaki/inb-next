@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { coaExpiryDate } from "./coa-dates";
 
 export const text = z.string().trim().max(1000);
 const required = text.min(1, "Required.");
@@ -115,10 +116,17 @@ export const coaSchema = z
       .default(""),
     no_coa: text,
     tanggal_rilis: date,
-    tanggal_expired: date,
+    tanggal_expired: z
+      .union([date, z.literal("")])
+      .optional()
+      .default(""),
     mfg_date: z.union([date, z.literal("")]),
     tanda_tangan: required,
   })
+  .transform((p) => ({
+    ...p,
+    tanggal_expired: p.mfg_date ? coaExpiryDate(p.mfg_date) : p.tanggal_expired,
+  }))
   .refine(
     (p) => p.tanggal_expired >= p.tanggal_rilis,
     "Expiry cannot be before release.",
@@ -127,7 +135,12 @@ export const coaSchema = z
     (p) => !p.mfg_date || p.mfg_date <= p.tanggal_rilis,
     "Manufacturing cannot be after release.",
   );
-export const issueSchema = coaSchema.and(z.object({ id_hasil: uuid }));
+export const issueSchema = coaSchema
+  .and(z.object({ id_hasil: uuid }))
+  .refine((p) => Boolean(p.mfg_date), {
+    message: "Manufacturing date is required.",
+    path: ["mfg_date"],
+  });
 export const updateCoaSchema = coaSchema.and(
   z.object({ id: uuid, no_coa: required }),
 );
