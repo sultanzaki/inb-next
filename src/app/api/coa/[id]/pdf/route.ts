@@ -1,3 +1,4 @@
+import { moduleGate } from "@/lib/erp/server";
 import { requireUser, logAudit } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { uuid } from "@/lib/domain/validation";
@@ -11,6 +12,8 @@ export async function GET(
 ) {
   const session = await requireUser();
   if (!session) return privateJson({ message: "Session expired." }, 401);
+  const denied = await moduleGate("quality");
+  if (denied) return denied;
   const { id } = await params;
   if (!uuid.safeParse(id).success)
     return privateJson({ message: "Invalid ID." }, 400);

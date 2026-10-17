@@ -1,4 +1,5 @@
 "use client";
+import { useERP } from "@/components/erp/context";
 import { RowActions } from "@/components/workspace/row-actions";
 import { saveDraftAction } from "@/lib/actions/inspeksi-actions";
 import { DraftPanel } from "@/components/workspace/draft-panel";
@@ -131,6 +132,7 @@ const textareaClass =
   "min-h-16 w-full rounded-md border border-input bg-surface px-2.5 py-1.5 text-sm transition-colors duration-150 outline-none";
 
 export default function InspeksiPage() {
+  const qualityWrite = useERP().can("quality", "write");
   const confirm = useConfirm();
   const [filter, setFilter] = useState("all");
   const [order, setOrder] = useState("default");
@@ -558,9 +560,9 @@ export default function InspeksiPage() {
   }
 
   const role: UserRole = (user?.role as UserRole) ?? "viewer";
-  const canDelete = canAction(role, "delete_uji");
-  const canCreate = canAction(role, "create_uji");
-  const canUpdate = canAction(role, "update_uji");
+  const canDelete = qualityWrite && canAction(role, "delete_uji");
+  const canCreate = qualityWrite && canAction(role, "create_uji");
+  const canUpdate = qualityWrite && canAction(role, "update_uji");
   const overallStatus = computeOverallStatus();
 
   return (

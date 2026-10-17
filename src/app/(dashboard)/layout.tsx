@@ -1,3 +1,4 @@
+import { ERPProvider } from "@/components/erp/context";
 import { Suspense } from "react";
 import { getSessionUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -20,7 +21,9 @@ async function SessionGate({ children }: { children: React.ReactNode }) {
   if (user.must_change_password) redirect("/account/password");
   return (
     <UserContextProvider user={user}>
-      <AppShell>{children}</AppShell>
+      <ERPProvider>
+        <AppShell>{children}</AppShell>
+      </ERPProvider>
     </UserContextProvider>
   );
 }
@@ -33,8 +36,7 @@ function ShellFallback() {
       aria-label="Preparing workspace"
       role="status"
     >
-      <div className="hidden fixed inset-y-0 left-0 w-[220px] border-r border-border bg-page-bg lg:block" />
-      <div className="lg:ml-[220px]">
+      <div>
         <div className="h-[64px] border-b border-border-soft bg-surface" />
         <div className="p-8">
           <div className="skeleton-shimmer h-7 w-48 rounded-lg" />

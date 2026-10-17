@@ -1,4 +1,5 @@
 "use client";
+import { useERP } from "@/components/erp/context";
 import { RowActions } from "@/components/workspace/row-actions";
 import {
   DataTools,
@@ -148,6 +149,7 @@ const selectClass =
   "h-9 w-full rounded-md border border-input bg-surface px-2.5 text-sm transition-colors duration-150 outline-none";
 
 export default function DokumenPage() {
+  const qualityWrite = useERP().can("quality", "write");
   const confirm = useConfirm();
   const [filter, setFilter] = useState("all");
   const [order, setOrder] = useState("default");
@@ -335,12 +337,12 @@ export default function DokumenPage() {
   }
 
   const role: UserRole = (user?.role as UserRole) ?? "viewer";
-  const canDelete = canAction(role, "delete_doc");
+  const canDelete = qualityWrite && canAction(role, "delete_doc");
   // dokumen_arsip writes are gated by create_doc, limited to the same
   // privileged set as delete_doc ('admin qc', 'administrator inbionusa').
   // Hide the upload trigger for other roles, whose insert would only fail
   // server-side with a raw RLS error.
-  const canUpload = canAction(role, "create_doc");
+  const canUpload = qualityWrite && canAction(role, "create_doc");
 
   return (
     <div className="page-stack">

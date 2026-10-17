@@ -1,3 +1,4 @@
+import { moduleGate } from "@/lib/erp/server";
 import { requireUser, logAudit } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -21,6 +22,10 @@ export async function GET(request: Request) {
   if (!parsed.success)
     return privateJson({ message: "Invalid export filters." }, 400);
   const v = parsed.data;
+  if (["inspeksi", "coa", "arsip"].includes(v.module)) {
+    const denied = await moduleGate("quality");
+    if (denied) return denied;
+  }
   if (v.module === "audit" && !canAction(session.user.role, "read_audit"))
     return privateJson({ message: "Access denied." }, 403);
   const cfg = modules[v.module],

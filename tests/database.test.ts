@@ -105,6 +105,7 @@ before(async () => {
     "migrations/001_private_access.sql",
     "migrations/002_integrity.sql",
     "migrations/003_workflows.sql",
+    "migrations/004_modular_erp.sql",
   ])
     await db.query(
       await readFile(new URL("../src/lib/db/" + file, import.meta.url), "utf8"),
@@ -137,6 +138,7 @@ test("setup schema and migrations are repeatable", async () => {
     "migrations/001_private_access.sql",
     "migrations/002_integrity.sql",
     "migrations/003_workflows.sql",
+    "migrations/004_modular_erp.sql",
   ])
     await db.query(
       await readFile(new URL("../src/lib/db/" + file, import.meta.url), "utf8"),

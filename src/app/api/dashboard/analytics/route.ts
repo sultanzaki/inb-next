@@ -1,3 +1,4 @@
+import { moduleGate } from "@/lib/erp/server";
 import { requireUser } from "@/lib/auth";
 import { privateJson } from "@/lib/api-response";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -11,6 +12,8 @@ import {
 export async function GET(request: Request) {
   const session = await requireUser();
   if (!session) return privateJson({ message: "Session expired." }, 401);
+  const denied = await moduleGate("quality");
+  if (denied) return denied;
   const value = new URL(request.url).searchParams.get("period") ?? "30";
   if (value !== "30" && value !== "90")
     return privateJson({ message: "Choose a 30 or 90 day period." }, 400);

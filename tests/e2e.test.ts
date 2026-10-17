@@ -1,3 +1,4 @@
+import { exerciseERP } from "./erp-browser";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
@@ -27,8 +28,10 @@ function jwt(role: string) {
 }
 
 test(
-  "production app: authenticated reads, pagination, mutations, search, error handling and logout",
-  { timeout: 360000 },
+  process.env.TEST_ERP_ONLY === "1"
+    ? "ERP production browser workflows"
+    : "production app: authenticated reads, pagination, mutations, search, error handling and logout",
+  { timeout: 600000 },
   async () => {
     const db = new Client({ connectionString: dbUrl });
     await db.connect();
@@ -235,6 +238,11 @@ test(
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
       await page.waitForURL("**/dashboard");
       await page.locator(".quality-summary").waitFor();
+      if (process.env.TEST_ERP_ONLY === "1") {
+        await exerciseERP(page, db, origin, suffix, capture, accessible);
+        assert.deepEqual(runtimeErrors, []);
+        return;
+      }
       assert.equal(
         await page
           .getByRole("button", { name: "Refresh", exact: true })
@@ -622,6 +630,7 @@ test(
       assert.match(pdf.headers()["content-type"], /application\/pdf/);
       assert.equal((await pdf.body()).subarray(0, 4).toString(), "%PDF");
       await printPage.close();
+      await exerciseERP(page, db, origin, suffix, capture, accessible);
       await page.goto(origin + "/dashboard/arsip");
       await page.locator(".data-toolbar").waitFor();
       await page.waitForFunction(
@@ -1365,7 +1374,7 @@ test(
       const logoutNotice = page
         .locator('[data-sonner-toast][data-removed="false"]')
         .filter({ hasText: "Could not sign out. Retry." });
-      // Pause the notification's normal auto-dismiss while checking server state.
+      // Retry remains available until the user dismisses the failure or retries.
       await logoutNotice.hover();
       assert.equal(
         (await db.query("select from sessions where user_id=$1", [user.id]))

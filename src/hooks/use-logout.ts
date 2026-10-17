@@ -26,6 +26,7 @@ export function useLogout() {
       toast.error("Could not sign out. Retry.", {
         id: "workspace-signout",
         position: "bottom-right",
+        duration: Infinity,
         action: { label: "Retry", onClick: () => void logout() },
       });
     }

@@ -3299,3 +3299,470 @@ button[data-slot="button"][class*="ghost"] {
   flex-direction: column;
   gap: 0;
 }
+
+/* Modular operations share the established palette, type and compact topbar. */
+.erp-module-switch {
+  min-width: 128px;
+  max-width: 165px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 9px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--color-surface-alt);
+  color: var(--color-primary-dark);
+}
+.erp-workspace {
+  min-width: 0;
+}
+.erp-section-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 3px;
+  background: var(--color-surface-alt);
+  border-radius: 12px;
+  width: fit-content;
+  max-width: 100%;
+}
+.erp-section-tabs button {
+  padding: 9px 13px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--color-muted);
+}
+.erp-section-tabs button[aria-current="page"] {
+  background: var(--color-surface);
+  color: var(--color-primary-dark);
+  box-shadow: 0 1px 4px
+    color-mix(in srgb, var(--color-primary-ink) 8%, transparent);
+}
+.erp-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.erp-toolbar > input {
+  max-width: 340px;
+  flex: 1;
+  min-width: 140px;
+}
+.erp-toolbar > span {
+  color: var(--color-muted);
+  font-size: 11px;
+  margin-right: auto;
+}
+.erp-toolbar select,
+.erp-field select {
+  min-height: 40px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  padding: 9px 12px;
+  font-size: 12px;
+}
+.erp-export,
+.erp-document-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-primary-dark);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 8px 0;
+}
+.erp-row-description {
+  font-size: 11px;
+  color: var(--color-muted);
+  margin-top: 5px;
+  max-width: 440px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.erp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 42px 20px;
+  color: var(--color-muted);
+  text-align: center;
+  font-size: 13px;
+}
+.erp-empty h2 {
+  color: var(--color-text);
+  font-weight: 600;
+}
+.erp-module-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.erp-module-cards > :is(article, a) {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: 16px;
+  padding: 22px;
+}
+.erp-module-cards article > div:first-child {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.erp-module-cards h2 {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+.erp-module-cards p {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.erp-module-cards > .erp-notice {
+  grid-column: 1/-1;
+}
+[data-slot="dialog-content"].erp-dialog {
+  display: flex;
+  flex-direction: column;
+  width: calc(100% - 24px);
+  max-width: 760px;
+  max-height: min(90dvh, 1000px);
+  overflow-y: auto;
+  overflow-x: clip;
+  gap: 20px;
+  padding: 24px;
+}
+.erp-dialog > [data-slot="dialog-header"],
+.erp-dialog > * {
+  flex-shrink: 0;
+  min-width: 0;
+}
+.erp-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+.erp-form-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.erp-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.erp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.erp-field > span,
+.erp-label {
+  font-size: 12px;
+  font-weight: 500;
+  display: block;
+}
+.erp-field :is(input, select, textarea) {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.erp-field small {
+  font-size: 11px;
+  color: var(--color-muted);
+  line-height: 1.6;
+}
+.erp-field textarea {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  min-height: 82px;
+  font-size: 13px;
+  background: var(--color-surface);
+  resize: vertical;
+}
+.erp-error {
+  border: 1px solid var(--color-danger);
+  color: var(--color-danger);
+  border-radius: 10px;
+  background: var(--color-surface);
+  padding: 12px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.erp-notice {
+  border: 1px solid var(--color-border-soft);
+  border-radius: 10px;
+  background: var(--color-surface-alt);
+  padding: 12px 14px;
+  font-size: 12px;
+  color: var(--color-muted);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.erp-line-editor {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.erp-line-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.erp-line-title strong {
+  font-weight: 600;
+}
+.erp-picker {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.erp-picker-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  text-align: left;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.erp-picker-trigger svg {
+  flex-shrink: 0;
+}
+.erp-picker-panel {
+  width: min(430px, calc(100vw - 36px));
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  padding: 12px;
+  box-shadow: 0 14px 40px
+    color-mix(in srgb, var(--color-primary-ink) 15%, transparent);
+}
+.erp-picker-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.erp-picker-results {
+  overflow-y: auto;
+  max-height: min(270px, 40dvh);
+  padding-block: 8px;
+}
+.erp-picker-results > button {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  padding: 12px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.erp-picker-results > button:hover {
+  background: var(--color-primary-soft);
+}
+.erp-picker-results > p {
+  padding: 16px 8px;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+.erp-picker-pages {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid var(--color-border-soft);
+  padding-top: 8px;
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.erp-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.erp-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.erp-detail-summary p {
+  min-width: 0;
+}
+.erp-detail-summary span {
+  display: block;
+  font-size: 11px;
+  color: var(--color-muted);
+  margin-bottom: 5px;
+  text-transform: capitalize;
+}
+.erp-detail-summary strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.erp-detail-lines {
+  display: grid;
+  gap: 10px;
+}
+.erp-detail-lines > article {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 15px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.erp-detail-lines h3 {
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.erp-detail-lines p {
+  font-size: 12px;
+  color: var(--color-muted);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.erp-detail-lines strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.erp-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 6px;
+}
+.erp-totals {
+  width: 100%;
+  max-width: 320px;
+  margin-left: auto;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--color-surface-alt);
+}
+.erp-totals p {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 12px;
+  text-transform: capitalize;
+}
+.erp-totals strong {
+  font-weight: 600;
+}
+.erp-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.erp-check input {
+  width: 17px;
+  height: 17px;
+  margin-top: 2px;
+  accent-color: var(--color-primary);
+  flex-shrink: 0;
+}
+.erp-pdf-frame {
+  width: 100%;
+  min-height: min(65dvh, 650px);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+@media (max-width: 1099px) {
+  .erp-module-switch {
+    display: none;
+  }
+}
+@media (max-width: 767px) {
+  .erp-form-grid,
+  .erp-detail-summary,
+  .erp-module-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .erp-toolbar {
+    gap: 8px;
+  }
+  .erp-toolbar > input {
+    flex-basis: 100%;
+    max-width: none;
+  }
+  .erp-toolbar select {
+    max-width: 145px;
+  }
+  [data-slot="dialog-content"].erp-dialog {
+    padding: 20px 16px;
+    max-height: 92dvh;
+    gap: 16px;
+  }
+  .erp-form-body {
+    gap: 16px;
+  }
+  .erp-field :is(input, textarea, select) {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  .erp-picker-trigger {
+    font-size: 14px;
+    min-height: 44px;
+  }
+  .erp-line-editor {
+    padding: 12px;
+  }
+  .erp-actions [data-slot="button"] {
+    white-space: normal;
+    height: auto;
+    min-height: 38px;
+    text-align: left;
+  }
+  .erp-section-tabs button {
+    padding: 9px 11px;
+  }
+  .erp-detail-lines > article {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .erp-module-cards > :is(article, a) {
+    padding: 18px;
+  }
+}

@@ -11,6 +11,7 @@ export function proxy(request: NextRequest) {
   if (
     pathname === "/login" ||
     pathname.startsWith("/api/data/") ||
+    pathname.startsWith("/api/erp/") ||
     pathname === "/api/dashboard/analytics" ||
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico"
