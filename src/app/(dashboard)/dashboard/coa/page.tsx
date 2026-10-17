@@ -688,7 +688,7 @@ export default function COAPage() {
                     />
                   </Field>
 
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
                     <Field
                       label="Compliance statement"
                       name="compliance_statement"
