@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
 // session_token dibuat via crypto.randomUUID() -> UUID 36 karakter.
 const SESSION_TOKEN_RE = /^[0-9a-f-]{36}$/i;
@@ -9,25 +9,26 @@ export function proxy(request: NextRequest) {
 
   // Halaman login & aset statis dilewati.
   if (
-    pathname === '/login' ||
-    pathname.startsWith('/api/data/') ||
-    pathname.startsWith('/_next') ||
-    pathname === '/favicon.ico'
+    pathname === "/login" ||
+    pathname.startsWith("/api/data/") ||
+    pathname === "/api/dashboard/analytics" ||
+    pathname.startsWith("/_next") ||
+    pathname === "/favicon.ico"
   ) {
     return NextResponse.next();
   }
 
   // Sesi wajib: cookie harus ada dan berbentuk UUID valid.
   // Cookie sampah / kedaluwarsa dianggap belum login.
-  const token = request.cookies.get('session_token')?.value ?? '';
+  const token = request.cookies.get("session_token")?.value ?? "";
 
   if (!SESSION_TOKEN_RE.test(token)) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|logo.png).*)'],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|logo.png).*)"],
 };
