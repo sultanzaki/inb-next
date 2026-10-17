@@ -111,3 +111,50 @@ test("pass-rate display reserves 100 percent for complete compliance", async () 
   assert.equal(formatPassRate(2020, 2021), "99.95");
   assert.equal(formatPassRate(99999, 100000), "<100");
 });
+
+test("COA expiry uses a calendar year, clamps leap days and ignores supplied expiry", async () => {
+  const { coaExpiryDate } = await import("../src/lib/domain/coa-dates");
+  assert.equal(coaExpiryDate("2026-10-17"), "2027-10-17");
+  assert.equal(coaExpiryDate("2024-02-29"), "2025-02-28");
+  assert.equal(coaExpiryDate("2023-02-28"), "2024-02-28");
+  assert.equal(coaExpiryDate("2026-02-30"), "");
+  const payload = {
+    id_hasil: "11111111-1111-4111-8111-111111111111",
+    no_coa: "",
+    tanda_tangan: "QC",
+    tanggal_rilis: "2026-10-17",
+    mfg_date: "2026-10-01",
+    tanggal_expired: "2030-01-01",
+  };
+  assert.equal(issueSchema.parse(payload).tanggal_expired, "2027-10-01");
+  assert.equal(
+    issueSchema.parse({ ...payload, tanggal_expired: undefined })
+      .tanggal_expired,
+    "2027-10-01",
+  );
+  assert.equal(
+    issueSchema.safeParse({ ...payload, mfg_date: "" }).success,
+    false,
+  );
+  assert.equal(
+    issueSchema.safeParse({ ...payload, tanggal_rilis: "2027-10-02" }).success,
+    false,
+  );
+  assert.equal(
+    issueSchema.safeParse({ ...payload, tanggal_rilis: "2026-09-30" }).success,
+    false,
+  );
+});
+
+test("analytics intervals cover exactly the selected days without gaps or overlap", async () => {
+  const { analyticsBuckets, shiftDate } =
+    await import("../src/lib/dashboard-analytics");
+  for (const period of [30, 90] as const) {
+    const buckets = analyticsBuckets("2026-01-10", period);
+    assert.equal(buckets.length, 6);
+    assert.equal(buckets[0].from, shiftDate("2026-01-10", 1 - period));
+    assert.equal(buckets.at(-1)!.to, "2026-01-10");
+    for (let i = 1; i < buckets.length; i++)
+      assert.equal(buckets[i].from, shiftDate(buckets[i - 1].to, 1));
+  }
+});

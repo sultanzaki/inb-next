@@ -1,4 +1,5 @@
 "use client";
+import { coaExpiryDate } from "@/lib/domain/coa-dates";
 import { RowActions } from "@/components/workspace/row-actions";
 import { Download } from "lucide-react";
 import { PdfPreview } from "@/components/workspace/pdf-preview";
@@ -638,20 +639,21 @@ export default function COAPage() {
                         }
                       />
                     </Field>
-                    <Field label="Expiry date" name="tanggal_expired" required>
-                      <Input
-                        type="date"
-                        value={form.tanggal_expired}
-                        disabled={!canWrite}
-                        onChange={(e) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            tanggal_expired: e.target.value,
-                          }))
-                        }
-                      />
+                    <Field
+                      label="Expiry date"
+                      name="tanggal_expired"
+                      hint="Calculated automatically: one year from manufacturing."
+                    >
+                      <output
+                        className="coa-expiry-output"
+                        aria-label="Expiry date"
+                      >
+                        {form.mfg_date
+                          ? coaExpiryDate(form.mfg_date)
+                          : form.tanggal_expired || "Set manufacturing date"}
+                      </output>
                     </Field>
-                    <Field label="MFG Date" name="mfg_date">
+                    <Field label="MFG Date" name="mfg_date" required>
                       <Input
                         type="date"
                         value={form.mfg_date}
@@ -660,6 +662,7 @@ export default function COAPage() {
                           setForm((prev) => ({
                             ...prev,
                             mfg_date: e.target.value,
+                            tanggal_expired: coaExpiryDate(e.target.value),
                           }))
                         }
                       />
@@ -686,18 +689,6 @@ export default function COAPage() {
                   </Field>
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="Delivery date" name="delivery_date">
-                      <Input
-                        type="date"
-                        value={form.delivery_date}
-                        onChange={(e) =>
-                          setForm((v) => ({
-                            ...v,
-                            delivery_date: e.target.value,
-                          }))
-                        }
-                      />
-                    </Field>
                     <Field
                       label="Compliance statement"
                       name="compliance_statement"

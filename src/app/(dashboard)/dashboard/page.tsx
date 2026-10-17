@@ -1,4 +1,5 @@
 "use client";
+import { DashboardAnalytics } from "@/components/workspace/dashboard-analytics";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
@@ -295,6 +296,7 @@ export default function DashboardPage() {
           ))}
         </div>
       </section>
+      <DashboardAnalytics />
       <div className="overview-records">
         <section className="recent-section">
           <div className="section-heading">

@@ -189,7 +189,7 @@ test("preview proof rejects altered forms, changed source revisions, malformed t
       no_coa: "",
       tanggal_rilis: "2026-10-17",
       tanggal_expired: "2028-10-17",
-      mfg_date: "",
+      mfg_date: "2026-10-01",
       tanda_tangan: "QC",
       language: "en",
     });
