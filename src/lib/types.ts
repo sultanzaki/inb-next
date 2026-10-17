@@ -2,24 +2,32 @@ export interface User {
   id: string;
   username: string;
   role: UserRole;
+  is_active?: boolean;
+  must_change_password?: boolean;
   nama_lengkap: string;
 }
 
-export type UserRole = 'admin qc' | 'administrator inbionusa' | 'qc supervisor' | 'viewer';
+export type UserRole =
+  "admin qc" | "administrator inbionusa" | "qc supervisor" | "viewer";
 
 export interface MasterProduk {
+  spec_version?: number;
+  inci_name?: string;
+  nama_produk_en?: string;
   id: string;
   kode_produk: string;
   nama_produk: string;
   kategori: string;
   satuan: string;
-  status_halal: 'Halal' | 'Non-Halal';
+  status_halal: "Halal" | "Non-Halal";
   tipe_kemasan: string;
   created_at: string;
   updated_at: string;
 }
 
 export interface SpesifikasiItem {
+  parameter_en?: string;
+  keterangan_en?: string;
   id: string;
   id_produk: string;
   parameter_uji: string;
@@ -27,21 +35,24 @@ export interface SpesifikasiItem {
   nilai_maks: string;
   satuan: string;
   keterangan: string;
-  tipe_batas: 'RANGE' | 'MIN' | 'MAX' | 'TEXT';
+  tipe_batas: "RANGE" | "MIN" | "MAX" | "TEXT";
   urutan: number;
   created_at: string;
 }
 
 export interface HasilUjiItem {
+  val_en?: string;
+  p_en?: string;
+  k_en?: string;
   spec_id?: string;
   p: string;
-  t: 'RANGE' | 'MIN' | 'MAX' | 'TEXT';
+  t: "RANGE" | "MIN" | "MAX" | "TEXT";
   mn: string;
   mx: string;
   u: string;
   k: string;
   val: string;
-  st: 'PASS' | 'FAIL';
+  st: "PASS" | "FAIL";
 }
 
 /**
@@ -58,6 +69,8 @@ export interface ProdukJoin {
  * jadi kolom; ambil dari join master_produk).
  */
 export interface HasilUji {
+  failure_reason?: string;
+  spec_version?: number;
   id: string;
   no_lot: string;
   id_produk: string;
@@ -65,7 +78,7 @@ export interface HasilUji {
   tgl_uji: string;
   inspector: string;
   hasil_detail: HasilUjiItem[];
-  status: 'PASS' | 'FAIL';
+  status: "PASS" | "FAIL";
   catatan: string | null;
   created_at: string;
   updated_at: string;
@@ -79,6 +92,11 @@ export type HasilUjiRow = HasilUji & { master_produk: ProdukJoin };
  * server saat penerbitan; bentuknya dikunci oleh coa-actions.ts.
  */
 export interface COA {
+  language?: "id" | "en";
+  inci_name?: string;
+  compliance_statement?: string;
+  delivery_date?: string | null;
+  template_version?: string;
   id: string;
   no_coa: string;
   id_produk: string;
@@ -87,6 +105,9 @@ export interface COA {
   tanggal_expired: string;
   hasil_uji_snapshot: {
     produk: string;
+    produk_en?: string;
+    inci_name?: string;
+    spec_version?: number;
     kode_produk?: string;
     ts: string;
     tu: string;
@@ -132,17 +153,21 @@ export interface DashboardData {
 }
 
 export const ROLE_ALLOW: Record<string, UserRole[]> = {
-  delete_produk: ['admin qc', 'administrator inbionusa'],
-  delete_uji: ['admin qc', 'administrator inbionusa'],
-  delete_coa: ['admin qc', 'administrator inbionusa'],
-  delete_doc: ['admin qc', 'administrator inbionusa'],
-  create_doc: ['admin qc', 'administrator inbionusa'],
-  update_coa: ['admin qc', 'administrator inbionusa', 'qc supervisor'],
-  issue_coa: ['admin qc', 'administrator inbionusa', 'qc supervisor'],
-  create_produk: ['admin qc', 'administrator inbionusa', 'qc supervisor'],
-  update_produk: ['admin qc', 'administrator inbionusa', 'qc supervisor'],
-  create_uji: ['admin qc', 'administrator inbionusa', 'qc supervisor'],
-  update_uji: ['admin qc', 'administrator inbionusa', 'qc supervisor'],
+  save_draft: ["admin qc", "administrator inbionusa", "qc supervisor"],
+  delete_draft: ["admin qc", "administrator inbionusa", "qc supervisor"],
+  manage_users: ["admin qc", "administrator inbionusa"],
+  read_audit: ["admin qc", "administrator inbionusa"],
+  delete_produk: ["admin qc", "administrator inbionusa"],
+  delete_uji: ["admin qc", "administrator inbionusa"],
+  delete_coa: ["admin qc", "administrator inbionusa"],
+  delete_doc: ["admin qc", "administrator inbionusa"],
+  create_doc: ["admin qc", "administrator inbionusa"],
+  update_coa: ["admin qc", "administrator inbionusa", "qc supervisor"],
+  issue_coa: ["admin qc", "administrator inbionusa", "qc supervisor"],
+  create_produk: ["admin qc", "administrator inbionusa", "qc supervisor"],
+  update_produk: ["admin qc", "administrator inbionusa", "qc supervisor"],
+  create_uji: ["admin qc", "administrator inbionusa", "qc supervisor"],
+  update_uji: ["admin qc", "administrator inbionusa", "qc supervisor"],
 };
 
 export function canAction(role: UserRole, action: string): boolean {
@@ -152,5 +177,25 @@ export function canAction(role: UserRole, action: string): boolean {
 }
 
 export function isWriteRole(role: UserRole): boolean {
-  return role !== 'viewer';
+  return role !== "viewer";
+}
+
+export interface InspectionDraft {
+  id: string;
+  owner_id: string;
+  product_id: string | null;
+  no_lot: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+export interface SpecVersion {
+  id: string;
+  id_produk: string;
+  version: number;
+  product_snapshot: MasterProduk;
+  specifications: SpesifikasiItem[];
+  actor: string;
+  revision_note: string;
+  created_at: string;
 }

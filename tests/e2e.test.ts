@@ -28,7 +28,7 @@ function jwt(role: string) {
 
 test(
   "production app: authenticated reads, pagination, mutations, search, error handling and logout",
-  { timeout: 180000 },
+  { timeout: 360000 },
   async () => {
     const db = new Client({ connectionString: dbUrl });
     await db.connect();
@@ -237,13 +237,9 @@ test(
       await page.locator(".quality-summary").waitFor();
       await capture("02-dashboard-desktop");
       await accessible();
-      await page.getByRole("button", { name: "Ringkas sidebar" }).click();
-      await page.waitForFunction(
-        () => localStorage.getItem("inb-sidebar-collapsed") === "true",
-      );
-      await page.getByRole("button", { name: "Perluas sidebar" }).click();
+      assert.equal(await page.locator(".app-sidebar").count(), 0);
       await page.keyboard.press("Control+k");
-      await page.getByPlaceholder("Ke mana Anda ingin pergi?").fill("Produk");
+      await page.getByPlaceholder("Cari lot, produk, atau COA…").fill("Produk");
       await page.keyboard.press("Enter");
       await page.waitForURL("**/dashboard/produk");
       await page.waitForFunction(
@@ -377,6 +373,30 @@ test(
       await page.locator("[role=dialog] select").selectOption(p.id);
       await page.getByPlaceholder("0", { exact: true }).waitFor();
       await page.getByPlaceholder("LOT-001").fill(browserLot);
+      await page
+        .getByRole("button", { name: "Simpan draft", exact: true })
+        .click();
+      await page.waitForFunction(
+        () => !document.querySelector("[role=dialog]"),
+      );
+      assert.equal(
+        (
+          await db.query("select id from hasil_uji where no_lot=$1", [
+            browserLot,
+          ])
+        ).rowCount,
+        0,
+      );
+      await page.getByRole("button", { name: /Draft inspeksi/ }).click();
+      await page
+        .locator(".draft-row")
+        .filter({ hasText: browserLot })
+        .getByRole("button", { name: "Lanjutkan" })
+        .click();
+      assert.equal(
+        await page.getByPlaceholder("LOT-001").inputValue(),
+        browserLot,
+      );
       await page.getByPlaceholder("Nama inspector").fill("Browser Tester");
       await page.getByPlaceholder("0", { exact: true }).fill("7,5");
       await capture("06-inspeksi-form");
@@ -391,6 +411,14 @@ test(
           [p.id, browserLot],
         )
       ).rows[0];
+      assert.equal(
+        (
+          await db.query("select id from inspection_drafts where no_lot=$1", [
+            browserLot,
+          ])
+        ).rowCount,
+        0,
+      );
       assert.equal(h.status, "PASS");
       assert.equal(h.hasil_detail[0].val, "7,5");
       await page.getByPlaceholder("Cari no lot atau produk…").fill(browserName);
@@ -409,14 +437,20 @@ test(
         .first()
         .click();
       await page
-        .locator("[role=dialog] select option")
+        .locator("[role=dialog] select")
+        .first()
+        .locator("option")
         .filter({ hasText: browserLot })
         .waitFor({ state: "attached" });
-      await page.locator("[role=dialog] select").selectOption(h.id);
+      await page.locator("[role=dialog] select").first().selectOption(h.id);
       const dates = page.locator("[role=dialog] input[type=date]");
       await dates.nth(1).fill("2027-12-31");
       await page
-        .getByRole("button", { name: "Terbitkan", exact: true })
+        .getByRole("button", { name: "Pratinjau COA", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "Terbitkan COA", exact: true })
+        .last()
         .click();
       await page.waitForFunction(
         () => !document.querySelector("[role=dialog]"),
@@ -445,22 +479,18 @@ test(
       await page.waitForFunction(
         () => !document.querySelector("[role=dialog]"),
       );
-      const printPagePromise = context.waitForEvent("page");
+      const downloadPromise = context.waitForEvent("page");
       await page
         .getByRole("button", { name: "Cetak", exact: true })
         .first()
         .click();
-      const printPage = await printPagePromise;
+      const printPage = await downloadPromise;
       await printPage.waitForLoadState();
-      await printPage.getByAltText("INBIONUSA").waitFor();
-      assert.equal(
-        await printPage.locator(".m-val").first().textContent(),
-        browserName,
-      );
-      await printPage.screenshot({
-        path: `${artifacts}/12-coa-print.png`,
-        fullPage: true,
-      });
+      assert.match(printPage.url(), /api\/coa\/.*\/pdf/);
+      const pdf = await context.request.get(printPage.url());
+      assert.equal(pdf.status(), 200);
+      assert.match(pdf.headers()["content-type"], /application\/pdf/);
+      assert.equal((await pdf.body()).subarray(0, 4).toString(), "%PDF");
       await printPage.close();
       await page.goto(origin + "/dashboard/arsip");
       await page.locator(".data-toolbar").waitFor();
@@ -583,6 +613,136 @@ test(
         );
       }
       await page.setViewportSize({ width: 1440, height: 1000 });
+      // New account administration, forced password change and read-only boundaries.
+      await page.goto(origin + "/dashboard/pengguna");
+      await page
+        .getByRole("button", { name: "Tambah pengguna", exact: true })
+        .click();
+      const managedUsername = "managed-" + suffix;
+      await page
+        .getByLabel("Nama lengkap", { exact: true })
+        .fill("Managed QA " + suffix);
+      await page.getByLabel("Username", { exact: true }).fill(managedUsername);
+      await page
+        .getByLabel("Password sementara", { exact: true })
+        .fill("Temporary QA password 2026");
+      await page
+        .getByRole("button", { name: "Simpan pengguna", exact: true })
+        .click();
+      await page.getByText("@" + managedUsername, { exact: true }).waitFor();
+      await capture("18-pengguna");
+      await accessible();
+      const usersResponse = await context.request.get(
+        origin + "/api/admin/users?q=" + managedUsername,
+      );
+      assert.equal(usersResponse.status(), 200);
+      assert.doesNotMatch(await usersResponse.text(), /password_hash|scrypt\$/);
+      const restricted = await browser.newContext();
+      const member = await restricted.newPage();
+      await member.goto(origin + "/login");
+      await member.locator("[name=username]").fill(managedUsername);
+      await member
+        .locator("[name=password]")
+        .fill("Temporary QA password 2026");
+      await member.getByRole("button", { name: "Masuk", exact: true }).click();
+      await member.waitForURL("**/account/password");
+      assert.equal(
+        (
+          await restricted.request.get(origin + "/api/data/master_produk")
+        ).status(),
+        401,
+      );
+      await member
+        .getByLabel("Password saat ini", { exact: true })
+        .fill("Temporary QA password 2026");
+      await member
+        .getByLabel("Password baru", { exact: true })
+        .fill("Changed QA password 2026");
+      await member
+        .getByLabel("Ulangi password baru", { exact: true })
+        .fill("Changed QA password 2026");
+      await member
+        .getByRole("button", { name: "Simpan password", exact: true })
+        .click();
+      await member.waitForURL("**/dashboard");
+      assert.equal(
+        (await restricted.request.get(origin + "/api/admin/users")).status(),
+        403,
+      );
+      assert.equal(
+        (await restricted.request.get(origin + "/api/audit")).status(),
+        403,
+      );
+      assert.equal(
+        (
+          await restricted.request.get(origin + "/api/data/inspection_drafts")
+        ).status(),
+        403,
+      );
+      const managedRow = page
+        .getByRole("row")
+        .filter({ hasText: managedUsername });
+      await managedRow
+        .getByRole("button", { name: "Reset password", exact: true })
+        .click();
+      await page
+        .getByLabel("Password sementara", { exact: true })
+        .fill("Reset QA password 2026");
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Reset password", exact: true })
+        .click();
+      await page.waitForFunction(
+        () => !document.querySelector("[role=dialog]"),
+      );
+      assert.equal(
+        (
+          await restricted.request.get(origin + "/api/data/master_produk")
+        ).status(),
+        401,
+      );
+      await restricted.close();
+      await page.goto(origin + "/dashboard/audit");
+      await page
+        .getByRole("heading", { name: "Log audit", exact: true })
+        .waitFor();
+      await capture("19-audit");
+      await accessible();
+      // Filtered exports include only the requested records; XLSX is a real ZIP workbook.
+      const csv = await context.request.get(
+        origin +
+          "/api/export?" +
+          new URLSearchParams({
+            module: "produk",
+            search: browserName,
+            filter: "all",
+            order: "default",
+            format: "csv",
+          }),
+      );
+      assert.equal(csv.status(), 200);
+      assert.doesNotMatch(await csv.text(), /E2E Product/);
+      const xlsx = await context.request.get(
+        origin +
+          "/api/export?" +
+          new URLSearchParams({
+            module: "produk",
+            search: browserName,
+            filter: "all",
+            order: "default",
+            format: "xlsx",
+          }),
+      );
+      assert.equal(xlsx.status(), 200);
+      assert.equal((await xlsx.body()).subarray(0, 2).toString(), "PK");
+      const searchResponse = await context.request.get(
+        origin + "/api/search?q=" + encodeURIComponent(browserLot),
+      );
+      assert.equal(searchResponse.status(), 200);
+      const searchResults = await searchResponse.json();
+      assert.ok(
+        searchResults.results.some((r: { type: string }) => r.type === "COA"),
+      );
       await db.query("update users set role=$1 where id=$2", [
         "viewer",
         user.id,
@@ -646,7 +806,7 @@ test(
         .waitFor();
       assert.equal(
         await page
-          .getByRole("button", { name: "Terbitkan", exact: true })
+          .getByRole("button", { name: "Pratinjau COA", exact: true })
           .isDisabled(),
         true,
       );

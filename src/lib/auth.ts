@@ -1,8 +1,8 @@
-import { createAdminClient } from './supabase/admin';
-import { cookies } from 'next/headers';
-import { User } from '@/lib/types';
-import { hashPassword } from './password';
-export { hashPassword, verifyPassword } from './password';
+import { createAdminClient } from "./supabase/admin";
+import { cookies } from "next/headers";
+import { User } from "@/lib/types";
+import { hashPassword } from "./password";
+export { hashPassword, verifyPassword } from "./password";
 const SESSION_TTL = 60 * 60 * 6;
 
 /**
@@ -12,26 +12,41 @@ const SESSION_TTL = 60 * 60 * 6;
 export async function upgradePasswordHash(
   userId: string,
   password: string,
+  expectedHash: string,
 ): Promise<void> {
   try {
     const admin = createAdminClient();
     const hashed = await hashPassword(password);
     const { error } = await admin
-      .from('users')
+      .from("users")
       .update({ password_hash: hashed })
-      .eq('id', userId);
+      .eq("id", userId)
+      .eq("password_hash", expectedHash);
     if (error) throw new Error(error.message);
   } catch (err) {
-    console.error('[auth] gagal upgrade hash password:', err);
+    console.error("[auth] gagal upgrade hash password:", err);
   }
 }
 
-export async function createSession(userId: string): Promise<string> {
+export async function createSession(
+  userId: string,
+  expectedHash?: string,
+): Promise<string> {
   const admin = createAdminClient();
   const token = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + SESSION_TTL * 1000).toISOString();
 
-  const { error } = await admin.from('sessions').insert({
+  if (expectedHash) {
+    const { data, error } = await admin.rpc("qc_create_login_session", {
+      p_user_id: userId,
+      p_expected_hash: expectedHash,
+      p_token: token,
+      p_expires: expiresAt,
+    });
+    if (error || !data) throw new Error("Akun berubah. Silakan masuk kembali.");
+    return token;
+  }
+  const { error } = await admin.from("sessions").insert({
     user_id: userId,
     token,
     expires_at: expiresAt,
@@ -43,8 +58,14 @@ export async function createSession(userId: string): Promise<string> {
 
 export async function getSessionUser(): Promise<User | null> {
   const cookieStore = await cookies();
-  const token = cookieStore.get('session_token')?.value;
-  if (!token || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token)) return null;
+  const token = cookieStore.get("session_token")?.value;
+  if (
+    !token ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      token,
+    )
+  )
+    return null;
 
   const admin = createAdminClient();
 
@@ -53,18 +74,19 @@ export async function getSessionUser(): Promise<User | null> {
   // Expired sessions disaring lewat Postgres ('now' dievaluasi DB), purge
   // periodik dilakukan lewat purgeExpiredSessions() dari login action.
   const { data: session, error: sessionError } = await admin
-    .from('sessions')
-    .select('user_id, expires_at')
-    .eq('token', token)
-    .gt('expires_at', 'now')
+    .from("sessions")
+    .select("user_id, expires_at")
+    .eq("token", token)
+    .gt("expires_at", "now")
     .single();
 
   if (sessionError || !session) return null;
 
   const { data: user, error: userError } = await admin
-    .from('users')
-    .select('id, username, role, nama_lengkap')
-    .eq('id', session.user_id)
+    .from("users")
+    .select("id, username, role, nama_lengkap, is_active, must_change_password")
+    .eq("id", session.user_id)
+    .eq("is_active", true)
     .single();
 
   if (userError || !user) return null;
@@ -73,23 +95,23 @@ export async function getSessionUser(): Promise<User | null> {
 
 export async function clearSession(): Promise<void> {
   const cookieStore = await cookies();
-  const token = cookieStore.get('session_token')?.value;
+  const token = cookieStore.get("session_token")?.value;
   if (token) {
     const admin = createAdminClient();
-    const { error } = await admin.from('sessions').delete().eq('token', token);
-    if (error) throw new Error('Gagal mencabut sesi. Coba keluar lagi.');
+    const { error } = await admin.from("sessions").delete().eq("token", token);
+    if (error) throw new Error("Gagal mencabut sesi. Coba keluar lagi.");
   }
-  cookieStore.delete('session_token');
+  cookieStore.delete("session_token");
 }
 
 export async function setSessionCookie(token: string): Promise<void> {
   const cookieStore = await cookies();
-  cookieStore.set('session_token', token, {
+  cookieStore.set("session_token", token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
     maxAge: SESSION_TTL,
-    path: '/',
+    path: "/",
   });
 }
 
@@ -99,7 +121,7 @@ export async function setSessionCookie(token: string): Promise<void> {
  */
 export async function requireUser(): Promise<{ user: User } | null> {
   const user = await getSessionUser();
-  if (!user) return null;
+  if (!user || user.must_change_password) return null;
   return { user };
 }
 
@@ -111,24 +133,31 @@ export async function requireUser(): Promise<{ user: User } | null> {
 export async function purgeExpiredSessions(): Promise<void> {
   try {
     const admin = createAdminClient();
-    const { error } = await admin.from('sessions').delete().lt('expires_at', 'now');
-    if (error) console.error('[sessions] cleanup gagal', { code: error.code });
+    const { error } = await admin
+      .from("sessions")
+      .delete()
+      .lt("expires_at", "now");
+    if (error) console.error("[sessions] cleanup gagal", { code: error.code });
   } catch {
     // housekeeping saja — jangan ganggu alur utama
   }
 }
 
-export async function logAudit(userName: string, aksi: string, referensi: string = ''): Promise<void> {
+export async function logAudit(
+  userName: string,
+  aksi: string,
+  referensi: string = "",
+): Promise<void> {
   try {
     const admin = createAdminClient();
-    const { error } = await admin.from('audit_log').insert({
+    const { error } = await admin.from("audit_log").insert({
       user_name: userName,
       aksi,
       referensi,
     });
-    if (error) console.error('[audit] gagal dicatat', { code: error.code });
+    if (error) console.error("[audit] gagal dicatat", { code: error.code });
   } catch {
-    console.error('[audit] database tidak dapat dihubungi');
+    console.error("[audit] database tidak dapat dihubungi");
     // Business mutations have transactional SQL audit; login audit is best effort.
   }
 }

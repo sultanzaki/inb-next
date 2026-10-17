@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  outputFileTracingIncludes: {
+    "/api/coa/**": ["./src/assets/coa/**/*"],
+    "/dashboard/coa": ["./src/assets/coa/**/*"],
+  },
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {

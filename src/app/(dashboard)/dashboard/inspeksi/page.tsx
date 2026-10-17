@@ -1,4 +1,15 @@
 "use client";
+import { saveDraftAction } from "@/lib/actions/inspeksi-actions";
+import { DraftPanel } from "@/components/workspace/draft-panel";
+import { draftDataSchema } from "@/lib/domain/validation";
+import type { InspectionDraft } from "@/lib/types";
+import {
+  DataTools,
+  CopyValue,
+  useSearchSeed,
+  emptyFilters,
+  type AdvancedFilters,
+} from "@/components/workspace/data-tools";
 import {
   PageHeader,
   DataToolbar,
@@ -122,6 +133,10 @@ export default function InspeksiPage() {
   const confirm = useConfirm();
   const [filter, setFilter] = useState("all");
   const [order, setOrder] = useState("default");
+  const [advanced, setAdvanced] = useState<AdvancedFilters>({
+    ...emptyFilters,
+  });
+  useSearchSeed(onSearchChange);
   const requestSeq = useRef(0);
   const specSeq = useRef(0);
   const editSeq = useRef(0);
@@ -146,6 +161,13 @@ export default function InspeksiPage() {
   const [spesifikasi, setSpesifikasi] = useState<SpesifikasiItem[]>([]);
   const [hasilValues, setHasilValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [draftRefresh, setDraftRefresh] = useState(0);
+  const [failureReason, setFailureReason] = useState("");
+  const [resumedDraft, setResumedDraft] = useState(false);
+  const [englishValues, setEnglishValues] = useState<Record<string, string>>(
+    {},
+  );
 
   // Pagination: list queries are bounded with .range(); count:"exact" returns
   // the filtered row total (ignoring the range window) in the same request, so
@@ -179,6 +201,14 @@ export default function InspeksiPage() {
         .order("id")
         .range(start, start + pageSize - 1);
       if (filter !== "all") q = q.eq("status", filter);
+      if (advanced.from) q = q.gte("tgl_uji", advanced.from);
+      if (advanced.to) q = q.lte("tgl_uji", advanced.to);
+      if (advanced.product) q = q.eq("id_produk", advanced.product);
+      if (advanced.person)
+        q = q.ilike(
+          "inspector",
+          "%" + advanced.person.replace(/[\\%_]/g, "\\$&") + "%",
+        );
       if (search) {
         // Quoted values (via escapeOr): commas/parens stay literal and the
         // escaped %/_ reach Postgres LIKE as literals, not wildcards.
@@ -212,7 +242,7 @@ export default function InspeksiPage() {
       setLoadingMore(false);
       setLoading(false);
     },
-    [search, pageSize, filter, order],
+    [search, pageSize, filter, order, advanced],
   );
 
   // Fresh fetch: page 0 replaces any accumulated rows and resets the offset
@@ -228,46 +258,56 @@ export default function InspeksiPage() {
   }, [runQuery, offset]);
 
   const fetchProduk = useCallback(async () => {
-    const { data, error } = await sb
-      .from("master_produk")
-      .select("*")
-      .order("nama_produk");
-    if (error) {
-      setProdukList([]);
-      toast.error("Gagal memuat data. Coba lagi.");
-      return;
+    const all: MasterProduk[] = [];
+    for (let offset = 0; ; offset += 500) {
+      const { data, error } = await sb
+        .from("master_produk")
+        .select("*")
+        .order("nama_produk")
+        .order("id")
+        .range(offset, offset + 499);
+      if (error) {
+        setProdukList([]);
+        toast.error("Gagal memuat produk. Coba muat ulang.");
+        return;
+      }
+      all.push(...((data || []) as MasterProduk[]));
+      if (!data || data.length < 500) break;
     }
-    setProdukList((data as MasterProduk[]) ?? []);
+    setProdukList(all);
   }, []);
 
   // Pure loader: only fills spesifikasi state, never touches hasilValues.
-  const fetchSpesifikasi = useCallback(async (id_produk: string) => {
-    const seq = ++specSeq.current;
-    setSpecProductId(null);
-    setSpesifikasi([]);
-    setSpecLoading(true);
-    if (!id_produk) {
+  const fetchSpesifikasi = useCallback(
+    async (id_produk: string) => {
+      const seq = ++specSeq.current;
+      setSpecProductId(null);
       setSpesifikasi([]);
+      setSpecLoading(true);
+      if (!id_produk) {
+        setSpesifikasi([]);
+        setSpecLoading(false);
+        return false;
+      }
+      const { data, error } = await sb
+        .from("spesifikasi")
+        .select("*")
+        .eq("id_produk", id_produk)
+        .order("urutan");
+      if (seq !== specSeq.current) return; // superseded by a newer fetch
+      if (error) {
+        setSpesifikasi([]);
+        toast.error("Gagal memuat data. Coba lagi.");
+        setSpecLoading(false);
+        return false;
+      }
+      setSpecProductId(id_produk);
       setSpecLoading(false);
-      return false;
-    }
-    const { data, error } = await sb
-      .from("spesifikasi")
-      .select("*")
-      .eq("id_produk", id_produk)
-      .order("urutan");
-    if (seq !== specSeq.current) return; // superseded by a newer fetch
-    if (error) {
-      setSpesifikasi([]);
-      toast.error("Gagal memuat data. Coba lagi.");
-      setSpecLoading(false);
-      return false;
-    }
-    setSpecProductId(id_produk);
-    setSpecLoading(false);
-    setSpesifikasi((data as SpesifikasiItem[]) ?? []);
-    return true;
-  }, []);
+      setSpesifikasi((data as SpesifikasiItem[]) ?? []);
+      return true;
+    },
+    [setSpecProductId, setSpesifikasi, setSpecLoading],
+  );
 
   useEffect(() => {
     const sequence = requestSeq;
@@ -293,6 +333,7 @@ export default function InspeksiPage() {
     editSeq.current++;
     setForm((prev) => ({ ...prev, id_produk: id }));
     setHasilValues({});
+    setEnglishValues({});
     void fetchSpesifikasi(id);
   }
 
@@ -303,6 +344,10 @@ export default function InspeksiPage() {
   }
 
   function resetForm() {
+    setDraftId(null);
+    setFailureReason("");
+    setResumedDraft(false);
+    setEnglishValues({});
     specSeq.current++;
     editSeq.current++;
     setSpecProductId(null);
@@ -320,6 +365,9 @@ export default function InspeksiPage() {
   async function openEdit(item: HasilUjiRow) {
     const seq = ++editSeq.current;
     setEditingId(item.id);
+    setDraftId(null);
+    setFailureReason(item.failure_reason || "");
+    setResumedDraft(false);
     setForm({
       id_produk: item.id_produk,
       no_lot: item.no_lot,
@@ -345,6 +393,11 @@ export default function InspeksiPage() {
       }
     }
     setHasilValues(vals);
+    setEnglishValues(
+      Object.fromEntries(
+        (item.hasil_detail || []).map((h) => [h.p, h.val_en || ""]),
+      ),
+    );
 
     setDialogOpen(true);
   }
@@ -379,6 +432,7 @@ export default function InspeksiPage() {
       u: sp.satuan ?? "",
       k: sp.keterangan ?? "",
       val: hasilValues[sp.parameter_uji] ?? "",
+      val_en: englishValues[sp.parameter_uji] ?? "",
       st: evaluateParam(sp, hasilValues[sp.parameter_uji] ?? ""),
     }));
   }
@@ -407,6 +461,8 @@ export default function InspeksiPage() {
       // Mutasi lewat server action: sesi + peran dicek server-side.
       const res = await saveInspeksiAction({
         id: editingId,
+        draft_id: draftId,
+        failure_reason: failureReason,
         id_produk: form.id_produk,
         no_lot: form.no_lot,
         tgl_sampling: form.tgl_sampling,
@@ -425,12 +481,68 @@ export default function InspeksiPage() {
       );
       setDialogOpen(false);
       resetForm();
+      setDraftRefresh((v) => v + 1);
       fetchData();
     } catch {
       toast.error("Gagal terhubung ke server. Coba lagi.");
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleDraftSave() {
+    if (editingId) return;
+    setSaving(true);
+    try {
+      const r = await saveDraftAction({
+        id: draftId,
+        data: {
+          ...form,
+          failure_reason: failureReason,
+          hasil_detail: buildHasilDetail(),
+        },
+      });
+      if (!r.ok) {
+        toast.error(r.error || "Gagal menyimpan draft.");
+        return;
+      }
+      setDialogOpen(false);
+      resetForm();
+      setDraftRefresh((v) => v + 1);
+      toast.success("Draft inspeksi disimpan.");
+    } catch {
+      toast.error("Koneksi terputus. Coba lagi.");
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function resumeDraft(draft: InspectionDraft) {
+    const parsed = draftDataSchema.safeParse(draft.payload);
+    if (!parsed.success) {
+      toast.error("Format draft tidak valid. Hubungi administrator.");
+      return;
+    }
+    const values = parsed.data;
+    resetForm();
+    if (values.id_produk && !(await fetchSpesifikasi(values.id_produk))) return;
+    setForm({
+      id_produk: values.id_produk,
+      no_lot: values.no_lot,
+      tgl_sampling: values.tgl_sampling,
+      tgl_uji: values.tgl_uji,
+      inspector: values.inspector,
+      catatan: values.catatan,
+    });
+    setHasilValues(
+      Object.fromEntries(values.hasil_detail.map((h) => [h.p, h.val])),
+    );
+    setEnglishValues(
+      Object.fromEntries(values.hasil_detail.map((h) => [h.p, h.val_en || ""])),
+    );
+    setFailureReason(values.failure_reason);
+    setDraftId(draft.id);
+    setResumedDraft(true);
+    setDialogOpen(true);
   }
 
   async function handleDelete(id: string) {
@@ -472,7 +584,7 @@ export default function InspeksiPage() {
         description="Hasil pengujian, parameter, dan status setiap lot."
       >
         <DomainDialog
-          dirtyValue={{ form, hasilValues }}
+          dirtyValue={{ form, hasilValues, failureReason, englishValues }}
           busy={saving}
           open={dialogOpen}
           onOpenChange={(v) => {
@@ -510,6 +622,8 @@ export default function InspeksiPage() {
                 ...form,
                 id: editingId,
                 hasil_detail: buildHasilDetail(),
+                failure_reason: failureReason,
+                status: computeOverallStatus() || undefined,
               }}
               schema={inspectionSchema}
               onSubmit={handleSave}
@@ -517,6 +631,12 @@ export default function InspeksiPage() {
               {/* Scrollable body; the footer stays pinned below it. */}
               <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
                 <div className="space-y-6">
+                  {resumedDraft && (
+                    <p className="form-notice">
+                      Draft dilanjutkan. Periksa kembali hasil dan spesifikasi
+                      yang berlaku sebelum menyimpan sebagai inspeksi final.
+                    </p>
+                  )}
                   {/* Uji fields: two-column grid */}
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <Field
@@ -643,6 +763,24 @@ export default function InspeksiPage() {
                                   {res}
                                 </Badge>
                               )}
+                              {sp.tipe_batas === "TEXT" && (
+                                <label className="inspection-translation">
+                                  Hasil (English, opsional)
+                                  <Input
+                                    value={
+                                      englishValues[sp.parameter_uji] || ""
+                                    }
+                                    onChange={(e) =>
+                                      setEnglishValues((v) => ({
+                                        ...v,
+                                        [sp.parameter_uji]: e.target.value,
+                                      }))
+                                    }
+                                    placeholder="Gunakan hasil asli jika kosong"
+                                    maxLength={1000}
+                                  />
+                                </label>
+                              )}
                             </div>
                           );
                         })}
@@ -660,6 +798,22 @@ export default function InspeksiPage() {
                       </div>
                     </div>
                   )}
+                  {overallStatus === "FAIL" && (
+                    <Field
+                      label="Penjelasan hasil FAIL"
+                      name="failure_reason"
+                      required
+                      hint="Jelaskan parameter yang gagal, temuan, dan tindak lanjut awal."
+                    >
+                      <textarea
+                        className={textareaClass}
+                        value={failureReason}
+                        onChange={(e) => setFailureReason(e.target.value)}
+                        maxLength={5000}
+                        required
+                      />
+                    </Field>
+                  )}
                   {form.id_produk && spesifikasi.length === 0 && (
                     <p className="text-[13px] text-muted">
                       Produk ini belum memiliki spesifikasi pengujian.
@@ -672,6 +826,15 @@ export default function InspeksiPage() {
                 <DialogClose
                   render={<Button variant="outline">Batal</Button>}
                 />
+                {!editingId && (
+                  <Button
+                    variant="outline"
+                    onClick={() => void handleDraftSave()}
+                    disabled={saving || specLoading}
+                  >
+                    Simpan draft
+                  </Button>
+                )}
                 <Button
                   type="submit"
                   loading={saving}
@@ -690,6 +853,9 @@ export default function InspeksiPage() {
         </DomainDialog>
       </PageHeader>
 
+      {canCreate && (
+        <DraftPanel refresh={draftRefresh} onResume={resumeDraft} />
+      )}
       <div>
         <FilterTabs
           label="Filter inspeksi"
@@ -714,6 +880,15 @@ export default function InspeksiPage() {
       </div>
 
       {/* Table card: hairline border, radius 8, header micro-labels on surface-alt */}
+      <DataTools
+        module="inspeksi"
+        search={search}
+        filter={filter}
+        order={order}
+        filters={advanced}
+        onFilters={setAdvanced}
+        loading={loading}
+      />
       <div className="data-card">
         <Table data-actions>
           <TableHeader>
@@ -821,6 +996,7 @@ export default function InspeksiPage() {
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="row-actions">
+                      <CopyValue value={row.no_lot} label="Salin nomor lot" />
                       <button
                         type="button"
                         className="row-action"
@@ -916,6 +1092,17 @@ export default function InspeksiPage() {
                   </div>
                 </div>
 
+                {detailItem.failure_reason && (
+                  <section className="fail-explanation">
+                    <h3>Penjelasan hasil FAIL</h3>
+                    <p>{detailItem.failure_reason}</p>
+                  </section>
+                )}
+                {detailItem.spec_version && (
+                  <p className="text-xs text-muted">
+                    Spesifikasi versi {detailItem.spec_version}
+                  </p>
+                )}
                 {detailItem.catatan && (
                   <div className="border-t border-border-soft pt-4">
                     <span className="text-xs text-muted">Catatan</span>
