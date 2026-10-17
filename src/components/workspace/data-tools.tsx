@@ -6,12 +6,20 @@ import {
   Download,
   SlidersHorizontal,
   Loader2,
-  X,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useMobile } from "@/hooks/use-mobile";
+import { AdvancedFilterFields, filterTitles } from "./advanced-filters";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import {
   emptyFilters,
   type AdvancedFilters,
@@ -96,8 +104,19 @@ export function DataTools({
   onFilters: (v: AdvancedFilters) => void;
   loading: boolean;
 }) {
-  const [open, setOpen] = useState(false),
+  const mobile = useMobile();
+  const [desktopOpen, setDesktopOpen] = useState(false),
+    [mobileOpen, setMobileOpen] = useState(false),
+    [draft, setDraft] = useState<AdvancedFilters>({ ...filters }),
     [exporting, setExporting] = useState("");
+  const open = mobile ? mobileOpen : desktopOpen;
+  function toggle() {
+    if (mobile) {
+      setDraft({ ...filters });
+      setMobileOpen((v) => !v);
+    } else setDesktopOpen((v) => !v);
+  }
+  const invalidRange = Boolean(draft.from && draft.to && draft.from > draft.to);
   const count = Object.values(filters).filter(Boolean).length;
   const [products, setProducts] = useState<
     { id: string; kode_produk: string; nama_produk: string }[]
@@ -171,12 +190,7 @@ export function DataTools({
   return (
     <div className="data-tools">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
-        >
+        <Button variant="ghost" size="sm" aria-expanded={open} onClick={toggle}>
           <SlidersHorizontal className="size-3.5" />
           Advanced filters
           {count > 0 && <span className="filter-count">{count}</span>}
@@ -203,96 +217,73 @@ export function DataTools({
           ))}
         </div>
       </div>
-      {open && (
+      {!mobile && desktopOpen && (
         <div className="advanced-filter-panel">
-          <label>
-            From date
-            <Input
-              aria-label="From date"
-              type="date"
-              value={filters.from}
-              max={filters.to || undefined}
-              onChange={(e) => onFilters({ ...filters, from: e.target.value })}
-            />
-          </label>
-          <label>
-            To date
-            <Input
-              aria-label="To date"
-              type="date"
-              value={filters.to}
-              min={filters.from || undefined}
-              onChange={(e) => onFilters({ ...filters, to: e.target.value })}
-            />
-          </label>
-          {["inspeksi", "coa"].includes(module) && (
-            <label>
-              Products
-              <select
-                aria-label="Filter products"
-                value={filters.product}
-                onChange={(e) =>
-                  onFilters({ ...filters, product: e.target.value })
-                }
-              >
-                <option value="">All products</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.kode_produk} · {p.nama_produk}
-                  </option>
-                ))}
-              </select>
-              {productError && (
-                <span role="alert" className="text-danger">
-                  Could not load products. Reopen the filters to retry.
-                </span>
-              )}
-            </label>
-          )}
-          {["inspeksi", "audit"].includes(module) && (
-            <label>
-              {module === "audit" ? "Actor" : "Inspector"}
-              <Input
-                aria-label={
-                  module === "audit" ? "Filter actor" : "Filter inspector"
-                }
-                placeholder={
-                  module === "audit" ? "Actor name" : "Inspector name"
-                }
-                value={filters.person}
-                onChange={(e) =>
-                  onFilters({ ...filters, person: e.target.value })
-                }
-              />
-            </label>
-          )}
-          {["produk", "arsip", "audit"].includes(module) && (
-            <label>
-              {module === "audit" ? "Actions" : "Category"}
-              <Input
-                aria-label={
-                  module === "audit" ? "Filter actions" : "Filter category"
-                }
-                placeholder={
-                  module === "audit" ? "Exact action" : "Exact category"
-                }
-                value={filters.category}
-                onChange={(e) =>
-                  onFilters({ ...filters, category: e.target.value })
-                }
-              />
-            </label>
-          )}
+          <AdvancedFilterFields
+            value={filters}
+            onChange={onFilters}
+            module={module}
+            products={products}
+            productError={productError}
+          />
           <Button
             variant="ghost"
             size="sm"
             onClick={() => onFilters({ ...emptyFilters })}
           >
-            <X className="size-3.5" />
-            Clear advanced filters
+            <RotateCcw className="size-3.5" />
+            Clear filters
           </Button>
         </div>
       )}
+      <Sheet open={mobile && mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent side="bottom" className="filter-sheet">
+          <div className="sheet-grip" aria-hidden="true" />
+          <SheetHeader>
+            <SheetTitle>{filterTitles[module]}</SheetTitle>
+            <SheetDescription>Filters also apply to exports.</SheetDescription>
+          </SheetHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (invalidRange) return;
+              onFilters({ ...draft });
+              setMobileOpen(false);
+            }}
+          >
+            <div className="filter-sheet-body">
+              <AdvancedFilterFields
+                value={draft}
+                onChange={setDraft}
+                module={module}
+                products={products}
+                productError={productError}
+              />
+              {invalidRange && (
+                <p role="alert" className="mt-3 text-xs text-danger">
+                  End date must not be before start date.
+                </p>
+              )}
+            </div>
+            <div className="filter-sheet-footer">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDraft({ ...emptyFilters });
+                  onFilters({ ...emptyFilters });
+                  setMobileOpen(false);
+                }}
+              >
+                <RotateCcw className="size-3.5" />
+                Clear
+              </Button>
+              <Button type="submit" disabled={invalidRange}>
+                Apply filters
+              </Button>
+            </div>
+          </form>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

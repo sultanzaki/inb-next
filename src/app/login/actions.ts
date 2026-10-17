@@ -10,7 +10,7 @@ import {
   logAudit,
   clearSession,
 } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 
 export type LoginState = { error?: string };
 
@@ -86,7 +86,12 @@ export async function loginAction(
   redirect(user.must_change_password ? "/account/password" : "/");
 }
 
-export async function logoutAction() {
-  await clearSession();
-  redirect("/login");
+export async function logoutAction(): Promise<{ ok: boolean }> {
+  try {
+    await clearSession();
+    return { ok: true };
+  } catch (error) {
+    unstable_rethrow(error);
+    return { ok: false };
+  }
 }

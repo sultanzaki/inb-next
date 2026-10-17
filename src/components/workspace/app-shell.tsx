@@ -16,7 +16,6 @@ import {
   FileCheck2,
   FolderArchive,
   Search,
-  Menu,
   LogOut,
   Loader2,
   UserRound,
@@ -25,9 +24,8 @@ import {
   History,
   ArrowUpRight,
 } from "lucide-react";
-import { toast } from "sonner";
 import { useUser } from "@/app/(dashboard)/user-context";
-import { logoutAction } from "@/app/login/actions";
+import { useLogout } from "@/hooks/use-logout";
 import { canAction } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,13 +44,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
+import { MobileNavigation } from "./mobile-navigation";
 const navigation = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/produk", label: "Products", icon: Package },
@@ -89,8 +81,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [results, setResults] = useState<SearchResult[]>([]),
     [searching, setSearching] = useState(false),
     [searchError, setSearchError] = useState(false),
-    [retry, setRetry] = useState(0),
-    [loggingOut, setLoggingOut] = useState(false);
+    [retry, setRetry] = useState(0);
+  const { logout, loggingOut } = useLogout();
   const seq = useRef(0);
   const items = navigation.filter(
     (n) => !n.permission || canAction(user?.role || "viewer", n.permission),
@@ -177,16 +169,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       );
     } else router.push(href);
   }
-  async function logout() {
-    setLoggingOut(true);
-    try {
-      await logoutAction();
-    } catch {
-      toast.error("Could not sign out. Retry.");
-    } finally {
-      setLoggingOut(false);
-    }
-  }
   const shownNavigation = items.filter((n) =>
     n.label.toLowerCase().includes(query.toLowerCase()),
   );
@@ -205,6 +187,16 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Image src="/logo.png" alt="" width={34} height={34} priority />
             <span>INBIONUSA</span>
           </Link>
+          <MobileNavigation
+            items={items}
+            pathname={pathname}
+            open={mobileOpen}
+            onOpenChange={setMobileOpen}
+            onSearch={() => {
+              setMobileOpen(false);
+              setCommandOpen(true);
+            }}
+          />
           <nav className="app-desktop-nav" aria-label="Main navigation">
             {items.map((n) => (
               <Link
@@ -266,40 +258,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button
-              className="app-mobile-nav-toggle"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Open navigation menu"
-              onClick={() => setMobileOpen(true)}
-            >
-              <Menu />
-            </Button>
           </div>
         </div>
       </header>
-      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="top" className="app-mobile-menu">
-          <SheetHeader>
-            <SheetTitle>Menu</SheetTitle>
-            <SheetDescription>INBIONUSA · Quality Control</SheetDescription>
-          </SheetHeader>
-          <nav aria-label="Main navigation">
-            {items.map(({ icon: Icon, ...n }) => (
-              <Link
-                href={n.href}
-                key={n.href}
-                aria-current={pathname === n.href ? "page" : undefined}
-                onClick={() => setMobileOpen(false)}
-              >
-                <Icon className="size-4" />
-                {n.label}
-                <ArrowUpRight className="ml-auto size-3.5" />
-              </Link>
-            ))}
-          </nav>
-        </SheetContent>
-      </Sheet>
       <main id="main-content" tabIndex={-1} className="workspace-main app-main">
         <ViewTransition name="workspace-content" default="workspace-page">
           <div key={pathname} className="surface-enter">

@@ -1,4 +1,5 @@
 "use client";
+import { SpecificationParameters } from "@/components/workspace/specification-parameters";
 import { RowActions } from "@/components/workspace/row-actions";
 import { SpecHistory } from "@/components/workspace/spec-history";
 import {
@@ -853,31 +854,41 @@ export default function ProdukPage() {
                       <PackageSearch className="size-4" />
                     </div>
                     <p className="text-base font-semibold tracking-tight">
-                      {search || filter !== "all"
+                      {search ||
+                      filter !== "all" ||
+                      Object.values(advanced).some(Boolean)
                         ? "No matching results"
                         : "No products yet"}
                     </p>
                     <p className="text-xs text-muted">
-                      {search || filter !== "all"
-                        ? "Try another keyword or clear your search."
+                      {search ||
+                      filter !== "all" ||
+                      Object.values(advanced).some(Boolean)
+                        ? "Try another keyword or clear your filters."
                         : "Add your first record to get started."}
                     </p>
-                    {!search && filter === "all" && canCreate && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setDialogOpen(true)}
-                      >
-                        <Plus className="size-3.5" /> New product
-                      </Button>
-                    )}
-                    {(search || filter !== "all") && (
+                    {!search &&
+                      filter === "all" &&
+                      !Object.values(advanced).some(Boolean) &&
+                      canCreate && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setDialogOpen(true)}
+                        >
+                          <Plus className="size-3.5" /> New product
+                        </Button>
+                      )}
+                    {(search ||
+                      filter !== "all" ||
+                      Object.values(advanced).some(Boolean)) && (
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => {
                           onSearchChange("");
                           setFilter("all");
+                          setAdvanced({ ...emptyFilters });
                         }}
                       >
                         Clear filters
@@ -958,7 +969,7 @@ export default function ProdukPage() {
           }
         }}
       >
-        <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="product-detail-dialog max-h-[90svh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <p className="micro-label">Product specifications</p>
             <DialogTitle>{detail?.nama_produk}</DialogTitle>
@@ -1008,36 +1019,7 @@ export default function ProdukPage() {
                   This product has no test parameters.
                 </p>
               ) : (
-                <div className="data-card">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Parameter</TableHead>
-                        <TableHead>Limits</TableHead>
-                        <TableHead>Unit</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {detailSpecs.map((sp) => (
-                        <TableRow key={sp.id}>
-                          <TableCell className="font-medium">
-                            {sp.parameter_uji}
-                          </TableCell>
-                          <TableCell className="font-data">
-                            {sp.tipe_batas === "TEXT"
-                              ? sp.keterangan || "Text"
-                              : sp.tipe_batas === "MIN"
-                                ? `≥ ${sp.nilai_min}`
-                                : sp.tipe_batas === "MAX"
-                                  ? `≤ ${sp.nilai_maks}`
-                                  : `${sp.nilai_min} – ${sp.nilai_maks}`}
-                          </TableCell>
-                          <TableCell>{sp.satuan || "—"}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                <SpecificationParameters items={detailSpecs} />
               )}
               <SpecHistory
                 key={detail.id}

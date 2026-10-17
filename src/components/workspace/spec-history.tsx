@@ -1,14 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import type { SpecVersion, SpesifikasiItem } from "@/lib/types";
-import {
-  Table,
-  TableHeader,
-  TableHead,
-  TableBody,
-  TableCell,
-  TableRow,
-} from "@/components/ui/table";
+import { SpecificationParameters } from "./specification-parameters";
 import { Button } from "@/components/ui/button";
 import { DataPagination } from "./page-ui";
 function signature(s: SpesifikasiItem) {
@@ -144,32 +137,7 @@ export function SpecHistory({
                 Product in this version: {version.product_snapshot.nama_produk}{" "}
                 · {version.product_snapshot.kode_produk}
               </p>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Parameter</TableHead>
-                    <TableHead>Standard</TableHead>
-                    <TableHead>Unit</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {historic.map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell>{s.parameter_uji}</TableCell>
-                      <TableCell>
-                        {s.tipe_batas === "TEXT"
-                          ? s.keterangan || "Observation"
-                          : s.tipe_batas === "MIN"
-                            ? `≥ ${s.nilai_min}`
-                            : s.tipe_batas === "MAX"
-                              ? `≤ ${s.nilai_maks}`
-                              : `${s.nilai_min} – ${s.nilai_maks}`}
-                      </TableCell>
-                      <TableCell>{s.satuan || "—"}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <SpecificationParameters items={historic} />
               <details className="mt-4 rounded-lg bg-surface-alt p-4">
                 <summary className="cursor-pointer text-xs font-medium">
                   Changes from the current version
