@@ -23,7 +23,7 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
         data-slot="table-container"
         tabIndex={0}
         role="region"
-        aria-label="Tabel data, geser untuk melihat kolom lainnya"
+        aria-label="Data table, scroll to see more columns"
         className="relative w-full overflow-x-auto overscroll-x-contain"
       >
         <table
@@ -37,7 +37,7 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
       </div>
       {overflow && (
         <p className="flex items-center justify-center gap-2 border-t border-border-soft bg-surface-alt px-4 py-2.5 text-[10px] text-muted">
-          <span aria-hidden="true">↔</span>Geser tabel untuk melihat semua kolom
+          <span aria-hidden="true">↔</span>Scroll to see all columns
         </p>
       )}
     </>

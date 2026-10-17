@@ -12,14 +12,14 @@ export async function mutate(
 ): Promise<ActionResult> {
   const session = await requireUser();
   if (!session)
-    return { ok: false, error: "Sesi berakhir. Muat ulang halaman." };
+    return { ok: false, error: "Session expired. Reload the page." };
   if (!canAction(session.user.role, action))
-    return { ok: false, error: "Anda tidak punya izin untuk aksi ini." };
+    return { ok: false, error: "You cannot perform this action." };
   const parsed = schema.safeParse(raw);
   if (!parsed.success)
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Data tidak valid.",
+      error: parsed.error.issues[0]?.message ?? "Invalid data.",
     };
   const token = (await cookies()).get("session_token")?.value;
   try {
@@ -31,22 +31,22 @@ export async function mutate(
     if (error) {
       console.error("[qc_mutate]", { action, code: error.code });
       const messages: Record<string, string> = {
-        "23505": "Nomor atau kode sudah digunakan.",
-        "23503": "Data masih dirujuk atau referensi tidak valid.",
-        P0002: "Data tidak ditemukan atau sudah dihapus.",
-        "42501": "Sesi berakhir atau akses tidak diizinkan.",
-        "23514":
-          "Data tidak memenuhi aturan QC. Periksa spesifikasi dan tanggal.",
+        "23505": "This number or code is already used.",
+        "23503":
+          "This record is referenced elsewhere or its reference is invalid.",
+        P0002: "Record not found or already deleted.",
+        "42501": "Session expired or access denied.",
+        "23514": "Check the specifications and dates.",
         "55000":
-          "Data sudah disertifikasi atau spesifikasi telah berubah. Muat ulang data.",
+          "Results are certified or specifications changed. Reload the data.",
       };
       return {
         ok: false,
-        error: messages[error.code] ?? "Gagal menyimpan data. Coba lagi.",
+        error: messages[error.code] ?? "Could not save changes. Retry.",
       };
     }
     return { ok: true, id: data?.id };
   } catch {
-    return { ok: false, error: "Gagal terhubung ke server. Coba lagi." };
+    return { ok: false, error: "Could not reach the server. Retry." };
   }
 }

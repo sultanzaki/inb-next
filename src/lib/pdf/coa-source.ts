@@ -14,7 +14,7 @@ export async function loadCoaSource(form: Form) {
     .single();
   if (error || !data || data.status !== "PASS" || data.qc_version !== 1)
     throw Error(
-      "Sumber harus berupa inspeksi PASS tervalidasi yang belum disertifikasi.",
+      "Select a validated, passed inspection without an existing COA.",
     );
   const product = data.master_produk;
   const document: CoaDocument = {

@@ -14,15 +14,15 @@ import writeXlsxFile from "write-excel-file/node";
 export const maxDuration = 60;
 export async function GET(request: Request) {
   const session = await requireUser();
-  if (!session) return privateJson({ message: "Sesi berakhir." }, 401);
+  if (!session) return privateJson({ message: "Session expired." }, 401);
   const parsed = exportQuerySchema.safeParse(
     Object.fromEntries(new URL(request.url).searchParams),
   );
   if (!parsed.success)
-    return privateJson({ message: "Filter ekspor tidak valid." }, 400);
+    return privateJson({ message: "Invalid export filters." }, 400);
   const v = parsed.data;
   if (v.module === "audit" && !canAction(session.user.role, "read_audit"))
-    return privateJson({ message: "Akses tidak diizinkan." }, 403);
+    return privateJson({ message: "Access denied." }, 403);
   const cfg = modules[v.module],
     today = businessDate(),
     sb = createAdminClient();
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
     arsip: ["all", "active", "expired"],
   };
   if (!allowed[v.module].includes(v.filter))
-    return privateJson({ message: "Filter tidak valid." }, 400);
+    return privateJson({ message: "Invalid filter." }, 400);
   const all: Record<string, unknown>[] = [];
   try {
     for (let offset = 0; offset <= 10000; offset += 500) {
@@ -88,53 +88,52 @@ export async function GET(request: Request) {
       if (all.length > 10000)
         return privateJson(
           {
-            message:
-              "Lebih dari 10.000 baris. Persempit filter sebelum mengekspor.",
+            message: "Over 10,000 rows. Narrow the filters to export.",
           },
           422,
         );
       if (!data || data.length < 500) break;
     }
     const headers: Record<string, string[]> = {
-      audit: ["Waktu", "Pengguna", "Aksi", "Referensi"],
+      audit: ["Time", "Users", "Actions", "Reference"],
       produk: [
-        "Kode produk",
-        "Nama produk",
+        "Product code",
+        "Product name",
         "INCI",
-        "Kategori",
-        "Satuan",
+        "Category",
+        "Unit",
         "Halal",
-        "Kemasan",
-        "Versi spesifikasi",
+        "Packaging",
+        "Specification version",
       ],
       inspeksi: [
-        "Nomor lot",
-        "Kode produk",
-        "Nama produk",
+        "Lot number",
+        "Product code",
+        "Product name",
         "Sampling",
-        "Tanggal uji",
-        "Penguji",
+        "Test date",
+        "Inspector",
         "Status",
-        "Penjelasan FAIL",
-        "Catatan",
-        "Versi spesifikasi",
+        "Failure reason",
+        "Notes",
+        "Specification version",
       ],
       coa: [
-        "Nomor COA",
-        "Produk",
-        "Nomor lot",
-        "Tanggal rilis",
-        "Kedaluwarsa",
-        "Tanggal produksi",
-        "Bahasa",
-        "Penerbit",
+        "COA number",
+        "Products",
+        "Lot number",
+        "Release date",
+        "Expired",
+        "Manufacturing date",
+        "Language",
+        "Issuer",
       ],
       arsip: [
-        "Judul dokumen",
-        "Kategori",
-        "Tanggal berlaku",
-        "Kedaluwarsa",
-        "Tautan",
+        "Document title",
+        "Category",
+        "Effective date",
+        "Expired",
+        "Link",
       ],
     };
     const rows = all.map((r) => {
@@ -232,7 +231,7 @@ export async function GET(request: Request) {
     );
   } catch {
     return privateJson(
-      { message: "Ekspor gagal. Tidak ada file parsial yang dibuat." },
+      { message: "Export failed. No partial file was created." },
       503,
     );
   }

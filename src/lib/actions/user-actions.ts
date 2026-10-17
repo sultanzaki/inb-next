@@ -36,21 +36,21 @@ async function manage(
         ok: false,
         error:
           error.code === "23505"
-            ? "Username sudah digunakan."
+            ? "Username already exists."
             : error.code === "23514"
-              ? "Perubahan ditolak. Akun sendiri dan administrator terakhir harus tetap aktif."
-              : "Perubahan akun gagal. Muat ulang dan coba lagi.",
+              ? "You cannot deactivate your account or the last administrator."
+              : "Could not update the account. Reload and retry.",
       };
     }
     return { ok: true, id: data?.id };
   } catch {
-    return { ok: false, error: "Tidak dapat terhubung ke server." };
+    return { ok: false, error: "Could not reach the server." };
   }
 }
 export async function saveUserAction(raw: unknown): Promise<ActionResult> {
   const session = await requireUser();
   if (!session || !canAction(session.user.role, "manage_users"))
-    return { ok: false, error: "Akses tidak diizinkan." };
+    return { ok: false, error: "Access denied." };
   const isUpdate = typeof raw === "object" && raw !== null && "id" in raw;
   if (isUpdate) {
     const p = updateUserSchema.safeParse(raw);
@@ -70,7 +70,7 @@ export async function resetUserPasswordAction(
 ): Promise<ActionResult> {
   const session = await requireUser();
   if (!session || !canAction(session.user.role, "manage_users"))
-    return { ok: false, error: "Akses tidak diizinkan." };
+    return { ok: false, error: "Access denied." };
   const p = resetPasswordSchema.safeParse(raw);
   if (!p.success) return { ok: false, error: p.error.issues[0].message };
   return manage("reset_password", {
@@ -82,8 +82,7 @@ export async function changePasswordAction(
   raw: unknown,
 ): Promise<ActionResult> {
   const user = await getSessionUser();
-  if (!user)
-    return { ok: false, error: "Sesi berakhir. Silakan masuk kembali." };
+  if (!user) return { ok: false, error: "Session expired. Sign in again." };
   const p = changePasswordSchema.safeParse(raw);
   if (!p.success) return { ok: false, error: p.error.issues[0].message };
   const limit = await createAdminClient().rpc("qc_reserve_login", {
@@ -94,8 +93,7 @@ export async function changePasswordAction(
   if (limit.error || !limit.data)
     return {
       ok: false,
-      error:
-        "Terlalu banyak percobaan atau layanan belum tersedia. Coba lagi nanti.",
+      error: "Too many attempts or service unavailable. Try again later.",
     };
   const { data, error } = await createAdminClient()
     .from("users")
@@ -107,7 +105,7 @@ export async function changePasswordAction(
     !data ||
     !(await verifyPassword(p.data.current_password, data.password_hash))
   )
-    return { ok: false, error: "Password saat ini tidak sesuai." };
+    return { ok: false, error: "Current password is incorrect." };
   const newHash = await hashPassword(p.data.password);
   const result = await manage("change_password", {
     expected_hash: data.password_hash,
@@ -119,7 +117,7 @@ export async function changePasswordAction(
   } catch {
     return {
       ok: false,
-      error: "Password sudah berubah. Masuk kembali dengan password baru.",
+      error: "Password changed. Sign in with your new password.",
     };
   }
   return { ok: true };

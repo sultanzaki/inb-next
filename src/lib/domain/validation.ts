@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const text = z.string().trim().max(1000);
-const required = text.min(1, "Field wajib diisi.");
+const required = text.min(1, "Required.");
 export const uuid = z.uuid();
 export const date = z.iso.date();
 const numericPattern = /^[+-]?(?:\d+(?:[.,]\d+)?|[.,]\d+)(?:[eE][+-]?\d+)?$/;
@@ -28,19 +28,19 @@ export const specSchema = z
     if ((s.tipe_batas === "MIN" || s.tipe_batas === "RANGE") && min === null)
       ctx.addIssue({
         code: "custom",
-        message: "Batas minimum harus berupa angka.",
+        message: "Enter a numeric minimum.",
         path: ["nilai_min"],
       });
     if ((s.tipe_batas === "MAX" || s.tipe_batas === "RANGE") && max === null)
       ctx.addIssue({
         code: "custom",
-        message: "Batas maksimum harus berupa angka.",
+        message: "Enter a numeric maximum.",
         path: ["nilai_maks"],
       });
     if (s.tipe_batas === "RANGE" && min !== null && max !== null && min > max)
       ctx.addIssue({
         code: "custom",
-        message: "Minimum tidak boleh melebihi maksimum.",
+        message: "Minimum cannot exceed maximum.",
       });
   });
 export const productSchema = z
@@ -61,7 +61,7 @@ export const productSchema = z
     (p) =>
       new Set(p.spesifikasi.map((s) => s.parameter_uji.toLowerCase())).size ===
       p.spesifikasi.length,
-    "Nama parameter tidak boleh duplikat.",
+    "Parameter names must be unique.",
   );
 export const inspectionSchema = z
   .object({
@@ -89,18 +89,18 @@ export const inspectionSchema = z
   })
   .refine(
     (p) => p.tgl_uji >= p.tgl_sampling,
-    "Tanggal uji tidak boleh sebelum sampling.",
+    "Testing cannot be before sampling.",
   )
   .refine(
     (p) =>
       new Set(p.hasil_detail.map((v) => v.p)).size === p.hasil_detail.length,
-    "Parameter hasil uji duplikat.",
+    "Test parameters must be unique.",
   )
   .superRefine((p, ctx) => {
     if (p.status === "FAIL" && !p.failure_reason.trim())
       ctx.addIssue({
         code: "custom",
-        message: "Jelaskan hasil FAIL sebelum menyimpan inspeksi final.",
+        message: "Explain the failure before saving.",
         path: ["failure_reason"],
       });
   });
@@ -121,11 +121,11 @@ export const coaSchema = z
   })
   .refine(
     (p) => p.tanggal_expired >= p.tanggal_rilis,
-    "Tanggal kedaluwarsa tidak boleh sebelum rilis.",
+    "Expiry cannot be before release.",
   )
   .refine(
     (p) => !p.mfg_date || p.mfg_date <= p.tanggal_rilis,
-    "Tanggal produksi tidak boleh setelah rilis.",
+    "Manufacturing cannot be after release.",
   );
 export const issueSchema = coaSchema.and(z.object({ id_hasil: uuid }));
 export const updateCoaSchema = coaSchema.and(
@@ -144,11 +144,11 @@ export const documentSchema = z
       } catch {
         return false;
       }
-    }, "Link harus menggunakan http/https."),
+    }, "Use an http or https link."),
   })
   .refine(
     (p) => p.masa_kadaluarsa >= p.tanggal_berlaku,
-    "Tanggal kedaluwarsa tidak boleh sebelum tanggal berlaku.",
+    "Expiry cannot be before the effective date.",
   );
 
 export function evaluateParam(
@@ -203,9 +203,9 @@ export const draftSchema = z.object({
 });
 export const passwordSchema = z
   .string()
-  .min(16, "Password minimal 16 karakter.")
+  .min(16, "Use at least 16 characters.")
   .max(1024)
-  .refine((v) => v.trim() !== "INBIONUSA", "Gunakan password baru.");
+  .refine((v) => v.trim() !== "INBIONUSA", "Choose a new password.");
 export const userRoleSchema = z.enum([
   "admin qc",
   "administrator inbionusa",
@@ -220,7 +220,7 @@ export const createUserSchema = z.object({
     .max(100)
     .regex(
       /^[a-zA-Z0-9_.@-]+$/,
-      "Username hanya boleh berisi huruf, angka, titik, @, - atau _.",
+      "Use letters, numbers, dots, @, hyphens, or underscores.",
     ),
   nama_lengkap: z.string().trim().min(1).max(200),
   role: userRoleSchema,
@@ -242,11 +242,8 @@ export const changePasswordSchema = z
     password: passwordSchema,
     confirmation: z.string(),
   })
-  .refine(
-    (v) => v.password === v.confirmation,
-    "Konfirmasi password tidak sama.",
-  )
+  .refine((v) => v.password === v.confirmation, "Passwords do not match.")
   .refine(
     (v) => v.current_password !== v.password,
-    "Password baru harus berbeda.",
+    "Choose a different password.",
   );

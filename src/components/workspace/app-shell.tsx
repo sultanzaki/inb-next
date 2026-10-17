@@ -55,13 +55,13 @@ import {
 } from "@/components/ui/sheet";
 const navigation = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/produk", label: "Produk", icon: Package },
-  { href: "/dashboard/inspeksi", label: "Inspeksi", icon: ClipboardList },
+  { href: "/dashboard/produk", label: "Products", icon: Package },
+  { href: "/dashboard/inspeksi", label: "Inspections", icon: ClipboardList },
   { href: "/dashboard/coa", label: "COA", icon: FileCheck2 },
-  { href: "/dashboard/arsip", label: "Arsip", icon: FolderArchive },
+  { href: "/dashboard/arsip", label: "Documents", icon: FolderArchive },
   {
     href: "/dashboard/pengguna",
-    label: "Pengguna",
+    label: "Users",
     icon: Users,
     permission: "manage_users",
   },
@@ -182,7 +182,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     try {
       await logoutAction();
     } catch {
-      toast.error("Gagal keluar. Coba lagi.");
+      toast.error("Could not sign out. Retry.");
     } finally {
       setLoggingOut(false);
     }
@@ -193,7 +193,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="application">
       <a href="#main-content" className="skip-link">
-        Lewati ke konten utama
+        Skip to main content
       </a>
       <header className="app-topbar">
         <div className="app-topbar-inner">
@@ -205,7 +205,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Image src="/logo.png" alt="" width={34} height={34} priority />
             <span>INBIONUSA</span>
           </Link>
-          <nav className="app-desktop-nav" aria-label="Navigasi utama">
+          <nav className="app-desktop-nav" aria-label="Main navigation">
             {items.map((n) => (
               <Link
                 key={n.href}
@@ -220,18 +220,18 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="app-topbar-actions">
             <button
               className="app-global-search"
-              aria-label="Cari lot, produk, COA, atau halaman"
+              aria-label="Search lots, products, COAs, or pages"
               onClick={() => setCommandOpen(true)}
             >
               <Search className="size-4" />
-              <span>Cari…</span>
+              <span>Search…</span>
             </button>
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
                   <button
                     className="app-account-button"
-                    aria-label="Buka menu akun"
+                    aria-label="Open account menu"
                   />
                 }
               >
@@ -250,7 +250,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   onClick={() => router.push("/account/password")}
                 >
                   <KeyRound />
-                  Ganti password
+                  Change password
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   variant="destructive"
@@ -262,7 +262,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   ) : (
                     <LogOut />
                   )}
-                  Logout
+                  Sign out
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -270,7 +270,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               className="app-mobile-nav-toggle"
               variant="ghost"
               size="icon-sm"
-              aria-label="Buka menu navigasi"
+              aria-label="Open navigation menu"
               onClick={() => setMobileOpen(true)}
             >
               <Menu />
@@ -284,7 +284,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <SheetTitle>Menu</SheetTitle>
             <SheetDescription>INBIONUSA · Quality Control</SheetDescription>
           </SheetHeader>
-          <nav aria-label="Navigasi utama">
+          <nav aria-label="Main navigation">
             {items.map(({ icon: Icon, ...n }) => (
               <Link
                 href={n.href}
@@ -313,8 +313,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           setCommandOpen(v);
           if (!v) setQuery("");
         }}
-        title="Cari di INBIONUSA"
-        description="Temukan lot, produk, sertifikat, atau halaman."
+        title="Search INBIONUSA"
+        description="Find lots, products, certificates, or pages."
       >
         <Command shouldFilter={false}>
           <CommandInput
@@ -324,12 +324,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               setResults([]);
               setSearchError(false);
             }}
-            placeholder="Cari lot, produk, atau COA…"
-            aria-label="Pencarian lintas modul"
+            placeholder="Search lots, products, or COAs…"
+            aria-label="Search all modules"
           />
           <CommandList>
             {shownNavigation.length > 0 && (
-              <CommandGroup heading="Halaman">
+              <CommandGroup heading="Pages">
                 {shownNavigation.map(({ icon: Icon, ...n }) => (
                   <CommandItem
                     key={n.href}
@@ -343,7 +343,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </CommandGroup>
             )}
             {results.length > 0 && (
-              <CommandGroup heading="Hasil pencarian">
+              <CommandGroup heading="Search results">
                 {results.map((r) => (
                   <CommandItem
                     key={r.type + r.id}
@@ -364,18 +364,18 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
             {searching && (
               <p role="status" className="px-4 py-5 text-xs text-muted">
-                Mencari data…
+                Searching…
               </p>
             )}
             {searchError && (
               <div role="alert" className="px-4 py-4 text-xs text-danger">
-                Pencarian belum berhasil.
+                Search failed.
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setRetry((v) => v + 1)}
                 >
-                  Coba lagi
+                  Retry
                 </Button>
               </div>
             )}
@@ -384,11 +384,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               query.length >= 2 &&
               results.length === 0 &&
               shownNavigation.length === 0 && (
-                <CommandEmpty>Tidak ada hasil yang cocok.</CommandEmpty>
+                <CommandEmpty>No matching results.</CommandEmpty>
               )}
             {query.length < 2 && (
               <p className="px-4 py-4 text-xs text-muted">
-                Ketik minimal 2 karakter untuk mencari data.
+                Type at least 2 characters to search.
               </p>
             )}
           </CommandList>

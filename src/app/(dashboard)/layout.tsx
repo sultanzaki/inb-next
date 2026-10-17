@@ -30,7 +30,7 @@ function ShellFallback() {
   return (
     <div
       className="min-h-screen bg-surface"
-      aria-label="Menyiapkan ruang kerja"
+      aria-label="Preparing workspace"
       role="status"
     >
       <div className="hidden fixed inset-y-0 left-0 w-[220px] border-r border-border bg-page-bg lg:block" />

@@ -16,7 +16,7 @@ function SubmitButton() {
       loading={pending}
       className="h-12 w-full justify-between px-4"
     >
-      <span>{pending ? "Menghubungkan ke ruang kerja…" : "Masuk"}</span>
+      <span>{pending ? "Opening workspace…" : "Sign in"}</span>
       {!pending && <ArrowRight className="size-4" />}
     </Button>
   );
@@ -29,7 +29,7 @@ export function LoginForm() {
       <div className="mb-10 flex items-center gap-3 lg:hidden">
         <Image
           src="/logo.png"
-          alt="Logo INBIONUSA"
+          alt="INBIONUSA logo"
           width={36}
           height={36}
           priority
@@ -38,10 +38,10 @@ export function LoginForm() {
           INBIONUSA
         </span>
       </div>
-      <p className="mb-3 text-xs font-medium text-muted">Akun INBIONUSA</p>
-      <h1>Masuk.</h1>
+      <p className="mb-3 text-xs font-medium text-muted">INBIONUSA account</p>
+      <h1>Sign in</h1>
       <p className="mt-4 text-[13px] leading-relaxed text-muted">
-        Lanjutkan ke ruang kerja pengendalian mutu.
+        Sign in to your quality workspace.
       </p>
       <form action={action} className="mt-9 space-y-5">
         <div className="space-y-2">
@@ -55,7 +55,7 @@ export function LoginForm() {
               autoComplete="username"
               required
               maxLength={100}
-              placeholder="Masukkan username"
+              placeholder="Enter your username"
               className="h-12 px-3.5"
             />
           </div>
@@ -72,14 +72,14 @@ export function LoginForm() {
               autoComplete="current-password"
               required
               maxLength={1024}
-              placeholder="Masukkan password"
+              placeholder="Enter your password"
               className="h-12 pl-3.5 pr-12"
             />
             <button
               type="button"
               onClick={() => setShow((v) => !v)}
               className="absolute right-1.5 top-1/2 grid size-10 -translate-y-1/2 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-alt hover:text-primary"
-              aria-label={show ? "Sembunyikan password" : "Tampilkan password"}
+              aria-label={show ? "Hide password" : "Show password"}
               aria-pressed={show}
             >
               {show ? (
@@ -99,9 +99,7 @@ export function LoginForm() {
           <SubmitButton />
         </div>
       </form>
-      <p className="login-footer">
-        Butuh akses? Hubungi administrator internal Anda.
-      </p>
+      <p className="login-footer">Need access? Contact your administrator.</p>
     </div>
   );
 }

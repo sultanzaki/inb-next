@@ -189,8 +189,7 @@ export async function renderCoaPdf(
   }
   const template = await PDFDocument.load(await asset("letterhead.pdf"));
   const items = coa.hasil_uji_snapshot.items || [];
-  if (items.length > 200)
-    throw Error("Terlalu banyak parameter untuk sertifikat.");
+  if (items.length > 200) throw Error("Too many certificate parameters.");
   const rows: Row[] = items.map((item) => {
     const parameter =
       (id ? item.p : item.p_en || item.p) + (item.u ? ", " + item.u : "");
@@ -219,9 +218,7 @@ export async function renderCoaPdf(
     used = 0;
   for (const row of rows) {
     if (row.height > 226.8)
-      throw Error(
-        "Satu parameter terlalu panjang. Ringkas label atau hasil pengujiannya.",
-      );
+      throw Error("A parameter is too long. Shorten its label or result.");
     if (sheet.rows.length >= 15 || used + row.height > 226.9) {
       sheets.push(sheet);
       sheet = { rows: [], notes: [] };
@@ -284,7 +281,7 @@ export async function renderCoaPdf(
         ? coa.hasil_uji_snapshot.produk_en || coa.hasil_uji_snapshot.produk
         : coa.hasil_uji_snapshot.produk) || "-";
     if (width(product, fonts.bold, 8) > 468)
-      throw Error("Nama produk terlalu panjang untuk template.");
+      throw Error("Product name is too long for this template.");
     const productSize = Math.max(
       8,
       Math.min(12, (12 * 468) / Math.max(1, width(product, fonts.bold, 12))),
@@ -297,7 +294,7 @@ export async function renderCoaPdf(
       ": " +
       (coa.inci_name || coa.hasil_uji_snapshot.inci_name || "-");
     if (width(inci, fonts.italic, 8) > 468)
-      throw Error("Nama INCI terlalu panjang untuk template.");
+      throw Error("INCI name is too long for this template.");
     draw(
       page,
       inci,
@@ -326,7 +323,7 @@ export async function renderCoaPdf(
       draw(page, label, 56.64, metaY, fonts.regular, 12);
       const text = ": " + value;
       if (width(text, fonts.regular, 8) > 365)
-        throw Error("Identitas sertifikat terlalu panjang untuk template.");
+        throw Error("Certificate details are too long for this template.");
       draw(
         page,
         text,

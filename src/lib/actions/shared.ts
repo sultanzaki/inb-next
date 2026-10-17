@@ -5,7 +5,8 @@
  */
 
 // UUID v1-v8 (hex, dash-delimited 8-4-4-4-12), case-insensitive.
-export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Validasi format UUID untuk id yang datang dari payload client.
@@ -13,5 +14,5 @@ export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
  * Pola pemakaian: `const err = assertUuid(x); if (err) return { ok: false, error: err };`
  */
 export function assertUuid(id: string): string | null {
-  return UUID_RE.test(id) ? null : "ID tidak valid.";
+  return UUID_RE.test(id) ? null : "Invalid ID.";
 }

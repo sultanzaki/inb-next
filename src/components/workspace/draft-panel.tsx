@@ -69,46 +69,45 @@ export function DraftPanel({
         onClick={() => setOpen((v) => !v)}
       >
         <FilePenLine className="size-4" />
-        <span>Draft inspeksi</span>
+        <span>Inspection drafts</span>
         <span className="ml-1 text-muted">
           {loading ? "…" : error ? "—" : data.length + (more ? "+" : "")}
         </span>
         <span className="ml-auto text-xs text-primary">
-          {open ? "Tutup" : "Lihat draft"}
+          {open ? "Close" : "View drafts"}
         </span>
       </button>
       {open && (
         <div className="draft-list">
           {error ? (
             <div role="alert" className="text-sm text-danger">
-              Draft belum berhasil dimuat.
+              Could not load drafts.
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setRetry((v) => v + 1)}
               >
-                Coba lagi
+                Retry
               </Button>
             </div>
           ) : loading ? (
             <p role="status" className="text-sm text-muted">
-              Memuat draft…
+              Loading drafts…
             </p>
           ) : data.length === 0 ? (
             <p className="text-sm text-muted">
-              Belum ada draft. Anda dapat menyimpan pengujian yang belum lengkap
-              dari formulir inspeksi.
+              No drafts yet. Save an unfinished inspection to continue later.
             </p>
           ) : (
             data.map((draft) => (
               <div className="draft-row" key={draft.id}>
                 <div>
                   <p className="text-sm font-medium">
-                    {draft.no_lot || "Tanpa nomor lot"}
+                    {draft.no_lot || "No lot number"}
                   </p>
                   <p className="mt-1 text-xs text-muted">
-                    Diperbarui{" "}
-                    {new Intl.DateTimeFormat("id-ID", {
+                    Updated{" "}
+                    {new Intl.DateTimeFormat("en-GB", {
                       dateStyle: "medium",
                       timeStyle: "short",
                       timeZone: "Asia/Jakarta",
@@ -137,26 +136,26 @@ export function DraftPanel({
                         if (!rows[0]) throw Error();
                         await onResume(rows[0]);
                       } catch {
-                        toast.error("Draft tidak dapat dimuat. Coba lagi.");
+                        toast.error("Could not load the draft. Retry.");
                       } finally {
                         setBusy("");
                       }
                     }}
                   >
-                    Lanjutkan
+                    Continue
                     <ArrowRight className="size-3.5" />
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    aria-label="Hapus draft"
+                    aria-label="Delete draft"
                     disabled={Boolean(busy)}
                     onClick={async () => {
                       if (
                         !(await confirm({
-                          title: "Hapus draft inspeksi?",
+                          title: "Delete this draft?",
                           description:
-                            "Isian draft ini akan dihapus. Hasil inspeksi final tetap tersimpan.",
+                            "This draft will be deleted. Final inspections are kept.",
                         }))
                       )
                         return;
@@ -168,9 +167,9 @@ export function DraftPanel({
                           return;
                         }
                         setData((v) => v.filter((x) => x.id !== draft.id));
-                        toast.success("Draft dihapus.");
+                        toast.success("Draft deleted.");
                       } catch {
-                        toast.error("Gagal menghapus draft.");
+                        toast.error("Could not delete the draft.");
                       } finally {
                         setBusy("");
                       }
@@ -190,7 +189,7 @@ export function DraftPanel({
                 disabled={page === 0}
                 onClick={() => setPage((v) => v - 1)}
               >
-                Sebelumnya
+                Previous
               </Button>
               <Button
                 variant="ghost"
@@ -198,7 +197,7 @@ export function DraftPanel({
                 disabled={!more}
                 onClick={() => setPage((v) => v + 1)}
               >
-                Berikutnya
+                Next
               </Button>
             </div>
           )}

@@ -29,10 +29,9 @@ export function PdfPreview({
     >
       <DialogContent className="pdf-preview-dialog">
         <DialogHeader>
-          <DialogTitle>Pratinjau COA</DialogTitle>
+          <DialogTitle>Preview COA</DialogTitle>
           <DialogDescription>
-            Dokumen ini belum diterbitkan. Nomor otomatis akan dialokasikan saat
-            penerbitan.
+            Not issued yet. The certificate number is assigned on issuance.
           </DialogDescription>
         </DialogHeader>
         {url && (
@@ -43,11 +42,11 @@ export function PdfPreview({
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-xs text-primary"
             >
-              Buka pratinjau di tab baru
+              Open preview in a new tab
               <ExternalLink className="size-3.5" />
             </a>
             <iframe
-              title="Pratinjau PDF sertifikat analisis"
+              title="Certificate PDF preview"
               src={url + "#toolbar=0"}
               className="pdf-preview-frame"
             />
@@ -55,10 +54,10 @@ export function PdfPreview({
         )}
         <DialogFooter>
           <Button variant="outline" disabled={busy} onClick={onClose}>
-            Kembali mengedit
+            Back to editing
           </Button>
           <Button loading={busy} onClick={() => void onIssue()}>
-            Terbitkan COA
+            Issue COA
           </Button>
         </DialogFooter>
       </DialogContent>

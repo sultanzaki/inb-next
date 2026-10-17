@@ -7,27 +7,21 @@ async function read(
 ) {
   const session = await requireUser();
   if (!session)
-    return Response.json({ message: "Sesi berakhir." }, { status: 401 });
+    return Response.json({ message: "Session expired." }, { status: 401 });
   const { table } = await context.params;
   const base = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!base || !key)
     return Response.json(
-      { message: "Database belum dikonfigurasi." },
+      { message: "Database not configured." },
       { status: 503 },
     );
   const target = dataUrl(base, table, new URL(request.url).search);
   if (!target)
-    return Response.json(
-      { message: "Query tidak diizinkan." },
-      { status: 400 },
-    );
+    return Response.json({ message: "Query not allowed." }, { status: 400 });
   if (table === "inspection_drafts") {
     if (session.user.role === "viewer")
-      return Response.json(
-        { message: "Akses tidak diizinkan." },
-        { status: 403 },
-      );
+      return Response.json({ message: "Access denied." }, { status: 403 });
     if (!["admin qc", "administrator inbionusa"].includes(session.user.role))
       target.searchParams.set("owner_id", "eq." + session.user.id);
   }
@@ -56,10 +50,7 @@ async function read(
       { status: upstream.status, headers: resultHeaders },
     );
   } catch {
-    return Response.json(
-      { message: "Database tidak dapat dihubungi." },
-      { status: 503 },
-    );
+    return Response.json({ message: "Database unavailable." }, { status: 503 });
   }
 }
 export const GET = read;

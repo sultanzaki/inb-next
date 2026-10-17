@@ -29,12 +29,12 @@ export function PasswordForm({
         <Image src="/logo.png" alt="INBIONUSA" width={44} height={44} />
         <p className="mt-7 text-xs text-muted">@{username}</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight">
-          {forced ? "Buat password baru." : "Ganti password."}
+          {forced ? "Set a new password" : "Change password"}
         </h1>
         <p className="mt-4 text-sm leading-relaxed text-muted">
           {forced
-            ? "Administrator telah membuat atau mereset akses Anda. Ganti password sebelum melanjutkan."
-            : "Gunakan minimal 16 karakter. Setelah berhasil, sesi lain akan diakhiri."}
+            ? "Change your temporary password to continue."
+            : "Use at least 16 characters. Other sessions will end."}
         </p>
         <form
           className="mt-8 space-y-5"
@@ -45,7 +45,7 @@ export function PasswordForm({
             try {
               const r = await changePasswordAction(values);
               if (!r.ok) {
-                setError(r.error || "Gagal mengubah password.");
+                setError(r.error || "Could not change the password.");
                 return;
               }
               setValues({
@@ -53,11 +53,11 @@ export function PasswordForm({
                 password: "",
                 confirmation: "",
               });
-              toast.success("Password berhasil diperbarui.");
+              toast.success("Password changed.");
               router.replace("/dashboard");
               router.refresh();
             } catch {
-              setError("Koneksi terputus. Coba lagi.");
+              setError("Connection lost. Retry.");
             } finally {
               setBusy(false);
             }
@@ -65,9 +65,9 @@ export function PasswordForm({
         >
           {(
             [
-              ["current_password", "Password saat ini", "current-password"],
-              ["password", "Password baru", "new-password"],
-              ["confirmation", "Ulangi password baru", "new-password"],
+              ["current_password", "Current password", "current-password"],
+              ["password", "New password", "new-password"],
+              ["confirmation", "Confirm new password", "new-password"],
             ] as const
           ).map(([name, label, autocomplete]) => (
             <label key={name} className="block space-y-2 text-xs font-medium">
@@ -92,13 +92,13 @@ export function PasswordForm({
             </p>
           )}
           <Button type="submit" loading={busy} className="w-full">
-            Simpan password
+            Save password
           </Button>
         </form>
         <div className="mt-6 flex justify-between text-xs">
           {!forced && (
             <Link href="/dashboard" className="text-primary">
-              Kembali ke dashboard
+              Back to dashboard
             </Link>
           )}
           <button
@@ -106,7 +106,7 @@ export function PasswordForm({
             onClick={() => void logoutAction()}
             className="text-muted"
           >
-            Logout
+            Sign out
           </button>
         </div>
       </div>

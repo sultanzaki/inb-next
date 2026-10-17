@@ -17,13 +17,13 @@ const schema = z
   .refine((v) => !v.from || !v.to || v.to >= v.from);
 export async function GET(request: Request) {
   const session = await requireUser();
-  if (!session) return privateJson({ message: "Sesi berakhir." }, 401);
+  if (!session) return privateJson({ message: "Session expired." }, 401);
   if (!canAction(session.user.role, "read_audit"))
-    return privateJson({ message: "Akses tidak diizinkan." }, 403);
+    return privateJson({ message: "Access denied." }, 403);
   const p = schema.safeParse(
     Object.fromEntries(new URL(request.url).searchParams),
   );
-  if (!p.success) return privateJson({ message: "Filter tidak valid." }, 400);
+  if (!p.success) return privateJson({ message: "Invalid filter." }, 400);
   const v = p.data;
   if (v.id) {
     const { data, error } = await createAdminClient()
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
       .eq("id", v.id)
       .single();
     return error
-      ? privateJson({ message: "Aktivitas tidak ditemukan." }, 404)
+      ? privateJson({ message: "Activity not found." }, 404)
       : privateJson({ data });
   }
   let q = createAdminClient()
@@ -49,6 +49,6 @@ export async function GET(request: Request) {
   if (v.to) q = q.lte("waktu", v.to + "T23:59:59.999999+07:00");
   const { data, count, error } = await q;
   return error
-    ? privateJson({ message: "Log audit belum berhasil dimuat." }, 503)
+    ? privateJson({ message: "Could not load the audit log." }, 503)
     : privateJson({ data, count });
 }

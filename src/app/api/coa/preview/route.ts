@@ -7,16 +7,16 @@ import { privateJson } from "@/lib/api-response";
 export const maxDuration = 60;
 export async function POST(request: Request) {
   const session = await requireUser();
-  if (!session) return privateJson({ message: "Sesi berakhir." }, 401);
+  if (!session) return privateJson({ message: "Session expired." }, 401);
   if (!canAction(session.user.role, "issue_coa"))
-    return privateJson({ message: "Akses tidak diizinkan." }, 403);
+    return privateJson({ message: "Access denied." }, 403);
   let body;
   try {
     if (Number(request.headers.get("content-length")) > 32768)
-      return privateJson({ message: "Payload terlalu besar." }, 413);
+      return privateJson({ message: "Request too large." }, 413);
     body = await request.json();
   } catch {
-    return privateJson({ message: "Data tidak valid." }, 400);
+    return privateJson({ message: "Invalid data." }, 400);
   }
   const parsed = issueSchema.safeParse(body);
   if (!parsed.success)
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
         message:
           e instanceof Error
             ? e.message
-            : "Pratinjau gagal dibuat. Periksa panjang parameter dan hasil.",
+            : "Could not create the preview. Check the parameter and result lengths.",
       },
       422,
     );

@@ -60,7 +60,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           </DialogHeader>
           <DialogFooter className="mt-6">
             <Button variant="outline" autoFocus onClick={() => finish(false)}>
-              Kembali
+              Back
             </Button>
             <Button
               variant={
@@ -68,7 +68,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
               }
               onClick={() => finish(true)}
             >
-              {options?.confirmLabel ?? "Ya, hapus"}
+              {options?.confirmLabel ?? "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>

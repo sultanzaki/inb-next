@@ -43,7 +43,7 @@ export async function createSession(
       p_token: token,
       p_expires: expiresAt,
     });
-    if (error || !data) throw new Error("Akun berubah. Silakan masuk kembali.");
+    if (error || !data) throw new Error("Account changed. Sign in again.");
     return token;
   }
   const { error } = await admin.from("sessions").insert({
@@ -99,7 +99,7 @@ export async function clearSession(): Promise<void> {
   if (token) {
     const admin = createAdminClient();
     const { error } = await admin.from("sessions").delete().eq("token", token);
-    if (error) throw new Error("Gagal mencabut sesi. Coba keluar lagi.");
+    if (error) throw new Error("Could not revoke the session. Sign out again.");
   }
   cookieStore.delete("session_token");
 }

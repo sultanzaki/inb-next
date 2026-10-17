@@ -60,10 +60,7 @@ export const exportQuerySchema = z
     person: z.string().max(100).default(""),
     category: z.string().max(100).default(""),
   })
-  .refine(
-    (v) => !v.from || !v.to || v.to >= v.from,
-    "Rentang tanggal tidak valid.",
-  );
+  .refine((v) => !v.from || !v.to || v.to >= v.from, "Invalid date range.");
 export function searchOr(fields: readonly string[], query: string) {
   const term = escapeOrTerm(query);
   return fields.map((field) => `${field}.ilike."%${term}%"`).join(",");

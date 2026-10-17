@@ -45,10 +45,9 @@ export function DomainDialog({
         if (!next && baseline.current !== JSON.stringify(dirtyValue)) {
           details.cancel();
           const discard = await confirm({
-            title: "Tinggalkan perubahan?",
-            description:
-              "Perubahan Anda belum disimpan. Anda bisa melanjutkan mengedit atau membuang perubahan ini.",
-            confirmLabel: "Buang perubahan",
+            title: "Discard your changes?",
+            description: "You have unsaved changes.",
+            confirmLabel: "Discard changes",
           });
           if (!discard) return;
         }
