@@ -535,13 +535,17 @@ export default function DokumenPage() {
                       <FileSearch className="size-4" />
                     </div>
                     <p className="text-base font-semibold tracking-tight">
-                      {search || filter !== "all"
+                      {search ||
+                      filter !== "all" ||
+                      Object.values(advanced).some(Boolean)
                         ? "No matching results"
                         : "No documents yet"}
                     </p>
                     <p className="text-xs text-muted">
-                      {search || filter !== "all"
-                        ? "Try another keyword or clear your search."
+                      {search ||
+                      filter !== "all" ||
+                      Object.values(advanced).some(Boolean)
+                        ? "Try another keyword or clear your filters."
                         : "Add your first record to get started."}
                     </p>
                     {!search && filter === "all" && canUpload && (
@@ -556,13 +560,16 @@ export default function DokumenPage() {
                         <Plus className="size-3.5" /> Add document
                       </Button>
                     )}
-                    {(search || filter !== "all") && (
+                    {(search ||
+                      filter !== "all" ||
+                      Object.values(advanced).some(Boolean)) && (
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => {
                           onSearchChange("");
                           setFilter("all");
+                          setAdvanced({ ...emptyFilters });
                         }}
                       >
                         Clear filters

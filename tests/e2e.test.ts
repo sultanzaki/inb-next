@@ -235,6 +235,12 @@ test(
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
       await page.waitForURL("**/dashboard");
       await page.locator(".quality-summary").waitFor();
+      assert.equal(
+        await page
+          .getByRole("button", { name: "Refresh", exact: true })
+          .count(),
+        0,
+      );
       await capture("02-dashboard-desktop");
       await accessible();
       assert.equal(await page.locator(".app-sidebar").count(), 0);
@@ -609,6 +615,12 @@ test(
           .getByRole("button", { name: "Open navigation menu" })
           .click();
         await page
+          .getByRole("dialog")
+          .getByRole("heading", { name: "Your workspace" })
+          .waitFor();
+        await capture("21-mobile-launcher-" + width);
+        await accessible();
+        await page
           .getByRole("navigation", { name: "Main navigation" })
           .getByRole("link", { name: "Products", exact: true })
           .click();
@@ -682,10 +694,16 @@ test(
         await modal
           .getByRole("heading", { name: longName, exact: true })
           .waitFor();
-        await modal
-          .getByRole("cell", { name: "LongParameter".repeat(15), exact: true })
+        const parameterCard = modal
+          .locator(".specification-parameters")
           .first()
-          .waitFor();
+          .locator(".parameter-mobile-card")
+          .filter({ hasText: "LongParameter".repeat(15) });
+        await parameterCard.waitFor();
+        assert.ok(
+          (await parameterCard.boundingBox())!.height > 100,
+          "mobile parameter card keeps its height",
+        );
         assert.equal(
           await modal.evaluate((el) => el.scrollTop),
           0,
@@ -709,8 +727,121 @@ test(
           ),
           "page does not overflow at " + width,
         );
+        await parameterCard.scrollIntoViewIfNeeded();
+        assert.ok(
+          await parameterCard.evaluate((el) => {
+            const card = el.getBoundingClientRect();
+            const parent = el
+              .closest('[role="dialog"]')!
+              .getBoundingClientRect();
+            return (
+              card.bottom > parent.top &&
+              card.top < parent.bottom &&
+              el.parentElement!.getBoundingClientRect().height > 100
+            );
+          }),
+          "parameters are painted inside the modal, not collapsed",
+        );
         await capture("20-long-product-modal-" + width);
         await accessible();
+        await page.keyboard.press("Escape");
+        await page.waitForFunction(
+          () => !document.querySelector("[role=dialog]"),
+        );
+      }
+      await page.setViewportSize({ width: 375, height: 650 });
+      await page.getByRole("button", { name: "Open navigation menu" }).click();
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Find a lot, product, or COA" })
+        .click();
+      const launcherSearch = page.getByRole("combobox", {
+        name: "Search all modules",
+      });
+      await launcherSearch.waitFor();
+      await page.waitForFunction(
+        () =>
+          document.activeElement?.getAttribute("aria-label") ===
+          "Search all modules",
+      );
+      await launcherSearch.fill(browserLot);
+      await page
+        .getByRole("option")
+        .filter({ hasText: browserLot })
+        .first()
+        .click();
+      await page.waitForURL("**/dashboard/inspeksi?q=*");
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.getByRole("button", { name: "Open navigation menu" }).click();
+      await page.getByRole("heading", { name: "Your workspace" }).waitFor();
+      assert.equal(
+        await page
+          .locator(".launcher-tile")
+          .first()
+          .evaluate((el) => getComputedStyle(el).animationName),
+        "none",
+      );
+      assert.ok(
+        await page
+          .getByRole("dialog")
+          .evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
+      );
+      await page.keyboard.press("Escape");
+      await page.waitForFunction(
+        () => !document.querySelector("[role=dialog]"),
+      );
+      await page.emulateMedia({ reducedMotion: "no-preference" });
+      for (const width of [375, 320]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(origin + "/dashboard/produk");
+        await page
+          .getByRole("button", { name: "Advanced filters", exact: true })
+          .click();
+        const filterSheet = page.getByRole("dialog", {
+          name: "Filter products",
+          exact: true,
+        });
+        await filterSheet
+          .getByLabel("Filter category", { exact: true })
+          .fill("no-such-category-" + suffix);
+        assert.ok(
+          await filterSheet.evaluate(
+            (el) => el.scrollWidth <= el.clientWidth + 1,
+          ),
+        );
+        await capture("22-mobile-filters-" + width);
+        await accessible();
+        await filterSheet
+          .getByRole("button", { name: "Apply filters", exact: true })
+          .click();
+        await page.getByText("No matching results", { exact: true }).waitFor();
+        await page.getByRole("button", { name: /Advanced filters/ }).click();
+        await page
+          .getByRole("dialog")
+          .getByRole("button", { name: "Clear", exact: true })
+          .click();
+        await page
+          .locator("tbody tr .row-actions-mobile button")
+          .first()
+          .waitFor();
+        await page
+          .getByRole("button", { name: "Advanced filters", exact: true })
+          .click();
+        await page
+          .getByRole("dialog")
+          .getByLabel("From date", { exact: true })
+          .fill("2026-12-31");
+        await page
+          .getByRole("dialog")
+          .getByLabel("To date", { exact: true })
+          .fill("2026-01-01");
+        assert.equal(
+          await page
+            .getByRole("dialog")
+            .getByRole("button", { name: "Apply filters", exact: true })
+            .isDisabled(),
+          true,
+        );
         await page.keyboard.press("Escape");
         await page.waitForFunction(
           () => !document.querySelector("[role=dialog]"),
@@ -836,6 +967,23 @@ test(
           await restricted.request.get(origin + "/api/data/master_produk")
         ).status(),
         401,
+      );
+      await member.goto(origin + "/login");
+      await member.locator("[name=username]").fill(managedUsername);
+      await member.locator("[name=password]").fill("Reset QA password 2026");
+      await member
+        .getByRole("button", { name: "Sign in", exact: true })
+        .click();
+      await member.waitForURL("**/account/password");
+      await member
+        .getByRole("button", { name: "Sign out", exact: true })
+        .click();
+      await member.waitForURL("**/login");
+      assert.equal(
+        await member
+          .getByText("Could not sign out. Retry.", { exact: true })
+          .count(),
+        0,
       );
       await restricted.close();
       await page.goto(origin + "/dashboard/audit");
@@ -1106,6 +1254,13 @@ test(
         .getByRole("menuitem", { name: "Sign out", exact: true })
         .click();
       await page.waitForURL("**/login");
+      assert.equal(
+        await page
+          .getByText("Could not sign out. Retry.", { exact: true })
+          .count(),
+        0,
+        "successful logout never reports an error",
+      );
       assert.equal(
         (await db.query("select from sessions where user_id=$1", [user.id]))
           .rowCount,

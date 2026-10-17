@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { changePasswordAction } from "@/lib/actions/user-actions";
-import { logoutAction } from "@/app/login/actions";
+import { useLogout } from "@/hooks/use-logout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -23,6 +23,7 @@ export function PasswordForm({
       password: "",
       confirmation: "",
     });
+  const { logout, loggingOut } = useLogout();
   return (
     <main className="password-page">
       <div className="password-card">
@@ -102,11 +103,11 @@ export function PasswordForm({
             </Link>
           )}
           <button
-            disabled={busy}
-            onClick={() => void logoutAction()}
+            disabled={busy || loggingOut}
+            onClick={() => void logout()}
             className="text-muted"
           >
-            Sign out
+            {loggingOut ? "Signing out…" : "Sign out"}
           </button>
         </div>
       </div>

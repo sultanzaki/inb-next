@@ -5,7 +5,6 @@ import {
   FileCheck2,
   ArrowUpRight,
   ArrowRight,
-  RefreshCw,
   AlertTriangle,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -35,7 +34,6 @@ function localTodayStr() {
 }
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [failedKeys, setFailedKeys] = useState<string[]>([]);
   const [dateLabel, setDateLabel] = useState("");
@@ -56,7 +54,6 @@ export default function DashboardPage() {
   }, []);
   const fetchData = useCallback(async () => {
     const sb = createClient();
-    setLoading(true);
     const today = localTodayStr();
 
     try {
@@ -145,8 +142,6 @@ export default function DashboardPage() {
         dok_expired: 0,
         recent_inspeksi: [],
       });
-    } finally {
-      setLoading(false);
     }
   }, []);
 
@@ -210,16 +205,7 @@ export default function DashboardPage() {
         eyebrow="Dashboard"
         title="Quality overview"
         description={dateLabel || "INBIONUSA quality control"}
-      >
-        <Button
-          variant="outline"
-          loading={loading}
-          onClick={() => void fetchData()}
-        >
-          <RefreshCw className="size-3.5" />
-          Refresh
-        </Button>
-      </PageHeader>
+      />
       {loadError && (
         <Alert variant="destructive">
           <AlertTriangle />
