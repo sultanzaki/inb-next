@@ -1,3 +1,4 @@
+import { moduleGate } from "@/lib/erp/server";
 import { requireUser } from "@/lib/auth";
 import { canAction } from "@/lib/types";
 import { loadCoaSource, createPreviewProof } from "@/lib/pdf/coa-source";
@@ -8,6 +9,8 @@ export const maxDuration = 60;
 export async function POST(request: Request) {
   const session = await requireUser();
   if (!session) return privateJson({ message: "Session expired." }, 401);
+  const denied = await moduleGate("quality");
+  if (denied) return denied;
   if (!canAction(session.user.role, "issue_coa"))
     return privateJson({ message: "Access denied." }, 403);
   let body;

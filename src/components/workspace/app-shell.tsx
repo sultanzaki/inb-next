@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import { useUser } from "@/app/(dashboard)/user-context";
 import { useLogout } from "@/hooks/use-logout";
+import { useERP } from "@/components/erp/context";
+import { Factory, Warehouse, Handshake, Settings2 } from "lucide-react";
 import { canAction } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,6 +48,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MobileNavigation } from "./mobile-navigation";
 const navigation = [
+  { href: "/dashboard/warehouse", label: "Warehouse", icon: Warehouse },
+  { href: "/dashboard/production", label: "Production", icon: Factory },
+  { href: "/dashboard/sales", label: "Sales", icon: Handshake },
+  {
+    href: "/dashboard/settings",
+    label: "Settings",
+    icon: Settings2,
+    permission: "manage_users",
+  },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/produk", label: "Products", icon: Package },
   { href: "/dashboard/inspeksi", label: "Inspections", icon: ClipboardList },
@@ -72,6 +83,7 @@ type SearchResult = {
   href: string;
 };
 export function AppShell({ children }: { children: ReactNode }) {
+  const erp = useERP();
   const { user } = useUser(),
     pathname = usePathname(),
     router = useRouter();
@@ -84,9 +96,51 @@ export function AppShell({ children }: { children: ReactNode }) {
     [retry, setRetry] = useState(0);
   const { logout, loggingOut } = useLogout();
   const seq = useRef(0);
-  const items = navigation.filter(
-    (n) => !n.permission || canAction(user?.role || "viewer", n.permission),
-  );
+  const items = navigation.filter((n) => {
+    if (n.permission && !canAction(user?.role || "viewer", n.permission))
+      return false;
+    if (n.href.endsWith("/warehouse")) return erp.can("warehouse");
+    if (n.href.endsWith("/production")) return erp.can("production");
+    if (n.href.endsWith("/sales")) return erp.can("sales");
+    if (
+      ["/dashboard/inspeksi", "/dashboard/coa", "/dashboard/arsip"].includes(
+        n.href,
+      )
+    )
+      return erp.can("quality");
+    return true;
+  });
+  const area = pathname.includes("/warehouse")
+    ? "warehouse"
+    : pathname.includes("/production")
+      ? "production"
+      : pathname.includes("/sales")
+        ? "sales"
+        : pathname.includes("/settings") ||
+            pathname.includes("/pengguna") ||
+            pathname.includes("/audit")
+          ? "administration"
+          : pathname === "/dashboard" || pathname === "/dashboard/produk"
+            ? "overview"
+            : "quality";
+  const areaLinks: Record<string, string[]> = {
+    overview: ["/dashboard", "/dashboard/produk"],
+    quality: [
+      "/dashboard/produk",
+      "/dashboard/inspeksi",
+      "/dashboard/coa",
+      "/dashboard/arsip",
+    ],
+    warehouse: ["/dashboard/warehouse"],
+    production: ["/dashboard/production"],
+    sales: ["/dashboard/sales"],
+    administration: [
+      "/dashboard/settings",
+      "/dashboard/pengguna",
+      "/dashboard/audit",
+    ],
+  };
+  const desktopItems = items.filter((n) => areaLinks[area].includes(n.href));
   const current = items.find((n) => n.href === pathname);
   useEffect(() => {
     document.title = `${current?.label || "INBIONUSA"} — INBIONUSA`;
@@ -197,8 +251,40 @@ export function AppShell({ children }: { children: ReactNode }) {
               setCommandOpen(true);
             }}
           />
+          <select
+            className="erp-module-switch"
+            aria-label="Workspace module"
+            value={area}
+            onChange={(e) =>
+              router.push(
+                (
+                  {
+                    overview: "/dashboard",
+                    quality: "/dashboard/inspeksi",
+                    warehouse: "/dashboard/warehouse",
+                    production: "/dashboard/production",
+                    sales: "/dashboard/sales",
+                    administration: "/dashboard/settings",
+                  } as Record<string, string>
+                )[e.target.value],
+              )
+            }
+          >
+            <option value="overview">Overview</option>
+            {erp.can("quality") && <option value="quality">Quality</option>}
+            {erp.can("warehouse") && (
+              <option value="warehouse">Warehouse</option>
+            )}
+            {erp.can("production") && (
+              <option value="production">Production</option>
+            )}
+            {erp.can("sales") && <option value="sales">Sales</option>}
+            {canAction(user?.role || "viewer", "manage_users") && (
+              <option value="administration">Administration</option>
+            )}
+          </select>
           <nav className="app-desktop-nav" aria-label="Main navigation">
-            {items.map((n) => (
+            {desktopItems.map((n) => (
               <Link
                 key={n.href}
                 href={n.href}

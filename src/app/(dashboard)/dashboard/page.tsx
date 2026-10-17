@@ -1,4 +1,6 @@
 "use client";
+import { useERP } from "@/components/erp/context";
+import { OperationsHome } from "@/components/erp/workspace";
 import { DashboardAnalytics } from "@/components/workspace/dashboard-analytics";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -33,7 +35,7 @@ import {
 function localTodayStr() {
   return businessDate();
 }
-export default function DashboardPage() {
+function QualityDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [failedKeys, setFailedKeys] = useState<string[]>([]);
@@ -423,4 +425,10 @@ export default function DashboardPage() {
       </footer>
     </div>
   );
+}
+
+export default function DashboardPage() {
+  const erp = useERP();
+  if (!erp.data && !erp.error) return <p role="status">Preparing workspace…</p>;
+  return erp.can("quality") ? <QualityDashboardPage /> : <OperationsHome />;
 }

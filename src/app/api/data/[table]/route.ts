@@ -1,3 +1,4 @@
+import { moduleGate } from "@/lib/erp/server";
 import { requireUser } from "@/lib/auth";
 import { dataUrl } from "@/lib/data-access";
 
@@ -9,6 +10,18 @@ async function read(
   if (!session)
     return Response.json({ message: "Session expired." }, { status: 401 });
   const { table } = await context.params;
+  if (
+    [
+      "hasil_uji",
+      "coa",
+      "available_hasil_uji",
+      "inspection_drafts",
+      "dokumen_arsip",
+    ].includes(table)
+  ) {
+    const denied = await moduleGate("quality");
+    if (denied) return denied;
+  }
   const base = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!base || !key)

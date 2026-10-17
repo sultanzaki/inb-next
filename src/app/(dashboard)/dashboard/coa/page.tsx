@@ -1,4 +1,5 @@
 "use client";
+import { useERP } from "@/components/erp/context";
 import { coaExpiryDate } from "@/lib/domain/coa-dates";
 import { RowActions } from "@/components/workspace/row-actions";
 import { Download } from "lucide-react";
@@ -133,6 +134,7 @@ function coaStatusBadge(tanggalExpired: string) {
 }
 
 export default function COAPage() {
+  const qualityWrite = useERP().can("quality", "write");
   const confirm = useConfirm();
   const [filter, setFilter] = useState("all");
   const [order, setOrder] = useState("default");
@@ -488,9 +490,9 @@ export default function COAPage() {
   }
 
   const role: UserRole = (user?.role as UserRole) ?? "viewer";
-  const canDelete = canAction(role, "delete_coa");
-  const canIssue = canAction(role, "issue_coa");
-  const canEdit = canAction(role, "update_coa");
+  const canDelete = qualityWrite && canAction(role, "delete_coa");
+  const canIssue = qualityWrite && canAction(role, "issue_coa");
+  const canEdit = qualityWrite && canAction(role, "update_coa");
   // The dialog exists in the tree for every role (so Edit never dead-ends);
   // without a write role every input in it renders disabled (read-only mode).
   const canWrite = canIssue || canEdit;

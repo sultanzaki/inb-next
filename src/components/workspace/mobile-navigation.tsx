@@ -23,6 +23,10 @@ export type WorkspaceNavItem = {
   permission?: string;
 };
 const descriptions: Record<string, string> = {
+  Warehouse: "Stock & counts",
+  Production: "Finished goods",
+  Sales: "Quotes & orders",
+  Settings: "Modules & access",
   Dashboard: "At a glance",
   Products: "Standards & versions",
   Inspections: "Record & review",
@@ -98,7 +102,7 @@ export function MobileNavigation({
             </div>
             <SheetTitle>Your workspace</SheetTitle>
             <SheetDescription>
-              Products, inspections, and certificates.
+              Choose a workspace or jump to a record.
             </SheetDescription>
           </SheetHeader>
           <button
