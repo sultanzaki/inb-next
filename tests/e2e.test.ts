@@ -1260,11 +1260,16 @@ test(
       await page.waitForURL("**/login");
       assert.equal(
         await page
-          .getByText("Could not sign out. Retry.", { exact: true })
+          .locator('[data-sonner-toast][data-removed="false"]')
+          .filter({ hasText: "Could not sign out. Retry." })
           .count(),
         0,
-        "successful logout never reports an error",
+        "successful logout never reports an active error",
       );
+      // Sonner keeps a dismissed notification mounted during its exit animation.
+      await page
+        .getByText("Could not sign out. Retry.", { exact: true })
+        .waitFor({ state: "detached", timeout: 2000 });
       assert.equal(
         (await db.query("select from sessions where user_id=$1", [user.id]))
           .rowCount,
