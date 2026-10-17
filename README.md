@@ -1,5 +1,7 @@
 # INBIONUSA — Quality Control System
 
+Fitur draft inspeksi, COA server, administrasi akun, audit, pencarian dan ekspor: lihat [alur QC dan panduan migrasi 003](docs/QC-WORKFLOWS.md).
+
 Sistem Manajemen Mutu dan Quality Control berbasis web, dibangun dengan Next.js + Supabase.
 
 Migrasi dari Google Apps Script + Google Sheets ke arsitektur modern.
@@ -13,15 +15,15 @@ Migrasi dari Google Apps Script + Google Sheets ke arsitektur modern.
 
 ## Fitur
 
-| Fitur | Deskripsi |
-|-------|-----------|
-| **Dashboard** | Ringkasan statistik: total produk, lot diuji, pass/fail, COA, dokumen |
-| **Master Produk** | CRUD produk dengan spesifikasi parameter uji dinamis |
-| **Inspeksi** | Input hasil uji per lot, auto PASS/FAIL evaluation |
-| **COA** | Terbitkan Certificate of Analysis untuk lot lulus QC |
-| **Arsip Dokumen** | Kelola dokumen mutu dengan masa berlaku |
-| **Audit Log** | Semua aktivitas tercatat otomatis |
-| **Role-based Access** | Admin QC, Administrator, QC Supervisor, Viewer |
+| Fitur                 | Deskripsi                                                             |
+| --------------------- | --------------------------------------------------------------------- |
+| **Dashboard**         | Ringkasan statistik: total produk, lot diuji, pass/fail, COA, dokumen |
+| **Master Produk**     | CRUD produk dengan spesifikasi parameter uji dinamis                  |
+| **Inspeksi**          | Input hasil uji per lot, auto PASS/FAIL evaluation                    |
+| **COA**               | Terbitkan Certificate of Analysis untuk lot lulus QC                  |
+| **Arsip Dokumen**     | Kelola dokumen mutu dengan masa berlaku                               |
+| **Audit Log**         | Semua aktivitas tercatat otomatis                                     |
+| **Role-based Access** | Admin QC, Administrator, QC Supervisor, Viewer                        |
 
 ## Menjalankan
 
@@ -51,6 +53,7 @@ Docker diperlukan untuk PostgreSQL/PostgREST lokal yang terisolasi. Test databas
 ## Database
 
 7 tabel utama PostgreSQL:
+
 - `users` — User authentication & roles
 - `master_produk` — Product master data
 - `spesifikasi` — Test parameters per product
@@ -61,17 +64,18 @@ Docker diperlukan untuk PostgreSQL/PostgREST lokal yang terisolasi. Test databas
 
 ## Role Permissions
 
-| Aksi | Role |
-|------|------|
-| Delete produk | Admin QC, Administrator |
-| Delete hasil uji | Admin QC, Administrator |
-| Delete COA | Admin QC, Administrator |
+| Aksi             | Role                                   |
+| ---------------- | -------------------------------------- |
+| Delete produk    | Admin QC, Administrator                |
+| Delete hasil uji | Admin QC, Administrator                |
+| Delete COA       | Admin QC, Administrator                |
 | Issue/Update COA | Admin QC, Administrator, QC Supervisor |
-| View data | Semua role (termasuk Viewer) |
+| View data        | Semua role (termasuk Viewer)           |
 
 ## Migrasi Data
 
 Untuk migrasi data dari Google Sheets:
+
 1. Export setiap sheet sebagai CSV
 2. Import ke tabel Supabase yang sesuai
 3. Gunakan hash scrypt untuk password baru; kompatibilitas hash legacy hanya untuk migrasi dan ditingkatkan saat login. Password bootstrap publik lama ditolak.

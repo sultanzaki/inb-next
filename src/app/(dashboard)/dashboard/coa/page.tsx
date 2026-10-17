@@ -1,4 +1,13 @@
 "use client";
+import { Download } from "lucide-react";
+import { PdfPreview } from "@/components/workspace/pdf-preview";
+import {
+  DataTools,
+  CopyValue,
+  useSearchSeed,
+  emptyFilters,
+  type AdvancedFilters,
+} from "@/components/workspace/data-tools";
 import {
   PageHeader,
   DataToolbar,
@@ -18,7 +27,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
-import type { CoaRow, HasilUjiItem, HasilUjiRow, UserRole } from "@/lib/types";
+import type { CoaRow, HasilUjiRow, UserRole } from "@/lib/types";
 import { toast } from "sonner";
 import {
   issueCoaAction,
@@ -48,9 +57,12 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { TableSkeleton } from "@/components/table-skeleton";
-import { escapeHtml } from "@/lib/format";
 
 interface COAForm {
+  language: "id" | "en";
+  inci_name: string;
+  compliance_statement: string;
+  delivery_date: string;
   id_hasil: string;
   no_coa: string;
   tanggal_rilis: string;
@@ -60,6 +72,10 @@ interface COAForm {
 }
 
 const emptyForm: COAForm = {
+  language: "en",
+  inci_name: "",
+  compliance_statement: "",
+  delivery_date: "",
   id_hasil: "",
   no_coa: "",
   tanggal_rilis: "",
@@ -118,6 +134,10 @@ export default function COAPage() {
   const confirm = useConfirm();
   const [filter, setFilter] = useState("all");
   const [order, setOrder] = useState("default");
+  const [advanced, setAdvanced] = useState<AdvancedFilters>({
+    ...emptyFilters,
+  });
+  useSearchSeed(onSearchChange);
   const requestSeq = useRef(0);
   const appending = useRef(false);
   const { user } = useUser();
@@ -136,6 +156,21 @@ export default function COAPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<COAForm>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const previewRef = useRef<string | null>(null);
+  const previewToken = useRef("");
+  useEffect(
+    () => () => {
+      if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+    },
+    [],
+  );
+  function closePreview() {
+    if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+    previewRef.current = null;
+    previewToken.current = "";
+    setPreviewUrl(null);
+  }
 
   // Pagination: list queries are bounded with .range(); count:"exact" returns
   // the filtered row total (ignoring the range window) in the same request, so
@@ -165,6 +200,9 @@ export default function COAPage() {
         .range(start, start + pageSize - 1);
       if (filter === "active") q = q.gte("tanggal_expired", businessDate());
       if (filter === "expired") q = q.lt("tanggal_expired", businessDate());
+      if (advanced.from) q = q.gte("tanggal_rilis", advanced.from);
+      if (advanced.to) q = q.lte("tanggal_rilis", advanced.to);
+      if (advanced.product) q = q.eq("id_produk", advanced.product);
       if (search) {
         // Quoted values (via escapeOr): commas/parens stay literal and the
         // escaped %/_ reach Postgres LIKE as literals, not wildcards.
@@ -198,7 +236,7 @@ export default function COAPage() {
       setLoadingMore(false);
       setLoading(false);
     },
-    [search, pageSize, filter, order],
+    [search, pageSize, filter, order, advanced],
   );
 
   // Fresh fetch: page 0 replaces any accumulated rows and resets the offset
@@ -284,6 +322,10 @@ export default function COAPage() {
 
   async function openEdit(coa: CoaRow) {
     setForm({
+      language: coa.language || "en",
+      inci_name: coa.inci_name || coa.hasil_uji_snapshot.inci_name || "",
+      compliance_statement: coa.compliance_statement || "",
+      delivery_date: coa.delivery_date || "",
       id_hasil: "",
       no_coa: coa.no_coa,
       tanggal_rilis: coa.tanggal_rilis,
@@ -295,6 +337,35 @@ export default function COAPage() {
     setDialogOpen(true);
   }
 
+  async function preparePreview() {
+    if (editingId) {
+      await handleSave();
+      return;
+    }
+    setSaving(true);
+    try {
+      const r = await fetch("/api/coa/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!r.ok) {
+        const body = await r.json();
+        toast.error(body.message || "Pratinjau belum berhasil dibuat.");
+        return;
+      }
+      const blob = await r.blob();
+      closePreview();
+      previewToken.current = r.headers.get("X-COA-Preview-Token") || "";
+      const url = URL.createObjectURL(blob);
+      previewRef.current = url;
+      setPreviewUrl(url);
+    } catch {
+      toast.error("Koneksi terputus. Coba lagi.");
+    } finally {
+      setSaving(false);
+    }
+  }
   async function handleSave() {
     if (editingId) {
       if (!form.no_coa) {
@@ -311,6 +382,10 @@ export default function COAPage() {
           tanggal_expired: form.tanggal_expired,
           mfg_date: form.mfg_date,
           tanda_tangan: form.tanda_tangan,
+          language: form.language,
+          inci_name: form.inci_name,
+          compliance_statement: form.compliance_statement,
+          delivery_date: form.delivery_date,
         });
         if (!res.ok) {
           toast.error(res.error ?? "Gagal menyimpan COA. Coba lagi.");
@@ -338,17 +413,23 @@ export default function COAPage() {
       // Server action: nomor otomatis + snapshot + foreign key diturunkan
       // dari baris hasil uji DI SERVER; 23505 race di-retry di sana.
       const res = await issueCoaAction({
+        preview_token: previewToken.current,
         id_hasil: form.id_hasil,
         no_coa: form.no_coa,
         tanggal_rilis: form.tanggal_rilis,
         tanggal_expired: form.tanggal_expired,
         mfg_date: form.mfg_date,
         tanda_tangan: form.tanda_tangan,
+        language: form.language,
+        inci_name: form.inci_name,
+        compliance_statement: form.compliance_statement,
+        delivery_date: form.delivery_date,
       });
       if (!res.ok) {
         toast.error(res.error ?? "Gagal menerbitkan COA.");
         return;
       }
+      closePreview();
       toast.success("COA berhasil diterbitkan.");
       setDialogOpen(false);
       resetForm();
@@ -388,246 +469,25 @@ export default function COAPage() {
   }
 
   function handlePrint(coa: CoaRow) {
-    const snapshot = coa.hasil_uji_snapshot;
-    const items: HasilUjiItem[] = snapshot.items ?? [];
-    const w = window.open("", "_blank");
-    if (!w) {
-      toast.error("Izinkan jendela pop-up untuk mencetak COA.");
-      return;
+    window.open(`/api/coa/${coa.id}/pdf`, "_blank", "noopener,noreferrer");
+  }
+  async function downloadPdf(coa: CoaRow) {
+    try {
+      const r = await fetch(`/api/coa/${coa.id}/pdf?download=1`);
+      if (!r.ok) {
+        const data = await r.json();
+        toast.error(data.message || "PDF belum berhasil dibuat.");
+        return;
+      }
+      const url = URL.createObjectURL(await r.blob()),
+        a = document.createElement("a");
+      a.href = url;
+      a.download = coa.no_coa.replace(/[^a-zA-Z0-9_.-]/g, "_") + ".pdf";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch {
+      toast.error("Koneksi terputus. Coba lagi.");
     }
-    w.document
-      .write(`<html lang="id"><head><meta charset="utf-8"/><title>COA - ${escapeHtml(coa.no_coa)}</title>
-<style>
-  @page { margin: 12mm 15mm; }
-  * { box-sizing: border-box; }
-  body {
-    font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    font-size: 10.5pt;
-    line-height: 1.5;
-    color: #0f172a;
-    background: #ffffff;
-    margin: 0;
-    padding: 32px 24px;
-  }
-  /* Formal document: one centered 720px sheet. Ink on white, hairline rules,
-     no shadows, no fills beyond the token tints on the status chips. */
-  .doc { width: 720px; margin: 0 auto; }
-  .page { display: flex; flex-direction: column; min-height: 1000px; max-width: 820px; margin: 0 auto; }
-  .micro {
-    font-size: 7.5pt;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #5b6b7c;
-  }
-  .num { font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: -0.01em; }
-
-  /* Letterhead: logo + company block left, certificate label + number right. */
-  .lh {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 24px;
-    padding-bottom: 16px;
-    border-bottom: 3px solid #047857;
-  }
-  .lh-left { display: flex; align-items: center; gap: 12px; }
-  .lh-logo {
-    width: 40px;
-    height: 40px;
-    flex: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid #e4e8ec;
-    border-radius: 8px;
-    object-fit: contain;
-    color: #047857;
-    font-size: 11pt;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-  }
-  .lh-name { font-size: 13pt; font-weight: 700; letter-spacing: 0.02em; }
-  .lh-sub { font-size: 8pt; color: #5b6b7c; margin-top: 1px; }
-  .lh-right { text-align: right; }
-  .lh-no { margin-top: 4px; font-size: 12.5pt; }
-
-  /* Two-column meta grid: product identity left, document dates right,
-     separated by a vertical hairline. */
-  .meta {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    column-gap: 32px;
-    margin: 20px 0 24px;
-  }
-  .meta-col + .meta-col { border-left: 1px solid #e4e8ec; padding-left: 32px; }
-  .m-row + .m-row { margin-top: 10px; }
-  .m-val { margin-top: 1px; font-size: 10.5pt; }
-
-  /* Results table: booktabs rules — hairline frame, heavier header rules,
-     faint row dividers. Values keep tabular alignment. */
-  .tbl { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
-  .tbl th {
-    text-align: left;
-    font-size: 7.5pt;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #5b6b7c;
-    padding: 8px 10px;
-    border-top: 1px solid #0f172a;
-    border-bottom: 1px solid #0f172a;
-  }
-  .tbl th:nth-child(2), .tbl th:nth-child(3) { width: 21%; }
-  .tbl th:nth-child(4) { width: 15%; text-align: center; }
-  .tbl td { padding: 9px 10px; border-bottom: 1px solid #edf0f3; vertical-align: top; }
-  .tbl td:nth-child(4) { text-align: center; }
-  .tbl tbody tr:last-child td { border-bottom: 1px solid #0f172a; }
-  .unit { color: #5b6b7c; font-size: 8.5pt; font-weight: 400; margin-left: 3px; }
-  .chip {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 8pt;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-  }
-  .chip-pass { background: #ecfdf5; color: #065f46; }
-  .chip-fail { background: #fef2f2; color: #991b1b; }
-
-  /* Signature: document note left, signer block bottom-right with a blank
-     tanda tangan space above a hairline. */
-  .foot {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    gap: 32px;
-    margin-top: auto;
-    padding-top: 16px;
-    border-top: 1px solid #e4e8ec;
-  }
-  .doc-note { font-size: 8pt; color: #5b6b7c; line-height: 1.6; }
-  .sig { text-align: center; min-width: 220px; }
-  .sig-space { height: 18mm; }
-  .sig-name {
-    font-size: 10pt;
-    font-weight: 600;
-    padding-top: 6px;
-    border-top: 1px solid #0f172a;
-  }
-  .sig-role { margin-top: 2px; }
-
-  @media print {
-    body {
-      padding: 0;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
-    .doc { width: auto; max-width: 100%; }
-    .page { page-break-after: always; min-height: 260mm; max-width: none; margin: 0; }
-    .page:last-child { page-break-after: auto; }
-    .lh { page-break-after: avoid; }
-    .meta { page-break-after: avoid; }
-    .tbl thead { display: table-header-group; }
-    .foot { page-break-inside: avoid; }
-  }
-</style></head><body>
-<div class="page">
-  <div class="lh">
-    <div class="lh-left">
-      <img class="lh-logo" src="/logo.png" alt="INBIONUSA" />
-      <div>
-        <div class="lh-name">INBIONUSA</div>
-        <div class="lh-sub">Quality Control System</div>
-      </div>
-    </div>
-    <div class="lh-right">
-      <div class="micro">Certificate of Analysis</div>
-      <div class="lh-no num">${escapeHtml(coa.no_coa)}</div>
-    </div>
-  </div>
-
-  <div class="meta">
-    <div class="meta-col">
-      <div class="m-row">
-        <div class="micro">Nama Produk</div>
-        <div class="m-val">${escapeHtml(snapshot.produk || "-")}</div>
-      </div>
-      <div class="m-row">
-        <div class="micro">Kode Produk</div>
-        <div class="m-val num">${escapeHtml(snapshot.kode_produk || "-")}</div>
-      </div>
-      <div class="m-row">
-        <div class="micro">MFG Date</div>
-        <div class="m-val num">${escapeHtml(coa.mfg_date || "-")}</div>
-      </div>
-    </div>
-    <div class="meta-col">
-      <div class="m-row">
-        <div class="micro">Nomor Lot</div>
-        <div class="m-val num">${escapeHtml(coa.no_lot)}</div>
-      </div>
-      <div class="m-row">
-        <div class="micro">Tanggal Rilis</div>
-        <div class="m-val num">${escapeHtml(coa.tanggal_rilis)}</div>
-      </div>
-      <div class="m-row">
-        <div class="micro">Tanggal Expired</div>
-        <div class="m-val num">${escapeHtml(coa.tanggal_expired)}</div>
-      </div>
-      <div class="m-row">
-        <div class="micro">Tanggal Sampling</div>
-        <div class="m-val num">${escapeHtml(snapshot.ts || "-")}</div>
-      </div>
-      <div class="m-row">
-        <div class="micro">Tanggal Uji</div>
-        <div class="m-val num">${escapeHtml(snapshot.tu || "-")}</div>
-      </div>
-    </div>
-  </div>
-
-  <table class="tbl">
-    <thead>
-      <tr>
-        <th>Parameter Uji</th>
-        <th>Spesifikasi</th>
-        <th>Hasil Uji</th>
-        <th>Status</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${items
-        .map((item) => {
-          const specText =
-            item.t === "TEXT"
-              ? "Teks"
-              : item.t === "MIN"
-                ? "≥ " + item.mn
-                : item.t === "MAX"
-                  ? "≤ " + item.mx
-                  : (item.mn || "-") + " — " + (item.mx || "-");
-          return `<tr><td>${escapeHtml(item.p)}</td><td>${escapeHtml(specText)}</td><td class="num">${escapeHtml(item.val || "-")}${item.u ? '<span class="unit">' + escapeHtml(item.u) + "</span>" : ""}</td><td>${item.st === "PASS" ? '<span class="chip chip-pass">PASS</span>' : '<span class="chip chip-fail">FAIL</span>'}</td></tr>`;
-        })
-        .join("")}
-    </tbody>
-  </table>
-
-  <div class="foot">
-    <div class="doc-note">
-      INBIONUSA — Quality Control System<br/>
-      Diterbitkan berdasarkan snapshot hasil pengujian.
-    </div>
-    <div class="sig">
-      <div class="micro">Diterbitkan Oleh,</div>
-      <div class="sig-space"></div>
-      <div class="sig-name">${escapeHtml(coa.tanda_tangan_digital || "—")}</div>
-      <div class="sig-role micro">Quality Control</div>
-    </div>
-  </div>
-</div>
-<script>window.addEventListener("load",()=>{window.print()});<\/script>
-</body></html>`);
-    w.document.close();
   }
 
   function openDetail(coa: CoaRow) {
@@ -687,7 +547,7 @@ export default function COAPage() {
             <DomainForm
               value={{ ...form, id: editingId }}
               schema={editingId ? updateCoaSchema : issueSchema}
-              onSubmit={handleSave}
+              onSubmit={preparePreview}
             >
               {/* Scrollable body; the hairline footer stays pinned below it. */}
               <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
@@ -740,6 +600,31 @@ export default function COAPage() {
                     </div>
                   )}
 
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Bahasa dokumen" name="language">
+                      <select
+                        value={form.language}
+                        onChange={(e) =>
+                          setForm((v) => ({
+                            ...v,
+                            language: e.target.value as "id" | "en",
+                          }))
+                        }
+                      >
+                        <option value="en">English</option>
+                        <option value="id">Bahasa Indonesia</option>
+                      </select>
+                    </Field>
+                    <Field label="Nama INCI" name="inci_name">
+                      <Input
+                        value={form.inci_name}
+                        onChange={(e) =>
+                          setForm((v) => ({ ...v, inci_name: e.target.value }))
+                        }
+                        placeholder="Nama INCI produk"
+                      />
+                    </Field>
+                  </div>
                   <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                     <Field label="No COA" name="no_coa">
                       <Input
@@ -814,6 +699,37 @@ export default function COAPage() {
                     />
                   </Field>
 
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Tanggal pengiriman" name="delivery_date">
+                      <Input
+                        type="date"
+                        value={form.delivery_date}
+                        onChange={(e) =>
+                          setForm((v) => ({
+                            ...v,
+                            delivery_date: e.target.value,
+                          }))
+                        }
+                      />
+                    </Field>
+                    <Field
+                      label="Pernyataan kepatuhan"
+                      name="compliance_statement"
+                      hint="Isi standar yang memang berlaku untuk produk ini, sesuai bahasa dokumen."
+                    >
+                      <textarea
+                        className="w-full rounded-control border border-input p-3 text-sm"
+                        value={form.compliance_statement}
+                        maxLength={3000}
+                        onChange={(e) =>
+                          setForm((v) => ({
+                            ...v,
+                            compliance_statement: e.target.value,
+                          }))
+                        }
+                      />
+                    </Field>
+                  </div>
                   {!editingId && selectedHasil && (
                     <div className="border-t border-border pt-4">
                       <p className="micro-label">Pratinjau Hasil Uji</p>
@@ -838,7 +754,11 @@ export default function COAPage() {
                       (!editingId && (availableLoading || availableError))
                     }
                   >
-                    {saving ? "Menyimpan…" : editingId ? "Simpan" : "Terbitkan"}
+                    {saving
+                      ? "Menyimpan…"
+                      : editingId
+                        ? "Simpan"
+                        : "Pratinjau COA"}
                   </Button>
                 )}
               </DialogFooter>
@@ -871,6 +791,15 @@ export default function COAPage() {
       </div>
 
       {/* Table card: hairline border, radius 8, header micro-labels on surface-alt */}
+      <DataTools
+        module="coa"
+        search={search}
+        filter={filter}
+        order={order}
+        filters={advanced}
+        onFilters={setAdvanced}
+        loading={loading}
+      />
       <div className="data-card">
         <Table data-actions>
           <TableHeader>
@@ -974,6 +903,7 @@ export default function COAPage() {
                   <TableCell>{coaStatusBadge(coa.tanggal_expired)}</TableCell>
                   <TableCell className="pr-4">
                     <div className="row-actions">
+                      <CopyValue value={coa.no_coa} label="Salin nomor COA" />
                       <button
                         type="button"
                         className="row-action"
@@ -992,6 +922,14 @@ export default function COAPage() {
                           <Pencil className="size-3.5" />
                         </button>
                       )}
+                      <button
+                        type="button"
+                        className="row-action"
+                        title="Unduh PDF"
+                        onClick={() => void downloadPdf(coa)}
+                      >
+                        <Download className="size-3.5" />
+                      </button>
                       <button
                         type="button"
                         className="row-action"
@@ -1028,6 +966,12 @@ export default function COAPage() {
         />
       )}
 
+      <PdfPreview
+        url={previewUrl}
+        onClose={closePreview}
+        onIssue={handleSave}
+        busy={saving}
+      />
       {/* Detail dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="flex max-h-[90svh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">

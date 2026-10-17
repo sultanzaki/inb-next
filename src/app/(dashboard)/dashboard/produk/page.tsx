@@ -1,4 +1,12 @@
 "use client";
+import { SpecHistory } from "@/components/workspace/spec-history";
+import {
+  DataTools,
+  CopyValue,
+  useSearchSeed,
+  emptyFilters,
+  type AdvancedFilters,
+} from "@/components/workspace/data-tools";
 import {
   PageHeader,
   DataToolbar,
@@ -78,6 +86,8 @@ const kemasanList = [
 ];
 
 interface SpesifikasiForm {
+  parameter_en: string;
+  keterangan_en: string;
   parameter_uji: string;
   tipe_batas: "RANGE" | "MIN" | "MAX" | "TEXT";
   nilai_min: string;
@@ -87,6 +97,9 @@ interface SpesifikasiForm {
 }
 
 interface ProdukForm {
+  inci_name: string;
+  nama_produk_en: string;
+  revision_note: string;
   kode_produk: string;
   nama_produk: string;
   kategori: string;
@@ -96,6 +109,9 @@ interface ProdukForm {
 }
 
 const emptyForm: ProdukForm = {
+  inci_name: "",
+  nama_produk_en: "",
+  revision_note: "",
   kode_produk: "",
   nama_produk: "",
   kategori: "",
@@ -119,6 +135,10 @@ export default function ProdukPage() {
   const confirm = useConfirm();
   const [filter, setFilter] = useState("all");
   const [order, setOrder] = useState("default");
+  const [advanced, setAdvanced] = useState<AdvancedFilters>({
+    ...emptyFilters,
+  });
+  useSearchSeed(onSearchChange);
   const requestSeq = useRef(0);
   const editSeq = useRef(0);
   const detailSeq = useRef(0);
@@ -169,6 +189,11 @@ export default function ProdukPage() {
         .order("id")
         .range(start, start + pageSize - 1);
       if (filter !== "all") q = q.eq("status_halal", filter);
+      if (advanced.from)
+        q = q.gte("created_at", advanced.from + "T00:00:00+07:00");
+      if (advanced.to)
+        q = q.lte("created_at", advanced.to + "T23:59:59.999999+07:00");
+      if (advanced.category) q = q.eq("kategori", advanced.category);
       if (search) {
         // Quoted values (via escapeOrTerm): commas/parens stay literal and the
         // escaped %/_ reach Postgres LIKE as literals, not wildcards.
@@ -202,7 +227,7 @@ export default function ProdukPage() {
       setLoadingMore(false);
       setLoading(false);
     },
-    [search, pageSize, filter, order],
+    [search, pageSize, filter, order, advanced],
   );
 
   // Fresh fetch: page 0 replaces any accumulated rows and resets the offset
@@ -265,6 +290,9 @@ export default function ProdukPage() {
     }
 
     setForm({
+      inci_name: produk.inci_name || "",
+      nama_produk_en: produk.nama_produk_en || "",
+      revision_note: "",
       kode_produk: produk.kode_produk,
       nama_produk: produk.nama_produk,
       kategori: produk.kategori,
@@ -277,6 +305,8 @@ export default function ProdukPage() {
     setSpesifikasi(
       (sp ?? []).map((s: SpesifikasiItem) => ({
         parameter_uji: s.parameter_uji,
+        parameter_en: s.parameter_en || "",
+        keterangan_en: s.keterangan_en || "",
         tipe_batas: s.tipe_batas,
         nilai_min: s.nilai_min ?? "",
         nilai_maks: s.nilai_maks ?? "",
@@ -309,6 +339,8 @@ export default function ProdukPage() {
       ...prev,
       {
         parameter_uji: "",
+        parameter_en: "",
+        keterangan_en: "",
         tipe_batas: "RANGE",
         nilai_min: "",
         nilai_maks: "",
@@ -465,6 +497,30 @@ export default function ProdukPage() {
                         placeholder="Nama produk"
                       />
                     </Field>
+                    <Field
+                      label="Nama INCI"
+                      name="inci_name"
+                      hint="Dipakai pada sertifikat analisis."
+                    >
+                      <Input
+                        value={form.inci_name}
+                        onChange={(e) =>
+                          setForm({ ...form, inci_name: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field
+                      label="Nama produk (English)"
+                      name="nama_produk_en"
+                      hint="Opsional jika nama dagang sama."
+                    >
+                      <Input
+                        value={form.nama_produk_en}
+                        onChange={(e) =>
+                          setForm({ ...form, nama_produk_en: e.target.value })
+                        }
+                      />
+                    </Field>
                     <Field label="Kategori" name="kategori">
                       <select
                         className={selectClass}
@@ -527,6 +583,17 @@ export default function ProdukPage() {
                     </Field>
                   </div>
 
+                  {editingId && (
+                    <Field label="Catatan revisi" name="revision_note">
+                      <Input
+                        value={form.revision_note}
+                        onChange={(e) =>
+                          setForm({ ...form, revision_note: e.target.value })
+                        }
+                        placeholder="Alasan perubahan spesifikasi"
+                      />
+                    </Field>
+                  )}
                   {/* Spesifikasi section */}
                   <div className="border-t border-border pt-5">
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -650,6 +717,52 @@ export default function ProdukPage() {
                                 placeholder="Satuan"
                               />
                             </Field>
+                            <Field
+                              label="Parameter (English)"
+                              name={`spesifikasi.${idx}.parameter_en`}
+                            >
+                              <Input
+                                value={sp.parameter_en}
+                                onChange={(e) =>
+                                  updateSpesifikasi(
+                                    idx,
+                                    "parameter_en",
+                                    e.target.value,
+                                  )
+                                }
+                              />
+                            </Field>
+                            <Field
+                              label="Standar observasi"
+                              name={`spesifikasi.${idx}.keterangan`}
+                              hint="Untuk parameter tipe TEXT."
+                            >
+                              <Input
+                                value={sp.keterangan}
+                                onChange={(e) =>
+                                  updateSpesifikasi(
+                                    idx,
+                                    "keterangan",
+                                    e.target.value,
+                                  )
+                                }
+                              />
+                            </Field>
+                            <Field
+                              label="Standar observasi (English)"
+                              name={`spesifikasi.${idx}.keterangan_en`}
+                            >
+                              <Input
+                                value={sp.keterangan_en}
+                                onChange={(e) =>
+                                  updateSpesifikasi(
+                                    idx,
+                                    "keterangan_en",
+                                    e.target.value,
+                                  )
+                                }
+                              />
+                            </Field>
                           </div>
                           <button
                             type="button"
@@ -704,6 +817,15 @@ export default function ProdukPage() {
       </div>
 
       {/* Table card: hairline border, radius 8, header micro-labels on surface-alt */}
+      <DataTools
+        module="produk"
+        search={search}
+        filter={filter}
+        order={order}
+        filters={advanced}
+        onFilters={setAdvanced}
+        loading={loading}
+      />
       <div className="data-card">
         <Table data-actions>
           <TableHeader>
@@ -800,6 +922,10 @@ export default function ProdukPage() {
                   <TableCell className="text-muted">{p.tipe_kemasan}</TableCell>
                   <TableCell className="pr-4">
                     <div className="row-actions">
+                      <CopyValue
+                        value={p.kode_produk}
+                        label="Salin kode produk"
+                      />
                       <button
                         type="button"
                         className="row-action"
@@ -851,7 +977,8 @@ export default function ProdukPage() {
             <p className="micro-label">Spesifikasi produk</p>
             <DialogTitle>{detail?.nama_produk}</DialogTitle>
             <DialogDescription>
-              {detail?.kode_produk} · Standar pengujian yang sedang berlaku.
+              {detail?.kode_produk} · Versi {detail?.spec_version || 1} ·
+              Standar pengujian yang sedang berlaku.
             </DialogDescription>
           </DialogHeader>
           {detail && (
@@ -928,6 +1055,7 @@ export default function ProdukPage() {
                   </Table>
                 </div>
               )}
+              <SpecHistory productId={detail.id} current={detailSpecs} />
             </>
           )}
           <DialogFooter className="mt-6">

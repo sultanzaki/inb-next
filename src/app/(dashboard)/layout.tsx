@@ -17,6 +17,7 @@ async function SessionGate({ children }: { children: React.ReactNode }) {
     redirect("/login");
   }
 
+  if (user.must_change_password) redirect("/account/password");
   return (
     <UserContextProvider user={user}>
       <AppShell>{children}</AppShell>

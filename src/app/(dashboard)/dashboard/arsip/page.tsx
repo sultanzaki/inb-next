@@ -1,5 +1,12 @@
 "use client";
 import {
+  DataTools,
+  CopyValue,
+  useSearchSeed,
+  emptyFilters,
+  type AdvancedFilters,
+} from "@/components/workspace/data-tools";
+import {
   PageHeader,
   DataToolbar,
   DataPagination,
@@ -143,6 +150,10 @@ export default function DokumenPage() {
   const confirm = useConfirm();
   const [filter, setFilter] = useState("all");
   const [order, setOrder] = useState("default");
+  const [advanced, setAdvanced] = useState<AdvancedFilters>({
+    ...emptyFilters,
+  });
+  useSearchSeed(onSearchChange);
   const requestSeq = useRef(0);
   const appending = useRef(false);
   const { user } = useUser();
@@ -183,6 +194,9 @@ export default function DokumenPage() {
         .range(start, start + pageSize - 1);
       if (filter === "active") q = q.gte("masa_kadaluarsa", localTodayStr());
       if (filter === "expired") q = q.lt("masa_kadaluarsa", localTodayStr());
+      if (advanced.from) q = q.gte("tanggal_berlaku", advanced.from);
+      if (advanced.to) q = q.lte("tanggal_berlaku", advanced.to);
+      if (advanced.category) q = q.eq("kategori", advanced.category);
       if (search) {
         const term = escapeOr(search);
         q = q.or(`judul_dokumen.ilike."%${term}%",kategori.ilike."%${term}%"`);
@@ -214,7 +228,7 @@ export default function DokumenPage() {
       setLoadingMore(false);
       setLoading(false);
     },
-    [search, pageSize, filter, order],
+    [search, pageSize, filter, order, advanced],
   );
 
   // Fresh fetch: page 0 replaces any accumulated rows and resets the offset
@@ -485,6 +499,15 @@ export default function DokumenPage() {
       </div>
 
       {/* Table card: hairline border, radius 8, header micro-labels on surface-alt */}
+      <DataTools
+        module="arsip"
+        search={search}
+        filter={filter}
+        order={order}
+        filters={advanced}
+        onFilters={setAdvanced}
+        loading={loading}
+      />
       <div className="data-card">
         <Table data-actions>
           <TableHeader>
@@ -573,6 +596,7 @@ export default function DokumenPage() {
                       <div className="font-medium">{doc.judul_dokumen}</div>
                       <div className="font-data text-xs text-muted">
                         {doc.id.slice(0, 8)}...
+                        <CopyValue value={doc.id} label="Salin ID dokumen" />
                       </div>
                     </TableCell>
                     <TableCell className="text-muted">{doc.kategori}</TableCell>

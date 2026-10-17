@@ -1,6 +1,11 @@
 "use client";
-
-import { useEffect, useState, ViewTransition, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  ViewTransition,
+  type ReactNode,
+} from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -11,28 +16,20 @@ import {
   FileCheck2,
   FolderArchive,
   Search,
-  PanelLeftClose,
-  PanelLeftOpen,
   Menu,
-  ChevronRight,
-  ChevronsUpDown,
   LogOut,
-  LifeBuoy,
-  Keyboard,
   Loader2,
-  X,
+  UserRound,
+  KeyRound,
+  Users,
+  History,
+  ArrowUpRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useUser } from "@/app/(dashboard)/user-context";
 import { logoutAction } from "@/app/login/actions";
+import { canAction } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-  DialogHeader,
-} from "@/components/ui/dialog";
 import {
   Command,
   CommandDialog,
@@ -41,7 +38,6 @@ import {
   CommandEmpty,
   CommandGroup,
   CommandItem,
-  CommandShortcut,
 } from "@/components/ui/command";
 import {
   DropdownMenu,
@@ -49,148 +45,137 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
-
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 const navigation = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard/produk", label: "Produk", icon: Package },
+  { href: "/dashboard/inspeksi", label: "Inspeksi", icon: ClipboardList },
+  { href: "/dashboard/coa", label: "COA", icon: FileCheck2 },
+  { href: "/dashboard/arsip", label: "Arsip", icon: FolderArchive },
   {
-    href: "/dashboard",
-    label: "Dashboard",
-    description: "Ringkasan kinerja dan aktivitas mutu",
-    icon: LayoutDashboard,
+    href: "/dashboard/pengguna",
+    label: "Pengguna",
+    icon: Users,
+    permission: "manage_users",
   },
   {
-    href: "/dashboard/produk",
-    label: "Produk",
-    description: "Katalog produk dan spesifikasi pengujian",
-    icon: Package,
-  },
-  {
-    href: "/dashboard/inspeksi",
-    label: "Inspeksi",
-    description: "Pengujian, hasil, dan evaluasi lot",
-    icon: ClipboardList,
-  },
-  {
-    href: "/dashboard/coa",
-    label: "COA",
-    description: "Certificate of Analysis dan penerbitan",
-    icon: FileCheck2,
-  },
-  {
-    href: "/dashboard/arsip",
-    label: "Arsip dokumen",
-    description: "Dokumen mutu dan masa berlaku",
-    icon: FolderArchive,
+    href: "/dashboard/audit",
+    label: "Audit",
+    icon: History,
+    permission: "read_audit",
   },
 ];
-const roles: Record<string, string> = {
-  "admin qc": "Admin QC",
-  "administrator inbionusa": "Administrator",
-  "qc supervisor": "QC Supervisor",
-  viewer: "Viewer",
+type SearchResult = {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+  href: string;
 };
-
 export function AppShell({ children }: { children: ReactNode }) {
-  const { user } = useUser();
-  const pathname = usePathname();
-  const router = useRouter();
-  const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [commandOpen, setCommandOpen] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
-  const current =
-    navigation.find((item) => item.href === pathname) ?? navigation[0];
+  const { user } = useUser(),
+    pathname = usePathname(),
+    router = useRouter();
+  const [mobileOpen, setMobileOpen] = useState(false),
+    [commandOpen, setCommandOpen] = useState(false),
+    [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResult[]>([]),
+    [searching, setSearching] = useState(false),
+    [searchError, setSearchError] = useState(false),
+    [retry, setRetry] = useState(0),
+    [loggingOut, setLoggingOut] = useState(false);
+  const seq = useRef(0);
+  const items = navigation.filter(
+    (n) => !n.permission || canAction(user?.role || "viewer", n.permission),
+  );
+  const current = items.find((n) => n.href === pathname);
   useEffect(() => {
-    document.title = `${current.label} — INBIONUSA`;
-  }, [current.label]);
+    document.title = `${current?.label || "INBIONUSA"} — INBIONUSA`;
+  }, [current?.label]);
   useEffect(() => {
-    const timer = setTimeout(() => {
-      try {
-        setCollapsed(localStorage.getItem("inb-sidebar-collapsed") === "true");
-      } catch {
-        /* Storage may be unavailable. */
-      }
-    }, 0);
-    function keyboard(event: KeyboardEvent) {
+    function keyboard(e: KeyboardEvent) {
       if (
         document.querySelector('[role="dialog"]') &&
         !document.querySelector('[data-slot="command"]')
       )
         return;
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setCommandOpen((value) => !value);
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setCommandOpen((v) => !v);
       }
-      if (event.key === "Escape") setMobileOpen(false);
       if (
-        event.key === "/" &&
-        !(event.target instanceof HTMLInputElement) &&
-        !(event.target instanceof HTMLTextAreaElement) &&
-        !(event.target instanceof HTMLSelectElement) &&
-        !(event.target as HTMLElement).isContentEditable
+        e.key === "/" &&
+        !(e.target instanceof HTMLInputElement) &&
+        !(e.target instanceof HTMLTextAreaElement) &&
+        !(e.target instanceof HTMLSelectElement) &&
+        !(e.target as HTMLElement).isContentEditable
       ) {
         const input = document.querySelector<HTMLInputElement>(
           "[data-search-input]",
         );
         if (input) {
-          event.preventDefault();
+          e.preventDefault();
           input.focus();
         }
       }
     }
     document.addEventListener("keydown", keyboard);
+    return () => document.removeEventListener("keydown", keyboard);
+  }, []);
+  useEffect(() => {
+    const id = ++seq.current,
+      controller = new AbortController();
+    const timer = setTimeout(async () => {
+      if (!commandOpen || query.trim().length < 2) {
+        setResults([]);
+        setSearching(false);
+        setSearchError(false);
+        return;
+      }
+      setSearching(true);
+      setSearchError(false);
+      try {
+        const r = await fetch(
+          "/api/search?q=" + encodeURIComponent(query.trim()),
+          { signal: controller.signal },
+        );
+        if (!r.ok) throw Error();
+        const data = await r.json();
+        if (id === seq.current) setResults(data.results);
+      } catch {
+        if (!controller.signal.aborted && id === seq.current) {
+          setSearchError(true);
+          setResults([]);
+        }
+      } finally {
+        if (id === seq.current) setSearching(false);
+      }
+    }, 250);
     return () => {
       clearTimeout(timer);
-      document.removeEventListener("keydown", keyboard);
+      controller.abort();
     };
-  }, []);
-  useEffect(() => {
-    const desktop = window.matchMedia("(min-width: 1024px)");
-    const closeMobile = () => {
-      if (desktop.matches) setMobileOpen(false);
-    };
-    desktop.addEventListener("change", closeMobile);
-    return () => desktop.removeEventListener("change", closeMobile);
-  }, []);
-  useEffect(() => {
-    if (!mobileOpen) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const side = document.getElementById("workspace-navigation");
-    const previousFocus = document.activeElement as HTMLElement | null;
-    side?.querySelector<HTMLAnchorElement>("a")?.focus();
-    function trap(event: KeyboardEvent) {
-      if (event.key !== "Tab" || !side) return;
-      const elements = Array.from(
-        side.querySelectorAll<HTMLElement>("a,button"),
-      ).filter((el) => el.getClientRects().length);
-      const first = elements[0],
-        last = elements.at(-1);
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    }
-    document.addEventListener("keydown", trap);
-    return () => {
-      document.body.style.overflow = previous;
-      document.removeEventListener("keydown", trap);
-      previousFocus?.focus();
-    };
-  }, [mobileOpen]);
-  function toggleCollapsed() {
-    setCollapsed((value) => {
-      try {
-        localStorage.setItem("inb-sidebar-collapsed", String(!value));
-      } catch {}
-      return !value;
-    });
+  }, [query, commandOpen, retry]);
+  function navigate(href: string) {
+    setMobileOpen(false);
+    setCommandOpen(false);
+    setQuery("");
+    const target = new URL(href, window.location.origin);
+    if (target.pathname === pathname && target.searchParams.has("q")) {
+      router.replace(href);
+      window.dispatchEvent(
+        new CustomEvent("workspace:query", {
+          detail: target.searchParams.get("q") || "",
+        }),
+      );
+    } else router.push(href);
   }
   async function logout() {
     setLoggingOut(true);
@@ -202,268 +187,213 @@ export function AppShell({ children }: { children: ReactNode }) {
       setLoggingOut(false);
     }
   }
-  function navigate(href: string) {
-    setCommandOpen(false);
-    setMobileOpen(false);
-    router.push(href);
-  }
+  const shownNavigation = items.filter((n) =>
+    n.label.toLowerCase().includes(query.toLowerCase()),
+  );
   return (
-    <div
-      className="workspace"
-      data-collapsed={collapsed}
-      data-mobile-open={mobileOpen}
-    >
+    <div className="application">
       <a href="#main-content" className="skip-link">
         Lewati ke konten utama
       </a>
-      {mobileOpen && (
-        <button
-          className="workspace-scrim"
-          aria-label="Tutup menu navigasi"
-          onClick={() => setMobileOpen(false)}
-          tabIndex={-1}
-        />
-      )}
-      <aside
-        id="workspace-navigation"
-        className="workspace-sidebar"
-        aria-label="Sidebar ruang kerja"
-      >
-        <Link
-          href="/dashboard"
-          className="workspace-brand"
-          onClick={() => setMobileOpen(false)}
-          aria-label="INBIONUSA — Dashboard"
-        >
-          <Image
-            src="/logo.png"
-            alt=""
-            width={36}
-            height={36}
-            className="shrink-0 object-contain"
-            priority
-          />
-          <div className="sidebar-label">
-            <div className="workspace-brand-name">INBIONUSA</div>
-            <div className="workspace-brand-caption">Quality Control</div>
-          </div>
-        </Link>
-        <div className="mx-5 mb-4 h-px bg-border-soft" />
-        <nav aria-label="Navigasi utama" className="workspace-nav">
-          <p className="workspace-nav-label micro-label">Ruang kerja</p>
-          {navigation.map(({ href, label, icon: Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              transitionTypes={["workspace-navigation"]}
-              aria-current={pathname === href ? "page" : undefined}
-              className="workspace-nav-link"
-              title={collapsed ? label : undefined}
-              onClick={() => setMobileOpen(false)}
-            >
-              <Icon className="workspace-nav-icon" />
-              <span className="sidebar-label">{label}</span>
-            </Link>
-          ))}
-        </nav>
-        <div className="workspace-sidebar-foot">
-          <button className="sidebar-guide" onClick={() => setHelpOpen(true)}>
-            <LifeBuoy className="size-4" />
-            <span className="sidebar-label">Panduan & pintasan</span>
-          </button>
-          <div className="mb-3 h-px bg-border-soft" />
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <button
-                  className="workspace-profile"
-                  aria-label="Buka menu akun"
-                />
-              }
-            >
-              <span className="workspace-avatar">
-                {user?.nama_lengkap?.charAt(0).toUpperCase() ?? "U"}
-              </span>
-              <span className="sidebar-label min-w-0 flex-1">
-                <span className="block truncate text-xs font-semibold">
-                  {user?.nama_lengkap}
-                </span>
-                <span className="mt-0.5 block text-[11px] text-muted">
-                  {roles[user?.role ?? "viewer"]}
-                </span>
-              </span>
-              <ChevronsUpDown className="sidebar-label size-3.5 text-muted" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              side="top"
-              align="start"
-              sideOffset={10}
-              className="min-w-56"
-            >
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>Akun Anda</DropdownMenuLabel>
-                <div className="px-3 py-2 text-xs text-muted">
-                  @{user?.username}
-                </div>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setHelpOpen(true)}>
-                <LifeBuoy />
-                Panduan & pintasan
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                variant="destructive"
-                disabled={loggingOut}
-                onClick={() => void logout()}
+      <header className="app-topbar">
+        <div className="app-topbar-inner">
+          <Link
+            href="/dashboard"
+            className="app-wordmark"
+            aria-label="INBIONUSA — Dashboard"
+          >
+            <Image src="/logo.png" alt="" width={34} height={34} priority />
+            <span>INBIONUSA</span>
+          </Link>
+          <nav className="app-desktop-nav" aria-label="Navigasi utama">
+            {items.map((n) => (
+              <Link
+                key={n.href}
+                href={n.href}
+                aria-current={pathname === n.href ? "page" : undefined}
+                transitionTypes={["workspace-navigation"]}
               >
-                {loggingOut ? <Loader2 className="animate-spin" /> : <LogOut />}
-                Logout
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </aside>
-      <div className="workspace-content" inert={mobileOpen || undefined}>
-        <header className="workspace-header">
-          <div className="flex min-w-0 items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="hidden lg:inline-flex"
-              onClick={toggleCollapsed}
-              aria-label={collapsed ? "Perluas sidebar" : "Ringkas sidebar"}
+                {n.label}
+              </Link>
+            ))}
+          </nav>
+          <div className="app-topbar-actions">
+            <button
+              className="app-global-search"
+              aria-label="Cari lot, produk, COA, atau halaman"
+              onClick={() => setCommandOpen(true)}
             >
-              {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
-            </Button>
+              <Search className="size-4" />
+              <span>Cari…</span>
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <button
+                    className="app-account-button"
+                    aria-label="Buka menu akun"
+                  />
+                }
+              >
+                <UserRound className="size-4" />
+                <span>{user?.nama_lengkap?.split(" ")[0]}</span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-56">
+                <div className="px-3 py-2">
+                  <p className="text-xs font-semibold">{user?.nama_lengkap}</p>
+                  <p className="mt-1 text-[11px] text-muted">
+                    {user?.role} · @{user?.username}
+                  </p>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => router.push("/account/password")}
+                >
+                  <KeyRound />
+                  Ganti password
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  variant="destructive"
+                  disabled={loggingOut}
+                  onClick={() => void logout()}
+                >
+                  {loggingOut ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <LogOut />
+                  )}
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
+              className="app-mobile-nav-toggle"
               variant="ghost"
               size="icon-sm"
-              className="workspace-mobile-button"
-              onClick={() => setMobileOpen(true)}
               aria-label="Buka menu navigasi"
-              aria-expanded={mobileOpen}
+              onClick={() => setMobileOpen(true)}
             >
               <Menu />
             </Button>
-            <div className="workspace-breadcrumb">
-              <span className="hidden sm:inline">Ruang kerja</span>
-              <ChevronRight className="hidden size-3 text-faint sm:block" />
-              <strong>{current.label}</strong>
-            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              className="workspace-search"
-              onClick={() => setCommandOpen(true)}
-              aria-label="Cari halaman, Ctrl K"
-            >
-              <Search className="size-4" />
-              <span>Cari halaman…</span>
-              <kbd>⌘ K</kbd>
-            </button>
-            <span className="h-5 w-px bg-border-soft" />
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Buka panduan"
-              onClick={() => setHelpOpen(true)}
-            >
-              <LifeBuoy />
-            </Button>
+        </div>
+      </header>
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent side="top" className="app-mobile-menu">
+          <SheetHeader>
+            <SheetTitle>Menu</SheetTitle>
+            <SheetDescription>INBIONUSA · Quality Control</SheetDescription>
+          </SheetHeader>
+          <nav aria-label="Navigasi utama">
+            {items.map(({ icon: Icon, ...n }) => (
+              <Link
+                href={n.href}
+                key={n.href}
+                aria-current={pathname === n.href ? "page" : undefined}
+                onClick={() => setMobileOpen(false)}
+              >
+                <Icon className="size-4" />
+                {n.label}
+                <ArrowUpRight className="ml-auto size-3.5" />
+              </Link>
+            ))}
+          </nav>
+        </SheetContent>
+      </Sheet>
+      <main id="main-content" tabIndex={-1} className="workspace-main app-main">
+        <ViewTransition name="workspace-content" default="workspace-page">
+          <div key={pathname} className="surface-enter">
+            {children}
           </div>
-        </header>
-        <main id="main-content" tabIndex={-1} className="workspace-main">
-          <ViewTransition name="workspace-content" default="workspace-page">
-            <div key={pathname} className="surface-enter">
-              {children}
-            </div>
-          </ViewTransition>
-        </main>
-      </div>
+        </ViewTransition>
+      </main>
       <CommandDialog
         open={commandOpen}
-        onOpenChange={setCommandOpen}
-        title="Cari di ruang kerja"
-        description="Temukan halaman dan navigasikan dengan keyboard."
+        onOpenChange={(v) => {
+          setCommandOpen(v);
+          if (!v) setQuery("");
+        }}
+        title="Cari di INBIONUSA"
+        description="Temukan lot, produk, sertifikat, atau halaman."
       >
-        <Command>
+        <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Ke mana Anda ingin pergi?"
-            aria-label="Cari halaman"
+            value={query}
+            onValueChange={(v) => {
+              setQuery(v);
+              setResults([]);
+              setSearchError(false);
+            }}
+            placeholder="Cari lot, produk, atau COA…"
+            aria-label="Pencarian lintas modul"
           />
           <CommandList>
-            <CommandEmpty>
-              Halaman tidak ditemukan. Coba kata lain.
-            </CommandEmpty>
-            <CommandGroup heading="Navigasi ruang kerja">
-              {navigation.map(({ href, label, description, icon: Icon }) => (
-                <CommandItem
-                  key={href}
-                  value={`${label} ${description}`}
-                  onSelect={() => navigate(href)}
-                >
-                  <span className="entity-icon">
-                    <Icon className="size-4" />
-                  </span>
-                  <span>
-                    <span className="block text-sm font-medium">{label}</span>
-                    <span className="mt-0.5 block text-xs text-muted">
-                      {description}
+            {shownNavigation.length > 0 && (
+              <CommandGroup heading="Halaman">
+                {shownNavigation.map(({ icon: Icon, ...n }) => (
+                  <CommandItem
+                    key={n.href}
+                    value={n.href}
+                    onSelect={() => navigate(n.href)}
+                  >
+                    <Icon className="size-4 text-muted" />
+                    <span>{n.label}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            {results.length > 0 && (
+              <CommandGroup heading="Hasil pencarian">
+                {results.map((r) => (
+                  <CommandItem
+                    key={r.type + r.id}
+                    value={r.type + r.id}
+                    onSelect={() => navigate(r.href)}
+                  >
+                    <span className="search-result-type">{r.type}</span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm">{r.title}</span>
+                      <span className="mt-1 block truncate text-xs text-muted">
+                        {r.description}
+                      </span>
                     </span>
-                  </span>
-                  <CommandShortcut>↵</CommandShortcut>
-                </CommandItem>
-              ))}
-            </CommandGroup>
+                    <ArrowUpRight className="ml-auto size-3.5" />
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            {searching && (
+              <p role="status" className="px-4 py-5 text-xs text-muted">
+                Mencari data…
+              </p>
+            )}
+            {searchError && (
+              <div role="alert" className="px-4 py-4 text-xs text-danger">
+                Pencarian belum berhasil.
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setRetry((v) => v + 1)}
+                >
+                  Coba lagi
+                </Button>
+              </div>
+            )}
+            {!searching &&
+              !searchError &&
+              query.length >= 2 &&
+              results.length === 0 &&
+              shownNavigation.length === 0 && (
+                <CommandEmpty>Tidak ada hasil yang cocok.</CommandEmpty>
+              )}
+            {query.length < 2 && (
+              <p className="px-4 py-4 text-xs text-muted">
+                Ketik minimal 2 karakter untuk mencari data.
+              </p>
+            )}
           </CommandList>
-          <div className="flex items-center justify-between border-t border-border-soft px-4 py-3 text-[10px] text-muted">
-            <span>
-              <kbd>↑</kbd> <kbd>↓</kbd> untuk memilih
-            </span>
-            <span>
-              <kbd>↵</kbd> buka <kbd>esc</kbd> tutup
-            </span>
-          </div>
         </Command>
       </CommandDialog>
-      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <span className="entity-icon mb-3">
-              <Keyboard className="size-5" />
-            </span>
-            <DialogTitle>Panduan ruang kerja</DialogTitle>
-            <DialogDescription>
-              Pintasan keyboard dan alur pengendalian mutu.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="my-5 space-y-3">
-            {[
-              ["Cari halaman", "Ctrl / ⌘ + K"],
-              ["Fokus ke pencarian daftar", "/"],
-              ["Tutup dialog atau menu", "Escape"],
-              ["Berpindah antar-field", "Tab"],
-            ].map(([label, key]) => (
-              <div
-                key={key}
-                className="flex items-center justify-between rounded-xl border border-border-soft px-4 py-3 text-xs"
-              >
-                <span>{label}</span>
-                <kbd>{key}</kbd>
-              </div>
-            ))}
-          </div>
-          <p className="text-xs leading-relaxed text-muted">
-            Produk menyimpan standar pengujian. Inspeksi mengevaluasi setiap
-            lot. Hasil yang lulus dapat diterbitkan menjadi COA. Kelola dokumen
-            pendukung di Arsip.
-          </p>
-          <Button className="mt-5 w-full" onClick={() => setHelpOpen(false)}>
-            Mengerti
-            <X className="size-3.5" />
-          </Button>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
