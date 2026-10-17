@@ -5,14 +5,14 @@ import { searchOr } from "@/lib/query-filters";
 import { privateJson } from "@/lib/api-response";
 export async function GET(request: Request) {
   const session = await requireUser();
-  if (!session) return privateJson({ message: "Sesi berakhir." }, 401);
+  if (!session) return privateJson({ message: "Session expired." }, 401);
   if (!canAction(session.user.role, "manage_users"))
-    return privateJson({ message: "Akses tidak diizinkan." }, 403);
+    return privateJson({ message: "Access denied." }, 403);
   const params = new URL(request.url).searchParams,
     q = (params.get("q") || "").slice(0, 100),
     offset = Number(params.get("offset") || 0);
   if (!Number.isSafeInteger(offset) || offset < 0)
-    return privateJson({ message: "Halaman tidak valid." }, 400);
+    return privateJson({ message: "Invalid page." }, 400);
   let query = createAdminClient()
     .from("users")
     .select(
@@ -25,6 +25,6 @@ export async function GET(request: Request) {
   if (q) query = query.or(searchOr(["username", "nama_lengkap"], q));
   const { data, count, error } = await query;
   return error
-    ? privateJson({ message: "Daftar pengguna belum berhasil dimuat." }, 503)
+    ? privateJson({ message: "Could not load users." }, 503)
     : privateJson({ data, count });
 }

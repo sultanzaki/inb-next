@@ -31,8 +31,8 @@ function Command({
 }
 
 function CommandDialog({
-  title = "Navigasi cepat",
-  description = "Cari halaman dan pilih dengan keyboard.",
+  title = "Quick navigation",
+  description = "Find a page and select it with your keyboard.",
   children,
   className,
   showCloseButton = false,

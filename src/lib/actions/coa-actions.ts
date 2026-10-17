@@ -40,7 +40,7 @@ export interface UpdateCoaPayload {
 export async function issueCoaAction(payload: IssueCoaPayload) {
   const session = await requireUser();
   if (!session || !canAction(session.user.role, "issue_coa"))
-    return { ok: false, error: "Akses tidak diizinkan." };
+    return { ok: false, error: "Access denied." };
   const parsed = issueSchema.safeParse(payload);
   if (!parsed.success)
     return { ok: false, error: parsed.error.issues[0].message };
@@ -52,8 +52,7 @@ export async function issueCoaAction(payload: IssueCoaPayload) {
     )
       return {
         ok: false,
-        error:
-          "Pratinjau kedaluwarsa atau data berubah. Buat pratinjau kembali.",
+        error: "Preview expired or data changed. Preview the COA again.",
       };
     // Revalidate rendering and atomically compare source revisions inside the RPC.
     await renderCoaPdf(source.document);
@@ -74,14 +73,14 @@ export async function issueCoaAction(payload: IssueCoaPayload) {
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "COA belum berhasil diterbitkan.",
+      error: e instanceof Error ? e.message : "Could not issue the COA.",
     };
   }
 }
 export async function updateCoaAction(payload: UpdateCoaPayload) {
   const session = await requireUser();
   if (!session || !canAction(session.user.role, "update_coa"))
-    return { ok: false, error: "Akses tidak diizinkan." };
+    return { ok: false, error: "Access denied." };
   const parsed = updateCoaSchema.safeParse(payload);
   if (!parsed.success)
     return { ok: false, error: parsed.error.issues[0].message };
@@ -90,7 +89,7 @@ export async function updateCoaAction(payload: UpdateCoaPayload) {
     .select("*")
     .eq("id", parsed.data.id)
     .single();
-  if (error || !data) return { ok: false, error: "COA tidak ditemukan." };
+  if (error || !data) return { ok: false, error: "COA not found." };
   try {
     await renderCoaPdf({
       ...data,
@@ -104,7 +103,7 @@ export async function updateCoaAction(payload: UpdateCoaPayload) {
       error:
         e instanceof Error
           ? e.message
-          : "Data tidak dapat dirender sebagai PDF.",
+          : "This data cannot be rendered as a PDF.",
     };
   }
 }

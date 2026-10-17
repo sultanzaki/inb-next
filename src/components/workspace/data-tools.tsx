@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,10 +20,12 @@ import {
 
 export function CopyValue({
   value,
-  label = "Salin identitas",
+  label = "Copy identifier",
+  menuItem = false,
 }: {
   value: string;
   label?: string;
+  menuItem?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   useEffect(() => {
@@ -30,23 +33,31 @@ export function CopyValue({
     const t = setTimeout(() => setCopied(false), 1500);
     return () => clearTimeout(t);
   }, [copied]);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      toast.success("Copied.");
+    } catch {
+      toast.error("Could not copy. Select and copy the text manually.");
+    }
+  }
+  if (menuItem)
+    return (
+      <DropdownMenuItem onClick={() => void copy()}>
+        <Copy className="size-3.5" />
+        {label}
+      </DropdownMenuItem>
+    );
   return (
     <button
       type="button"
       className="copy-value"
-      aria-label={copied ? "Tersalin" : label}
+      aria-label={copied ? "Copied" : label}
       title={label}
-      onClick={async (e) => {
+      onClick={(e) => {
         e.stopPropagation();
-        try {
-          await navigator.clipboard.writeText(value);
-          setCopied(true);
-          toast.success("Disalin ke clipboard.");
-        } catch {
-          toast.error(
-            "Tidak dapat menyalin. Pilih teks dan salin secara manual.",
-          );
-        }
+        void copy();
       }}
     >
       {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
@@ -141,7 +152,7 @@ export function DataTools({
       );
       if (!r.ok) {
         const e = await r.json();
-        throw Error(e.message || "Ekspor gagal.");
+        throw Error(e.message || "Export failed.");
       }
       const blob = await r.blob(),
         url = URL.createObjectURL(blob),
@@ -150,9 +161,9 @@ export function DataTools({
       a.download = `${module}.${format}`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
-      toast.success("File ekspor siap.");
+      toast.success("Export ready.");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Ekspor gagal.");
+      toast.error(e instanceof Error ? e.message : "Export failed.");
     } finally {
       setExporting("");
     }
@@ -167,12 +178,12 @@ export function DataTools({
           onClick={() => setOpen((v) => !v)}
         >
           <SlidersHorizontal className="size-3.5" />
-          Filter lanjutan
+          Advanced filters
           {count > 0 && <span className="filter-count">{count}</span>}
         </Button>
         <div className="flex items-center gap-2">
           <span className="hidden text-[11px] text-muted sm:inline">
-            Ekspor sesuai filter
+            Export filtered results
           </span>
           {(["csv", "xlsx"] as const).map((format) => (
             <Button
@@ -195,9 +206,9 @@ export function DataTools({
       {open && (
         <div className="advanced-filter-panel">
           <label>
-            Dari tanggal
+            From date
             <Input
-              aria-label="Dari tanggal"
+              aria-label="From date"
               type="date"
               value={filters.from}
               max={filters.to || undefined}
@@ -205,9 +216,9 @@ export function DataTools({
             />
           </label>
           <label>
-            Sampai tanggal
+            To date
             <Input
-              aria-label="Sampai tanggal"
+              aria-label="To date"
               type="date"
               value={filters.to}
               min={filters.from || undefined}
@@ -216,15 +227,15 @@ export function DataTools({
           </label>
           {["inspeksi", "coa"].includes(module) && (
             <label>
-              Produk
+              Products
               <select
-                aria-label="Filter produk"
+                aria-label="Filter products"
                 value={filters.product}
                 onChange={(e) =>
                   onFilters({ ...filters, product: e.target.value })
                 }
               >
-                <option value="">Semua produk</option>
+                <option value="">All products</option>
                 {products.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.kode_produk} · {p.nama_produk}
@@ -233,21 +244,20 @@ export function DataTools({
               </select>
               {productError && (
                 <span role="alert" className="text-danger">
-                  Daftar produk belum berhasil dimuat. Tutup dan buka kembali
-                  filter untuk mencoba lagi.
+                  Could not load products. Reopen the filters to retry.
                 </span>
               )}
             </label>
           )}
           {["inspeksi", "audit"].includes(module) && (
             <label>
-              {module === "audit" ? "Pelaku" : "Penguji"}
+              {module === "audit" ? "Actor" : "Inspector"}
               <Input
                 aria-label={
-                  module === "audit" ? "Filter pelaku" : "Filter penguji"
+                  module === "audit" ? "Filter actor" : "Filter inspector"
                 }
                 placeholder={
-                  module === "audit" ? "Nama pelaku" : "Nama penguji"
+                  module === "audit" ? "Actor name" : "Inspector name"
                 }
                 value={filters.person}
                 onChange={(e) =>
@@ -258,13 +268,13 @@ export function DataTools({
           )}
           {["produk", "arsip", "audit"].includes(module) && (
             <label>
-              {module === "audit" ? "Aksi" : "Kategori"}
+              {module === "audit" ? "Actions" : "Category"}
               <Input
                 aria-label={
-                  module === "audit" ? "Filter aksi" : "Filter kategori"
+                  module === "audit" ? "Filter actions" : "Filter category"
                 }
                 placeholder={
-                  module === "audit" ? "Aksi persis" : "Kategori persis"
+                  module === "audit" ? "Exact action" : "Exact category"
                 }
                 value={filters.category}
                 onChange={(e) =>
@@ -279,7 +289,7 @@ export function DataTools({
             onClick={() => onFilters({ ...emptyFilters })}
           >
             <X className="size-3.5" />
-            Reset filter lanjutan
+            Clear advanced filters
           </Button>
         </div>
       )}

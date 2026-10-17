@@ -43,7 +43,7 @@ export default function DashboardPage() {
     const timer = setTimeout(
       () =>
         setDateLabel(
-          new Intl.DateTimeFormat("id-ID", {
+          new Intl.DateTimeFormat("en-GB", {
             timeZone: "Asia/Jakarta",
             day: "numeric",
             month: "long",
@@ -159,7 +159,7 @@ export default function DashboardPage() {
 
   if (!data)
     return (
-      <div className="page-stack" role="status" aria-label="Memuat dashboard">
+      <div className="page-stack" role="status" aria-label="Loading dashboard">
         <div className="space-y-3">
           <Skeleton className="h-4 w-24" />
           <Skeleton className="h-12 w-72 max-w-full" />
@@ -187,19 +187,19 @@ export default function DashboardPage() {
   const metrics = [
     {
       key: "total_produk",
-      label: "Produk",
+      label: "Products",
       value: data.total_produk,
       href: "/dashboard/produk",
     },
     {
       key: "total_lot",
-      label: "Lot diperiksa",
+      label: "Lots inspected",
       value: data.total_lot,
       href: "/dashboard/inspeksi",
     },
     {
       key: "total_coa",
-      label: "COA diterbitkan",
+      label: "COAs issued",
       value: data.total_coa,
       href: "/dashboard/coa",
     },
@@ -208,8 +208,8 @@ export default function DashboardPage() {
     <div className="page-stack overview-page">
       <PageHeader
         eyebrow="Dashboard"
-        title="Ringkasan mutu"
-        description={dateLabel || "Pengendalian mutu INBIONUSA"}
+        title="Quality overview"
+        description={dateLabel || "INBIONUSA quality control"}
       >
         <Button
           variant="outline"
@@ -217,15 +217,15 @@ export default function DashboardPage() {
           onClick={() => void fetchData()}
         >
           <RefreshCw className="size-3.5" />
-          Perbarui
+          Refresh
         </Button>
       </PageHeader>
       {loadError && (
         <Alert variant="destructive">
           <AlertTriangle />
-          <AlertTitle>Beberapa data belum tersedia</AlertTitle>
+          <AlertTitle>Some data is unavailable</AlertTitle>
           <AlertDescription>
-            Angka bertanda — belum berhasil dimuat.
+            Values marked — could not be loaded.
           </AlertDescription>
           <AlertAction>
             <Button
@@ -233,14 +233,14 @@ export default function DashboardPage() {
               size="sm"
               onClick={() => void fetchData()}
             >
-              Coba Lagi
+              Retry
             </Button>
           </AlertAction>
         </Alert>
       )}
-      <section className="overview-summary" aria-label="Ringkasan pengujian">
+      <section className="overview-summary" aria-label="Test summary">
         <div className="quality-summary">
-          <p className="summary-label">Tingkat kelulusan</p>
+          <p className="summary-label">Pass rate</p>
           <div className="summary-number">
             {resultFailed || !total ? (
               <span>—</span>
@@ -253,18 +253,18 @@ export default function DashboardPage() {
           </div>
           <p className="summary-caption">
             {resultFailed
-              ? "Hasil pengujian belum berhasil dimuat."
+              ? "Could not load test results."
               : total
-                ? `${data.lot_pass.toLocaleString("id-ID")} dari ${total.toLocaleString("id-ID")} lot memenuhi standar pengujian.`
-                : "Ringkasan akan tersedia setelah pengujian pertama."}
+                ? `${data.lot_pass.toLocaleString("en-GB")} of ${total.toLocaleString("en-GB")} lots meet specifications.`
+                : "A summary will appear after the first inspection."}
           </p>
           <div
             className="quality-bar"
             role="img"
             aria-label={
               resultFailed
-                ? "Data hasil uji belum tersedia"
-                : `${data.lot_pass} lot PASS dan ${data.lot_fail} lot FAIL`
+                ? "Test results unavailable"
+                : `${data.lot_pass} lots passed and ${data.lot_fail} lots failed`
             }
           >
             <span
@@ -281,18 +281,18 @@ export default function DashboardPage() {
               <i />
               PASS{" "}
               <strong>
-                {resultFailed ? "—" : data.lot_pass.toLocaleString("id-ID")}
+                {resultFailed ? "—" : data.lot_pass.toLocaleString("en-GB")}
               </strong>
             </span>
             <span>
               <i />
               FAIL{" "}
               <strong>
-                {resultFailed ? "—" : data.lot_fail.toLocaleString("id-ID")}
+                {resultFailed ? "—" : data.lot_fail.toLocaleString("en-GB")}
               </strong>
             </span>
             <Link href="/dashboard/inspeksi">
-              Lihat pengujian
+              View inspections
               <ArrowUpRight className="size-3.5" />
             </Link>
           </div>
@@ -302,7 +302,7 @@ export default function DashboardPage() {
             <Link href={href} key={key}>
               <span>{label}</span>
               <strong>
-                {failedKeys.includes(key) ? "—" : value.toLocaleString("id-ID")}
+                {failedKeys.includes(key) ? "—" : value.toLocaleString("en-GB")}
               </strong>
               <ArrowUpRight className="size-4" />
             </Link>
@@ -313,21 +313,21 @@ export default function DashboardPage() {
         <section className="recent-section">
           <div className="section-heading">
             <div>
-              <h2>Inspeksi terbaru</h2>
-              <p>Delapan hasil pengujian terakhir.</p>
+              <h2>Recent inspections</h2>
+              <p>The eight most recent inspections.</p>
             </div>
             <Link href="/dashboard/inspeksi">
-              Lihat semua
+              View all
               <ArrowRight className="size-3.5" />
             </Link>
           </div>
           <Table className="dashboard-recent-table">
             <TableHeader>
               <TableRow>
-                <TableHead>Nomor lot</TableHead>
-                <TableHead>Produk</TableHead>
-                <TableHead>Tanggal uji</TableHead>
-                <TableHead className="text-right">Hasil</TableHead>
+                <TableHead>Lot number</TableHead>
+                <TableHead>Products</TableHead>
+                <TableHead>Test date</TableHead>
+                <TableHead className="text-right">Results</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -375,11 +375,11 @@ export default function DashboardPage() {
                   <TableCell colSpan={4} className="!h-52 text-center">
                     <p className="text-sm font-medium">
                       {failedKeys.includes("recent_inspeksi")
-                        ? "Data inspeksi belum tersedia"
-                        : "Belum ada inspeksi"}
+                        ? "Inspections unavailable"
+                        : "No inspections yet"}
                     </p>
                     <p className="mt-2 text-xs text-muted">
-                      Tambahkan produk dan spesifikasi untuk memulai pengujian.
+                      Add a product and specifications to start testing.
                     </p>
                   </TableCell>
                 </TableRow>
@@ -389,8 +389,8 @@ export default function DashboardPage() {
         </section>
         <aside className="document-summary">
           <div className="section-heading">
-            <h2>Dokumen</h2>
-            <Link href="/dashboard/arsip" aria-label="Buka arsip dokumen">
+            <h2>Documents</h2>
+            <Link href="/dashboard/arsip" aria-label="Open documents">
               <ArrowUpRight className="size-4" />
             </Link>
           </div>
@@ -398,36 +398,34 @@ export default function DashboardPage() {
             <strong>
               {failedKeys.includes("dok_berlaku")
                 ? "—"
-                : data.dok_berlaku.toLocaleString("id-ID")}
+                : data.dok_berlaku.toLocaleString("en-GB")}
             </strong>
-            <span>dokumen berlaku</span>
+            <span>valid documents</span>
           </div>
           <div className="document-review" data-warning={data.dok_expired > 0}>
             <span className="document-review-count">
               {failedKeys.includes("dok_expired")
                 ? "—"
-                : data.dok_expired.toLocaleString("id-ID")}
+                : data.dok_expired.toLocaleString("en-GB")}
             </span>
             <div>
-              <p>Melewati masa berlaku</p>
+              <p>Expired</p>
               <span>
                 {failedKeys.includes("dok_expired")
-                  ? "Data dokumen belum berhasil dimuat."
+                  ? "Could not load documents."
                   : data.dok_expired
-                    ? "Periksa dan perbarui dokumen terkait."
-                    : "Tidak ada dokumen yang kedaluwarsa."}
+                    ? "Review and update these documents."
+                    : "No expired documents."}
               </span>
             </div>
           </div>
           <Link className="document-link" href="/dashboard/arsip">
-            Kelola arsip
+            Manage documents
             <ArrowRight className="size-4" />
           </Link>
           <div className="document-footnote">
             <FileCheck2 className="size-5" />
-            <p>
-              Data sertifikat mengikuti hasil pengujian pada saat penerbitan.
-            </p>
+            <p>Certificates use the results recorded at issuance.</p>
           </div>
         </aside>
       </div>

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import { LoginForm } from "./login-form";
 export const metadata: Metadata = {
-  title: "Masuk — INBIONUSA",
-  description: "Sistem pengendalian mutu INBIONUSA.",
+  title: "Sign in — INBIONUSA",
+  description: "INBIONUSA quality control system.",
 };
 export default function LoginPage() {
   return (
@@ -12,7 +12,7 @@ export default function LoginPage() {
         <div className="login-brand">
           <Image
             src="/logo.png"
-            alt="Logo INBIONUSA"
+            alt="INBIONUSA logo"
             width={42}
             height={42}
             priority
@@ -29,19 +29,19 @@ export default function LoginPage() {
             Control<span className="text-primary">.</span>
           </h2>
           <p className="login-story-note">
-            Standar produk, hasil pengujian, dan sertifikat. Tercatat dalam satu
-            tempat.
+            Product specifications, inspections, and certificates in one
+            workspace.
           </p>
         </div>
         <div className="login-index">
           <div>
-            <span>01</span>Produk
+            <span>01</span>Products
           </div>
           <div>
-            <span>02</span>Inspeksi
+            <span>02</span>Inspections
           </div>
           <div>
-            <span>03</span>Sertifikat
+            <span>03</span>Certificate
           </div>
         </div>
       </aside>

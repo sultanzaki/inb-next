@@ -23,11 +23,11 @@ export async function loginAction(
   const rawUsername = formData.get("username");
   const rawPassword = formData.get("password");
   if (typeof rawUsername !== "string" || typeof rawPassword !== "string")
-    return { error: "Username dan password wajib diisi." };
+    return { error: "Username and password are required." };
   const username = rawUsername.trim();
   const password = rawPassword;
   if (!username || username.length > 100 || !password || password.length > 1024)
-    return { error: "Username atau password tidak valid." };
+    return { error: "Invalid username or password." };
   const admin = createAdminClient();
   // Reserve atomically BEFORE database lookup/hash work; shared across instances.
   const { data: allowed, error: limitError } = await admin.rpc(
@@ -36,9 +36,8 @@ export async function loginAction(
       p_key: createHash("sha256").update(username.toLowerCase()).digest("hex"),
     },
   );
-  if (limitError)
-    return { error: "Layanan login belum tersedia. Coba lagi nanti." };
-  if (!allowed) return { error: "Terlalu banyak percobaan. Coba lagi nanti." };
+  if (limitError) return { error: "Sign-in is unavailable. Try again later." };
+  if (!allowed) return { error: "Too many attempts. Try again later." };
 
   const { data: users, error: userError } = await admin
     .from("users")
@@ -65,7 +64,7 @@ export async function loginAction(
       userError ? "db_error" : "invalid_credentials",
     );
     // Pesan seragam: jangan bocorkan apakah username ada / DB bermasalah.
-    return { error: "Username atau password salah." };
+    return { error: "Incorrect username or password." };
   }
 
   let token: string;
@@ -73,7 +72,7 @@ export async function loginAction(
     token = await createSession(user.id, user.password_hash);
   } catch {
     return {
-      error: "Akun berubah atau layanan belum tersedia. Silakan masuk kembali.",
+      error: "Account changed or service unavailable. Sign in again.",
     };
   }
   // Compare-and-set prevents a concurrent reset from being overwritten.

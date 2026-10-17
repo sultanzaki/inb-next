@@ -172,7 +172,7 @@ test("PDF wraps long results across pages without dropping rows and rejects exce
         items: Array(201).fill(items[0]),
       },
     }),
-    /Terlalu banyak/,
+    /Too many/,
   );
 });
 

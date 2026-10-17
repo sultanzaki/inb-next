@@ -5,9 +5,9 @@ import {
   X,
   ArrowDownUp,
   RotateCw,
-  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   FolderSearch,
-  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,9 +26,7 @@ export function PageHeader({
   return (
     <div className="page-header">
       <div>
-        <p className="page-eyebrow">
-          {eyebrow}
-        </p>
+        <p className="page-eyebrow">{eyebrow}</p>
         <h1 className="page-title">{title}</h1>
         <p className="page-description">{description}</p>
       </div>
@@ -74,7 +72,7 @@ export function DataToolbar({
           <button
             className="search-clear"
             type="button"
-            aria-label="Hapus pencarian"
+            aria-label="Clear search"
             onClick={() => {
               onSearch("");
               ref.current?.focus();
@@ -91,27 +89,27 @@ export function DataToolbar({
       <div className="data-toolbar-meta">
         {filter}
         <span className="sr-only sm:not-sr-only" aria-live="polite">
-          {loading ? "Memuat…" : `${total.toLocaleString("id-ID")} data`}
+          {loading ? "Loading…" : `${total.toLocaleString("en-GB")} records`}
         </span>
         {onOrder && (
           <label className="relative flex items-center gap-1.5">
             <ArrowDownUp className="pointer-events-none absolute left-3 size-3.5 text-muted" />
             <select
-              aria-label="Urutkan data"
+              aria-label="Sort records"
               value={order}
               onChange={(e) => onOrder(e.target.value)}
               className="!min-h-9 !py-1.5 !pl-8 !pr-2 !text-xs"
             >
-              <option value="default">Urutan default</option>
-              <option value="newest">Terbaru</option>
-              <option value="oldest">Terlama</option>
+              <option value="default">Default order</option>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
             </select>
           </label>
         )}
         <Button
           variant="outline"
           size="icon-sm"
-          aria-label="Muat ulang data"
+          aria-label="Refresh data"
           onClick={onRefresh}
           disabled={loading}
         >
@@ -182,41 +180,78 @@ export function EmptyState({
 export function DataPagination({
   count,
   total,
+  page,
+  pageSize,
   loading,
-  onMore,
+  onPageChange,
 }: {
   count: number;
   total: number;
+  page: number;
+  pageSize: number;
   loading: boolean;
-  onMore: () => void;
+  onPageChange: (page: number) => void;
 }) {
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const first = total === 0 ? 0 : (page - 1) * pageSize + 1,
+    last = Math.min(total, (page - 1) * pageSize + count);
+  const numbers = [...new Set([1, page - 1, page, page + 1, pages])]
+    .filter((p) => p > 0 && p <= pages)
+    .sort((a, b) => a - b);
   return (
-    <div className="data-footer">
-      <span className="data-counter">
-        Menampilkan{" "}
-        <strong className="font-medium text-text">
-          {count.toLocaleString("id-ID")}
-        </strong>{" "}
-        dari{" "}
-        <strong className="font-medium text-text">
-          {total.toLocaleString("id-ID")}
-        </strong>{" "}
-        data
+    <nav
+      className="data-footer"
+      aria-label="Table pagination"
+      aria-busy={loading}
+    >
+      <span className="data-counter" aria-live="polite">
+        {first.toLocaleString("en-GB")}–{last.toLocaleString("en-GB")} of{" "}
+        <strong>{total.toLocaleString("en-GB")}</strong>
       </span>
-      {count < total ? (
-        <Button variant="outline" size="sm" onClick={onMore} disabled={loading}>
-          {loading ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <ChevronDown className="size-3.5" />
-          )}
-          {loading ? "Memuat…" : `Muat lagi (${total - count} tersisa)`}
+      <div className="pagination-controls">
+        <Button
+          variant="outline"
+          size="icon-sm"
+          aria-label="Previous page"
+          disabled={loading || page <= 1}
+          onClick={() => onPageChange(page - 1)}
+        >
+          <ChevronLeft className="size-4" />
         </Button>
-      ) : (
-        <span className="text-[11px] text-muted">
-          Semua data sudah ditampilkan
+        <span className="pagination-mobile">
+          Page {page} of {pages}
         </span>
-      )}
-    </div>
+        <div className="pagination-numbers">
+          {numbers.map((n, index) => (
+            <span className="inline-flex items-center gap-1" key={n}>
+              {index > 0 && n > numbers[index - 1] + 1 && (
+                <span className="px-1 text-muted" aria-hidden="true">
+                  …
+                </span>
+              )}
+              <Button
+                variant={n === page ? "default" : "ghost"}
+                size="icon-sm"
+                aria-label={"Page " + n}
+                aria-current={n === page ? "page" : undefined}
+                disabled={loading}
+                onClick={() => onPageChange(n)}
+              >
+                {n}
+              </Button>
+            </span>
+          ))}
+        </div>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          aria-label="Next page"
+          disabled={loading || page >= pages}
+          onClick={() => onPageChange(page + 1)}
+        >
+          <ChevronRight className="size-4" />
+        </Button>
+      </div>
+    </nav>
   );
 }

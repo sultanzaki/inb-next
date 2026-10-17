@@ -17,7 +17,7 @@ export default function PasswordPage() {
     <Suspense
       fallback={
         <main className="password-page" role="status">
-          Memuat akun…
+          Loading account…
         </main>
       }
     >

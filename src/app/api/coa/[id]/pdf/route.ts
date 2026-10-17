@@ -10,19 +10,18 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await requireUser();
-  if (!session) return privateJson({ message: "Sesi berakhir." }, 401);
+  if (!session) return privateJson({ message: "Session expired." }, 401);
   const { id } = await params;
   if (!uuid.safeParse(id).success)
-    return privateJson({ message: "ID tidak valid." }, 400);
+    return privateJson({ message: "Invalid ID." }, 400);
   const { data, error } = await createAdminClient()
     .from("coa")
     .select("*")
     .eq("id", id)
     .single();
-  if (error || !data)
-    return privateJson({ message: "COA tidak ditemukan." }, 404);
+  if (error || !data) return privateJson({ message: "COA not found." }, 404);
   if (data.template_version !== "inb-reference-v1")
-    return privateJson({ message: "Versi template belum didukung." }, 422);
+    return privateJson({ message: "Unsupported template version." }, 422);
   try {
     const bytes = await renderCoaPdf(data as COA);
     await logAudit(session.user.nama_lengkap, "DOWNLOAD_COA", id);
@@ -41,7 +40,7 @@ export async function GET(
     });
   } catch {
     return privateJson(
-      { message: "PDF gagal dibuat. Periksa data sertifikat." },
+      { message: "Could not create the PDF. Check the certificate data." },
       422,
     );
   }

@@ -7,12 +7,12 @@ export default function DashboardError({ retry }: { retry: () => void }) {
     <div className="data-card">
       <EmptyState
         error
-        title="Ruang kerja belum berhasil dimuat"
-        description="Terjadi kendala saat membuka halaman ini. Coba kembali untuk melanjutkan pekerjaan Anda."
+        title="Could not load the workspace"
+        description="Could not open this page. Retry to continue."
       >
         <Button onClick={retry}>
           <RotateCw className="size-4" />
-          Coba lagi
+          Retry
         </Button>
       </EmptyState>
     </div>

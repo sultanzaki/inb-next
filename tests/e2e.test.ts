@@ -61,7 +61,7 @@ test(
           "QC",
           "Kg",
           "Halal",
-          "Botol",
+          "Bottle",
         ],
       );
     // Supabase clients mount PostgREST at /rest/v1; the standalone test image
@@ -232,14 +232,16 @@ test(
       await accessible();
       await page.locator("[name=username]").fill(username);
       await page.locator("[name=password]").fill(password);
-      await page.getByRole("button", { name: "Masuk", exact: true }).click();
+      await page.getByRole("button", { name: "Sign in", exact: true }).click();
       await page.waitForURL("**/dashboard");
       await page.locator(".quality-summary").waitFor();
       await capture("02-dashboard-desktop");
       await accessible();
       assert.equal(await page.locator(".app-sidebar").count(), 0);
       await page.keyboard.press("Control+k");
-      await page.getByPlaceholder("Cari lot, produk, atau COA…").fill("Produk");
+      await page
+        .getByPlaceholder("Search lots, products, or COAs…")
+        .fill("Products");
       await page.keyboard.press("Enter");
       await page.waitForURL("**/dashboard/produk");
       await page.waitForFunction(
@@ -262,26 +264,52 @@ test(
         400,
       );
       await page.goto(origin + "/dashboard/produk");
-      await page.getByPlaceholder("Cari produk…").fill("E2E Product");
+      await page.getByPlaceholder("Search products…").fill("E2E Product");
       await page.waitForFunction(() =>
-        document.querySelector("body")?.innerText.includes("120 data"),
+        document.querySelector("body")?.innerText.includes("120 records"),
       );
       await page.waitForFunction(
         () => document.querySelectorAll("tbody tr").length === 50,
       );
-      await page.getByRole("button", { name: /Muat lagi/ }).click();
+      const firstPage = await page.locator("tbody tr").allTextContents();
+      await page
+        .getByRole("button", { name: "Next page", exact: true })
+        .click();
       await page.waitForFunction(
-        () => document.querySelectorAll("tbody tr").length === 100,
+        () =>
+          document
+            .querySelector('button[aria-label="Page 2"]')
+            ?.getAttribute("aria-current") === "page",
       );
-      const rows = await page.locator("tbody tr").allTextContents();
-      assert.equal(new Set(rows).size, 100);
-      await page.getByRole("button", { name: /Muat lagi/ }).click();
+      await page.waitForFunction(() =>
+        document
+          .querySelector("tbody")
+          ?.textContent?.includes("E2E Product 050"),
+      );
+      const secondPage = await page.locator("tbody tr").allTextContents();
+      assert.equal(secondPage.length, 50);
+      assert.equal(new Set([...firstPage, ...secondPage]).size, 100);
+      await page
+        .getByRole("button", { name: "Next page", exact: true })
+        .click();
       await page.waitForFunction(
-        () => document.querySelectorAll("tbody tr").length === 120,
+        () => document.querySelectorAll("tbody tr").length === 20,
       );
       assert.equal(
-        new Set(await page.locator("tbody tr").allTextContents()).size,
-        120,
+        await page
+          .getByRole("button", { name: "Next page", exact: true })
+          .isDisabled(),
+        true,
+      );
+      await page
+        .getByRole("button", { name: "Previous page", exact: true })
+        .click();
+      await page.waitForFunction(
+        () => document.querySelectorAll("tbody tr").length === 50,
+      );
+      assert.deepEqual(
+        await page.locator("tbody tr").allTextContents(),
+        secondPage,
       );
       await capture("03-produk-desktop");
       await accessible();
@@ -289,7 +317,7 @@ test(
         .getByRole("button", { name: "Non-Halal", exact: true })
         .click();
       await page
-        .getByRole("button", { name: "Reset filter", exact: true })
+        .getByRole("button", { name: "Clear filters", exact: true })
         .waitFor();
       assert.equal(
         await page
@@ -299,62 +327,62 @@ test(
         0,
       );
       await page
-        .getByRole("button", { name: "Reset filter", exact: true })
+        .getByRole("button", { name: "Clear filters", exact: true })
         .click();
       await page.waitForFunction(
         () => document.querySelectorAll("tbody tr").length === 50,
       );
       await page
-        .getByLabel("Urutkan data", { exact: true })
+        .getByLabel("Sort records", { exact: true })
         .selectOption("newest");
       assert.equal(
-        await page.getByLabel("Urutkan data", { exact: true }).inputValue(),
+        await page.getByLabel("Sort records", { exact: true }).inputValue(),
         "newest",
       );
       // Empty submission and closing an edited form preserve user intent.
       await page
-        .getByRole("button", { name: "Produk Baru", exact: true })
+        .getByRole("button", { name: "New product", exact: true })
         .first()
         .click();
-      await page.getByRole("button", { name: "Tambah", exact: true }).click();
+      await page.getByRole("button", { name: "Add", exact: true }).click();
       assert.equal(
-        await page.getByLabel(/^Kode Produk/).getAttribute("aria-invalid"),
+        await page.getByLabel(/^Product code/).getAttribute("aria-invalid"),
         "true",
       );
-      await page.getByLabel(/^Kode Produk/).fill("DRAFT-ONLY");
+      await page.getByLabel(/^Product code/).fill("DRAFT-ONLY");
       await page.keyboard.press("Escape");
       await page
-        .getByRole("dialog", { name: "Tinggalkan perubahan?" })
+        .getByRole("dialog", { name: "Discard your changes?" })
         .waitFor();
       await capture("04-discard-confirmation");
-      await page.getByRole("button", { name: "Kembali", exact: true }).click();
+      await page.getByRole("button", { name: "Back", exact: true }).click();
       assert.equal(
-        await page.getByLabel(/^Kode Produk/).inputValue(),
+        await page.getByLabel(/^Product code/).inputValue(),
         "DRAFT-ONLY",
       );
       await page.keyboard.press("Escape");
       await page
-        .getByRole("button", { name: "Buang perubahan", exact: true })
+        .getByRole("button", { name: "Discard changes", exact: true })
         .click();
       await page.waitForFunction(
         () => !document.querySelector("[role=dialog]"),
       );
       // Create product + canonical parameter using the real Server Action/RPC.
       await page
-        .getByRole("button", { name: "Produk Baru", exact: true })
+        .getByRole("button", { name: "New product", exact: true })
         .first()
         .click();
       await page.getByPlaceholder("PRD-001").fill("BROWSER-" + randomUUID());
       await page
-        .getByPlaceholder("Nama produk", { exact: true })
+        .getByPlaceholder("Product name", { exact: true })
         .fill(browserName);
-      await page.getByRole("button", { name: "Tambah Parameter" }).click();
+      await page.getByRole("button", { name: "Add parameter" }).click();
       await page.getByPlaceholder("Parameter", { exact: true }).fill("pH");
       await page.getByPlaceholder("Min", { exact: true }).fill("6");
-      await page.getByPlaceholder("Maks", { exact: true }).fill("8");
+      await page.getByPlaceholder("Max", { exact: true }).fill("8");
       await capture("05-produk-form");
       await accessible();
-      await page.getByRole("button", { name: "Tambah", exact: true }).click();
+      await page.getByRole("button", { name: "Add", exact: true }).click();
       await page.waitForFunction(
         () => !document.querySelector("[role=dialog]"),
       );
@@ -367,14 +395,14 @@ test(
       assert.ok(p);
       await page.goto(origin + "/dashboard/inspeksi");
       await page
-        .getByRole("button", { name: "Input Uji Baru", exact: true })
+        .getByRole("button", { name: "New inspection", exact: true })
         .first()
         .click();
       await page.locator("[role=dialog] select").selectOption(p.id);
       await page.getByPlaceholder("0", { exact: true }).waitFor();
       await page.getByPlaceholder("LOT-001").fill(browserLot);
       await page
-        .getByRole("button", { name: "Simpan draft", exact: true })
+        .getByRole("button", { name: "Save draft", exact: true })
         .click();
       await page.waitForFunction(
         () => !document.querySelector("[role=dialog]"),
@@ -387,21 +415,21 @@ test(
         ).rowCount,
         0,
       );
-      await page.getByRole("button", { name: /Draft inspeksi/ }).click();
+      await page.getByRole("button", { name: /Inspection drafts/ }).click();
       await page
         .locator(".draft-row")
         .filter({ hasText: browserLot })
-        .getByRole("button", { name: "Lanjutkan" })
+        .getByRole("button", { name: "Continue" })
         .click();
       assert.equal(
         await page.getByPlaceholder("LOT-001").inputValue(),
         browserLot,
       );
-      await page.getByPlaceholder("Nama inspector").fill("Browser Tester");
+      await page.getByPlaceholder("Inspector name").fill("Browser Tester");
       await page.getByPlaceholder("0", { exact: true }).fill("7,5");
       await capture("06-inspeksi-form");
       await accessible();
-      await page.getByRole("button", { name: "Tambah", exact: true }).click();
+      await page.getByRole("button", { name: "Add", exact: true }).click();
       await page.waitForFunction(
         () => !document.querySelector("[role=dialog]"),
       );
@@ -421,7 +449,7 @@ test(
       );
       assert.equal(h.status, "PASS");
       assert.equal(h.hasil_detail[0].val, "7,5");
-      await page.getByPlaceholder("Cari no lot atau produk…").fill(browserName);
+      await page.getByPlaceholder("Search lots or products…").fill(browserName);
       await page.getByRole("cell", { name: browserLot, exact: true }).waitFor();
       // Put the desired source beyond the first 500 available rows. It must
       // remain selectable; the old two capped queries would hide this source.
@@ -433,7 +461,7 @@ test(
       );
       await page.goto(origin + "/dashboard/coa");
       await page
-        .getByRole("button", { name: "Terbitkan COA", exact: true })
+        .getByRole("button", { name: "Issue COA", exact: true })
         .first()
         .click();
       await page
@@ -446,10 +474,10 @@ test(
       const dates = page.locator("[role=dialog] input[type=date]");
       await dates.nth(1).fill("2027-12-31");
       await page
-        .getByRole("button", { name: "Pratinjau COA", exact: true })
+        .getByRole("button", { name: "Preview COA", exact: true })
         .click();
       await page
-        .getByRole("button", { name: "Terbitkan COA", exact: true })
+        .getByRole("button", { name: "Issue COA", exact: true })
         .last()
         .click();
       await page.waitForFunction(
@@ -464,7 +492,7 @@ test(
         "Master renamed after certification",
         p.id,
       ]);
-      await page.getByPlaceholder("Cari COA atau produk…").fill(browserName);
+      await page.getByPlaceholder("Search COAs or products…").fill(browserName);
       await page.getByRole("cell", { name: browserLot, exact: true }).waitFor();
       await page.getByText(browserName, { exact: true }).waitFor();
       await capture("07-coa-desktop");
@@ -481,7 +509,7 @@ test(
       );
       const downloadPromise = context.waitForEvent("page");
       await page
-        .getByRole("button", { name: "Cetak", exact: true })
+        .getByRole("button", { name: "Print", exact: true })
         .first()
         .click();
       const printPage = await downloadPromise;
@@ -497,17 +525,17 @@ test(
       await page.waitForFunction(
         () =>
           !document.querySelector<HTMLButtonElement>(
-            'button[aria-label="Muat ulang data"]',
+            'button[aria-label="Refresh data"]',
           )?.disabled,
       );
       await page
-        .getByRole("button", { name: "Tambah Dokumen", exact: true })
+        .getByRole("button", { name: "Add document", exact: true })
         .first()
         .click();
       await capture("08-arsip-form");
       await accessible();
       await page
-        .getByPlaceholder("Nama dokumen", { exact: true })
+        .getByPlaceholder("Document name", { exact: true })
         .fill("Dokumen browser " + suffix);
       await page.locator("[role=dialog] select").selectOption({ index: 1 });
       await page
@@ -521,10 +549,41 @@ test(
       await page
         .getByPlaceholder("https://drive.google.com/...")
         .fill("https://example.com/quality");
-      await page.getByRole("button", { name: "Tambah", exact: true }).click();
+      await page.getByRole("button", { name: "Add", exact: true }).click();
       await page.waitForFunction(
         () => !document.querySelector("[role=dialog]"),
       );
+      await page.evaluate(async () => {
+        await document.fonts.ready;
+      });
+      assert.match(
+        await page
+          .locator("body")
+          .evaluate((el) => getComputedStyle(el).fontFamily),
+        /dmSans|DM Sans/,
+      );
+      const longCode = "LONG-" + suffix;
+      const longName =
+        "Magnesium stearate " + "ExtendedProductIdentity".repeat(15);
+      const longProduct = (
+        await db.query(
+          `insert into master_produk(kode_produk,nama_produk,kategori,satuan,status_halal,tipe_kemasan) values($1,$2,$3,'kg','Halal',$3) returning id`,
+          [longCode, longName, "LongMetadata".repeat(20)],
+        )
+      ).rows[0];
+      await db.query(
+        `insert into spesifikasi(id_produk,parameter_uji,tipe_batas,keterangan,urutan) values($1,$2,'TEXT',$3,0)`,
+        [
+          longProduct.id,
+          "LongParameter".repeat(15),
+          "LongObservation".repeat(18),
+        ],
+      );
+      await db.query(
+        `insert into product_spec_versions(id_produk,version,product_snapshot,specifications,actor,revision_note) select m.id,v,to_jsonb(m),(select jsonb_agg(to_jsonb(sp)) from spesifikasi sp where sp.id_produk=m.id),'Pagination fixture','Version pagination test' from master_produk m cross join generate_series(1,55) v where m.id=$1`,
+        [longProduct.id],
+      );
+
       for (const width of [768, 375, 320]) {
         await page.setViewportSize({ width, height: 900 });
         await page.goto(origin + "/dashboard");
@@ -546,17 +605,19 @@ test(
             )),
         );
         await accessible();
-        await page.getByRole("button", { name: "Buka menu navigasi" }).click();
         await page
-          .getByRole("navigation", { name: "Navigasi utama" })
-          .getByRole("link", { name: "Produk", exact: true })
+          .getByRole("button", { name: "Open navigation menu" })
+          .click();
+        await page
+          .getByRole("navigation", { name: "Main navigation" })
+          .getByRole("link", { name: "Products", exact: true })
           .click();
         await page.waitForURL("**/dashboard/produk");
         await page.locator(".data-toolbar").waitFor();
         await page.waitForFunction(
           () =>
             !document.querySelector<HTMLButtonElement>(
-              'button[aria-label="Muat ulang data"]',
+              'button[aria-label="Refresh data"]',
             )?.disabled,
         );
         assert.ok(
@@ -566,32 +627,107 @@ test(
           `no product overflow at ${width}`,
         );
         await page
-          .getByRole("button", { name: "Produk Baru", exact: true })
+          .getByRole("button", { name: "New product", exact: true })
           .first()
           .click();
-        await page.getByRole("button", { name: "Tambah Parameter" }).click();
+        await page.getByRole("button", { name: "Add parameter" }).click();
         await capture(`10-produk-form-${width}`);
         await accessible();
         await page.keyboard.press("Escape");
         await page
-          .getByRole("button", { name: "Buang perubahan", exact: true })
+          .getByRole("button", { name: "Discard changes", exact: true })
           .click();
+        await page.waitForFunction(
+          () => !document.querySelector("[role=dialog]"),
+        );
+      }
+      for (const width of [375, 320]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(origin + "/dashboard/produk?q=" + longCode);
+        await page.getByText(longName, { exact: true }).waitFor();
+        const actions = page
+          .locator("tbody tr")
+          .filter({ hasText: longCode })
+          .locator(".row-actions");
+        assert.equal(
+          await actions.locator(".row-actions-desktop").isVisible(),
+          false,
+        );
+        const dataCell = await actions
+          .locator("xpath=ancestor::tr")
+          .locator("td")
+          .first()
+          .boundingBox();
+        const actionCell = await actions
+          .locator("xpath=ancestor::td")
+          .boundingBox();
+        assert.ok(
+          dataCell &&
+            actionCell &&
+            dataCell.x + dataCell.width <= actionCell.x + 1,
+          "mobile identity stays clear of the action column",
+        );
+
+        assert.ok(
+          (await actions.locator(".row-actions-mobile").boundingBox())!.width <=
+            44,
+        );
+        await actions
+          .getByRole("button", { name: "Row actions", exact: true })
+          .click();
+        await page
+          .getByRole("menuitem", { name: "Product details", exact: true })
+          .click();
+        const modal = page.getByRole("dialog");
+        await modal
+          .getByRole("heading", { name: longName, exact: true })
+          .waitFor();
+        await modal
+          .getByRole("cell", { name: "LongParameter".repeat(15), exact: true })
+          .first()
+          .waitFor();
+        assert.equal(
+          await modal.evaluate((el) => el.scrollTop),
+          0,
+          "details open at the top",
+        );
+        assert.ok(
+          await modal.evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
+          "long modal content wraps at " + width,
+        );
+        assert.ok(
+          await modal
+            .locator('[data-slot="table-container"]')
+            .evaluateAll((els) =>
+              els.every((el) => el.scrollWidth <= el.clientWidth + 1),
+            ),
+          "modal tables wrap at " + width,
+        );
+        assert.ok(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+          "page does not overflow at " + width,
+        );
+        await capture("20-long-product-modal-" + width);
+        await accessible();
+        await page.keyboard.press("Escape");
         await page.waitForFunction(
           () => !document.querySelector("[role=dialog]"),
         );
       }
       await page.setViewportSize({ width: 375, height: 900 });
       for (const [route, action] of [
-        ["inspeksi", "Input Uji Baru"],
-        ["coa", "Terbitkan COA"],
-        ["arsip", "Tambah Dokumen"],
+        ["inspeksi", "New inspection"],
+        ["coa", "Issue COA"],
+        ["arsip", "Add document"],
       ]) {
         await page.goto(origin + "/dashboard/" + route);
         await page.locator(".data-toolbar").waitFor();
         await page.waitForFunction(
           () =>
             !document.querySelector<HTMLButtonElement>(
-              'button[aria-label="Muat ulang data"]',
+              'button[aria-label="Refresh data"]',
             )?.disabled,
         );
         assert.ok(
@@ -615,19 +751,17 @@ test(
       await page.setViewportSize({ width: 1440, height: 1000 });
       // New account administration, forced password change and read-only boundaries.
       await page.goto(origin + "/dashboard/pengguna");
-      await page
-        .getByRole("button", { name: "Tambah pengguna", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Add user", exact: true }).click();
       const managedUsername = "managed-" + suffix;
       await page
-        .getByLabel("Nama lengkap", { exact: true })
+        .getByLabel("Full name", { exact: true })
         .fill("Managed QA " + suffix);
       await page.getByLabel("Username", { exact: true }).fill(managedUsername);
       await page
-        .getByLabel("Password sementara", { exact: true })
+        .getByLabel("Temporary password", { exact: true })
         .fill("Temporary QA password 2026");
       await page
-        .getByRole("button", { name: "Simpan pengguna", exact: true })
+        .getByRole("button", { name: "Save user", exact: true })
         .click();
       await page.getByText("@" + managedUsername, { exact: true }).waitFor();
       await capture("18-pengguna");
@@ -644,7 +778,9 @@ test(
       await member
         .locator("[name=password]")
         .fill("Temporary QA password 2026");
-      await member.getByRole("button", { name: "Masuk", exact: true }).click();
+      await member
+        .getByRole("button", { name: "Sign in", exact: true })
+        .click();
       await member.waitForURL("**/account/password");
       assert.equal(
         (
@@ -653,16 +789,16 @@ test(
         401,
       );
       await member
-        .getByLabel("Password saat ini", { exact: true })
+        .getByLabel("Current password", { exact: true })
         .fill("Temporary QA password 2026");
       await member
-        .getByLabel("Password baru", { exact: true })
+        .getByLabel("New password", { exact: true })
         .fill("Changed QA password 2026");
       await member
-        .getByLabel("Ulangi password baru", { exact: true })
+        .getByLabel("Confirm new password", { exact: true })
         .fill("Changed QA password 2026");
       await member
-        .getByRole("button", { name: "Simpan password", exact: true })
+        .getByRole("button", { name: "Save password", exact: true })
         .click();
       await member.waitForURL("**/dashboard");
       assert.equal(
@@ -686,7 +822,7 @@ test(
         .getByRole("button", { name: "Reset password", exact: true })
         .click();
       await page
-        .getByLabel("Password sementara", { exact: true })
+        .getByLabel("Temporary password", { exact: true })
         .fill("Reset QA password 2026");
       await page
         .getByRole("dialog")
@@ -704,7 +840,7 @@ test(
       await restricted.close();
       await page.goto(origin + "/dashboard/audit");
       await page
-        .getByRole("heading", { name: "Log audit", exact: true })
+        .getByRole("heading", { name: "Audit log", exact: true })
         .waitFor();
       await capture("19-audit");
       await accessible();
@@ -743,25 +879,159 @@ test(
       assert.ok(
         searchResults.results.some((r: { type: string }) => r.type === "COA"),
       );
+      // Every primary list replaces rows when changing pages.
+      const pagingPrefix = "Paging-" + suffix + "-";
+      await db.query(
+        `insert into dokumen_arsip(judul_dokumen,kategori,tanggal_berlaku,masa_kadaluarsa) select $1||i,'QA','2026-01-01','2028-01-01' from generate_series(1,60) i`,
+        [pagingPrefix],
+      );
+      await db.query(
+        `insert into users(username,password_hash,role,nama_lengkap) select $1||i,$2,'viewer',$1||i from generate_series(1,60) i`,
+        [
+          pagingPrefix,
+          `scrypt$${salt.toString("hex")}$${scryptSync(password, salt, 64).toString("hex")}`,
+        ],
+      );
+      await db.query(
+        `insert into audit_log(user_name,aksi,referensi) select $1||i,'QA_PAGING',$1||i from generate_series(1,60) i`,
+        [pagingPrefix],
+      );
+      await db.query(
+        `insert into coa(no_coa,id_produk,id_hasil_uji,no_lot,tanggal_rilis,tanggal_expired,hasil_uji_snapshot,tanda_tangan_digital) select $1||row_number() over(order by h.id),h.id_produk,h.id,h.no_lot,'2026-01-01','2028-01-01',jsonb_build_object('produk',$1,'items',h.hasil_detail,'ts',h.tgl_sampling,'tu',h.tgl_uji),'QA' from hasil_uji h where h.id_produk=$2 and h.no_lot like 'EXTRA-%' and not exists(select from coa c where c.id_hasil_uji=h.id) limit 60`,
+        [pagingPrefix, p.id],
+      );
+      async function verifyPages(
+        route: string,
+        placeholder: string,
+        term: string,
+        lastCount = 10,
+      ) {
+        await page.goto(origin + "/dashboard/" + route);
+        await page.getByPlaceholder(placeholder).fill(term);
+        await page
+          .getByText((lastCount === 50 ? 501 : 60) + " records", {
+            exact: true,
+          })
+          .waitFor();
+        await page.waitForFunction(
+          () => document.querySelectorAll("tbody tr").length === 50,
+        );
+        await page
+          .getByRole("button", { name: "Next page", exact: true })
+          .waitFor();
+        await page.waitForFunction(
+          () =>
+            !document.querySelector<HTMLButtonElement>(
+              'button[aria-label="Next page"]',
+            )?.disabled,
+        );
+        const first = await page.locator("tbody tr").allTextContents();
+        await page
+          .getByRole("button", { name: "Next page", exact: true })
+          .click();
+        await page.waitForFunction(
+          () =>
+            document
+              .querySelector('button[aria-label="Page 2"]')
+              ?.getAttribute("aria-current") === "page",
+        );
+        assert.equal(await page.locator("tbody tr").count(), lastCount);
+        assert.equal(
+          new Set([
+            ...first,
+            ...(await page.locator("tbody tr").allTextContents()),
+          ]).size,
+          50 + lastCount,
+        );
+        await page
+          .getByRole("button", { name: "Previous page", exact: true })
+          .click();
+        await page.waitForFunction(
+          () =>
+            document
+              .querySelector('button[aria-label="Page 1"]')
+              ?.getAttribute("aria-current") === "page",
+        );
+        assert.deepEqual(
+          await page.locator("tbody tr").allTextContents(),
+          first,
+        );
+      }
+      await verifyPages("arsip", "Search documents…", pagingPrefix);
+      await verifyPages("coa", "Search COAs or products…", pagingPrefix);
+      await verifyPages("pengguna", "Search names or usernames…", pagingPrefix);
+      await verifyPages(
+        "audit",
+        "Search users, actions, or references…",
+        pagingPrefix,
+      );
+      const extraLot = (
+        await db.query(
+          "select no_lot from hasil_uji where id_produk=$1 and no_lot like 'EXTRA-%' limit 1",
+          [p.id],
+        )
+      ).rows[0].no_lot;
+      await verifyPages(
+        "inspeksi",
+        "Search lots or products…",
+        extraLot.slice(-36),
+        50,
+      );
+      await page.goto(origin + "/dashboard/produk?q=" + longCode);
+      await page.getByText(longName, { exact: true }).waitFor();
+      await page
+        .getByRole("button", { name: "Product details", exact: true })
+        .click();
+      const history = page
+        .getByRole("dialog")
+        .getByRole("navigation", { name: "Table pagination" });
+      await history
+        .getByRole("button", { name: "Next page", exact: true })
+        .click();
+      await page
+        .getByRole("dialog")
+        .getByLabel("Specification version", { exact: true })
+        .locator("option")
+        .first()
+        .waitFor({ state: "attached" });
+      await page.waitForFunction(
+        () =>
+          document
+            .querySelector('[role="dialog"] button[aria-label="Page 2"]')
+            ?.getAttribute("aria-current") === "page",
+      );
+      assert.equal(
+        await page
+          .getByRole("dialog")
+          .getByLabel("Specification version", { exact: true })
+          .locator("option")
+          .count(),
+        5,
+      );
+      await page.keyboard.press("Escape");
+      await page.waitForFunction(
+        () => !document.querySelector("[role=dialog]"),
+      );
       await db.query("update users set role=$1 where id=$2", [
         "viewer",
         user.id,
       ]);
       await page.goto(origin + "/dashboard/produk");
       await page
-        .getByRole("button", { name: "Detail produk" })
+        .getByRole("button", { name: "Product details" })
         .first()
         .waitFor();
       assert.equal(
         await page
-          .getByRole("button", { name: "Produk Baru", exact: true })
+          .getByRole("button", { name: "New product", exact: true })
           .count(),
         0,
       );
-      await page.getByRole("button", { name: "Detail produk" }).first().click();
       await page
-        .getByRole("heading", { name: "Parameter pengujian" })
-        .waitFor();
+        .getByRole("button", { name: "Product details" })
+        .first()
+        .click();
+      await page.getByRole("heading", { name: "Test parameters" }).waitFor();
       await capture("13-produk-detail-viewer");
       await accessible();
       await page.keyboard.press("Escape");
@@ -781,7 +1051,7 @@ test(
         "noindex",
       );
       await page
-        .getByRole("heading", { name: "Mari kembali ke ruang kerja." })
+        .getByRole("heading", { name: "Back to your workspace" })
         .waitFor();
       await capture("17-not-found-mobile");
       await accessible();
@@ -797,16 +1067,16 @@ test(
       );
       await page.reload();
       await page
-        .getByRole("button", { name: "Terbitkan COA", exact: true })
+        .getByRole("button", { name: "Issue COA", exact: true })
         .first()
         .click();
       await page
         .getByRole("alert")
-        .filter({ hasText: "Gagal memuat hasil uji" })
+        .filter({ hasText: "Could not load test results." })
         .waitFor();
       assert.equal(
         await page
-          .getByRole("button", { name: "Pratinjau COA", exact: true })
+          .getByRole("button", { name: "Preview COA", exact: true })
           .isDisabled(),
         true,
       );
@@ -814,11 +1084,13 @@ test(
       await page.waitForFunction(
         () => !document.querySelector("[role=dialog]"),
       );
-      await page.getByRole("button", { name: "Buka menu akun" }).click();
+      await page.getByRole("button", { name: "Open account menu" }).click();
       failRevoke = true;
-      await page.getByRole("menuitem", { name: "Logout", exact: true }).click();
       await page
-        .getByText("Gagal keluar. Coba lagi.", { exact: true })
+        .getByRole("menuitem", { name: "Sign out", exact: true })
+        .click();
+      await page
+        .getByText("Could not sign out. Retry.", { exact: true })
         .waitFor();
       assert.equal(
         (await db.query("select from sessions where user_id=$1", [user.id]))
@@ -829,8 +1101,10 @@ test(
         (await context.cookies()).some((c) => c.name === "session_token"),
       );
       failRevoke = false;
-      await page.getByRole("button", { name: "Buka menu akun" }).click();
-      await page.getByRole("menuitem", { name: "Logout", exact: true }).click();
+      await page.getByRole("button", { name: "Open account menu" }).click();
+      await page
+        .getByRole("menuitem", { name: "Sign out", exact: true })
+        .click();
       await page.waitForURL("**/login");
       assert.equal(
         (await db.query("select from sessions where user_id=$1", [user.id]))

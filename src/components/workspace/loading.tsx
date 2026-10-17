@@ -1,6 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
 export function ModuleLoading({
-  title = "Memuat ruang kerja",
+  title = "Loading workspace",
 }: {
   title?: string;
 }) {

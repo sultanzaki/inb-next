@@ -1,4 +1,5 @@
 "use client";
+import { RowActions } from "@/components/workspace/row-actions";
 import { SpecHistory } from "@/components/workspace/spec-history";
 import {
   DataTools,
@@ -60,10 +61,10 @@ const sb = createClient();
 // Monotonic counter used to ignore stale list-fetch responses.
 
 const kategoriList = [
-  "Bahan Baku",
-  "Produk Jadi",
-  "Bahan Kemas",
-  "Bahan Tambahan",
+  "Raw materials",
+  "Finished goods",
+  "Packaging materials",
+  "Additives",
 ];
 const satuanList = [
   "Kg",
@@ -71,18 +72,18 @@ const satuanList = [
   "Liter",
   "mL",
   "Unit",
-  "Botol",
+  "Bottle",
   "Sachet",
-  "Dos",
+  "Box",
 ];
 const kemasanList = [
-  "Botol",
+  "Bottle",
   "Sachet",
-  "Dos",
-  "Jerigen",
+  "Box",
+  "Jerry can",
   "Drum",
   "Pouch",
-  "Lainnya",
+  "Other",
 ];
 
 interface SpesifikasiForm {
@@ -146,7 +147,7 @@ export default function ProdukPage() {
   const [detailSpecs, setDetailSpecs] = useState<SpesifikasiItem[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState(false);
-  const appending = useRef(false);
+  const navigating = useRef(false);
   const { user } = useUser();
 
   const [searchInput, setSearchInput] = useState("");
@@ -162,23 +163,18 @@ export default function ProdukPage() {
   const [spesifikasi, setSpesifikasi] = useState<SpesifikasiForm[]>([]);
   const [saving, setSaving] = useState(false);
 
-  // Pagination: list queries are bounded with .range(); count:"exact" returns
-  // the filtered row total (ignoring the range window) in the same request, so
-  // "Muat lagi" knows how many rows are left without a second query.
+  // Fetch one bounded page and its filtered total.
   const [pageSize] = useState(50);
   const [offset, setOffset] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [paging, setPaging] = useState(false);
 
-  // Bounded query runner shared by the fresh fetch and load-more.
-  // append=false swaps the accumulated list (mount, search, retry, after a
-  // mutation); append=true fetches the page starting at `start` and appends.
   const runQuery = useCallback(
-    async (start: number, append: boolean) => {
-      if (append && appending.current) return;
-      appending.current = append;
+    async (start: number, pageRequest: boolean) => {
+      if (pageRequest && navigating.current) return;
+      navigating.current = pageRequest;
       const seq = ++requestSeq.current;
-      if (append) setLoadingMore(true);
+      if (pageRequest) setPaging(true);
       else setLoading(true);
       let q = sb
         .from("master_produk")
@@ -204,43 +200,39 @@ export default function ProdukPage() {
       if (seq !== requestSeq.current) {
         // Superseded by a newer request: release the loading flag this
         // request owned (the newer one manages its own).
-        if (append) setLoadingMore(false);
+        if (pageRequest) setPaging(false);
         return;
       }
       if (error) {
-        // A failed load-more keeps the accumulated rows and leaves the offset
-        // unchanged, so retrying "Muat lagi" re-requests the same page.
-        if (!append) {
+        if (!pageRequest) {
           setLoadError(true);
           setProdukList([]);
           setTotalCount(0);
         }
-        toast.error("Gagal memuat data. Coba lagi.");
+        toast.error("Could not load data. Retry.");
       } else {
         const rows = (data as MasterProduk[]) ?? [];
         setLoadError(false);
-        setProdukList((prev) => (append ? [...prev, ...rows] : rows));
+        setProdukList(rows);
         setTotalCount(count ?? 0);
-        setOffset(start + rows.length);
+        setOffset(start);
       }
-      appending.current = false;
-      setLoadingMore(false);
+      navigating.current = false;
+      setPaging(false);
       setLoading(false);
     },
     [search, pageSize, filter, order, advanced],
   );
 
-  // Fresh fetch: page 0 replaces any accumulated rows and resets the offset
-  // (also fires when the debounced search changes).
   const fetchData = useCallback(() => {
     setOffset(0);
     return runQuery(0, false);
   }, [runQuery]);
 
-  // Load-more: append the next page to the accumulated rows.
-  const loadMore = useCallback(() => {
-    return runQuery(offset, true);
-  }, [runQuery, offset]);
+  const goToPage = useCallback(
+    (page: number) => runQuery((page - 1) * pageSize, true),
+    [runQuery, pageSize],
+  );
 
   useEffect(() => {
     const sequence = requestSeq;
@@ -250,7 +242,7 @@ export default function ProdukPage() {
     return () => {
       clearTimeout(timer);
       sequence.current++;
-      appending.current = false;
+      navigating.current = false;
     };
   }, [fetchData]);
 
@@ -285,7 +277,7 @@ export default function ProdukPage() {
       .order("urutan");
     if (seq !== editSeq.current) return;
     if (spErr) {
-      toast.error("Gagal memuat data. Coba lagi.");
+      toast.error("Could not load data. Retry.");
       return;
     }
 
@@ -368,7 +360,7 @@ export default function ProdukPage() {
 
   async function handleSave() {
     if (!form.kode_produk || !form.nama_produk) {
-      toast.error("Kode dan nama produk wajib diisi.");
+      toast.error("Product code and name are required.");
       return;
     }
     setSaving(true);
@@ -380,21 +372,17 @@ export default function ProdukPage() {
         spesifikasi,
       });
       if (!res.ok) {
-        toast.error(res.error ?? "Gagal menyimpan produk. Coba lagi.");
+        toast.error(res.error ?? "Could not save the product. Retry.");
         return;
       }
-      toast.success(
-        editingId
-          ? "Produk berhasil diperbarui."
-          : "Produk berhasil ditambahkan.",
-      );
+      toast.success(editingId ? "Product updated." : "Product added.");
       setDialogOpen(false);
       resetForm();
       fetchData();
     } catch {
       // Transport error (mis. jaringan putus): server action melempar, bukan
       // mengembalikan { ok:false } — tanpa catch user tidak lihat apa pun.
-      toast.error("Gagal terhubung ke server. Coba lagi.");
+      toast.error("Could not reach the server. Retry.");
     } finally {
       setSaving(false);
     }
@@ -403,10 +391,9 @@ export default function ProdukPage() {
   async function handleDelete(id: string) {
     if (
       !(await confirm({
-        title: "Hapus produk ini? Semua spesifikasi juga akan dihapus.",
-        description:
-          "Data yang dihapus tidak dapat dipulihkan melalui aplikasi. Pastikan data tidak lagi diperlukan.",
-        confirmLabel: "Ya, hapus data",
+        title: "Delete this product and its specifications?",
+        description: "This cannot be undone.",
+        confirmLabel: "Delete record",
       }))
     )
       return;
@@ -415,15 +402,15 @@ export default function ProdukPage() {
     try {
       const res = await deleteProdukAction(id);
       if (!res.ok) {
-        toast.error(res.error ?? "Gagal menghapus produk. Coba lagi.");
+        toast.error(res.error ?? "Could not delete the product. Retry.");
         return;
       }
-      toast.success("Produk dihapus.");
+      toast.success("Product deleted.");
       fetchData();
     } catch {
       // transport error — action tetap { ok:false } untuk kegagalan aplikatif;
       // tanpa catch user tidak lihat apa pun.
-      toast.error("Gagal terhubung ke server. Coba lagi.");
+      toast.error("Could not reach the server. Retry.");
     }
   }
 
@@ -436,8 +423,8 @@ export default function ProdukPage() {
     <div className="page-stack">
       <PageHeader
         eyebrow="Master data"
-        title="Master Produk"
-        description="Katalog produk dan spesifikasi pengujian."
+        title="Products"
+        description="Product catalog and test specifications."
       >
         <DomainDialog
           dirtyValue={{ form, spesifikasi }}
@@ -452,7 +439,7 @@ export default function ProdukPage() {
             <DialogTrigger
               render={
                 <Button>
-                  <Plus className="size-4" /> Produk Baru
+                  <Plus className="size-4" /> New product
                 </Button>
               }
             />
@@ -462,11 +449,10 @@ export default function ProdukPage() {
             <DialogHeader className="gap-1 border-b border-border-soft px-6 py-4 pr-14">
               <p className="micro-label">MASTER DATA</p>
               <DialogTitle className="text-2xl font-semibold tracking-tight">
-                {editingId ? "Edit Produk" : "Tambah Produk Baru"}
+                {editingId ? "Edit product" : "New product"}
               </DialogTitle>
               <DialogDescription className="mt-2 text-xs leading-relaxed">
-                Definisikan identitas produk dan standar pengujian yang akan
-                dipakai pada inspeksi.
+                Set the product details and inspection specifications.
               </DialogDescription>
             </DialogHeader>
             <DomainForm
@@ -479,7 +465,7 @@ export default function ProdukPage() {
                 <div className="space-y-6">
                   {/* Produk fields: two-column grid */}
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <Field label="Kode Produk *" name="kode_produk" required>
+                    <Field label="Product code *" name="kode_produk" required>
                       <Input
                         value={form.kode_produk}
                         onChange={(e) =>
@@ -488,19 +474,19 @@ export default function ProdukPage() {
                         placeholder="PRD-001"
                       />
                     </Field>
-                    <Field label="Nama Produk *" name="nama_produk" required>
+                    <Field label="Product name *" name="nama_produk" required>
                       <Input
                         value={form.nama_produk}
                         onChange={(e) =>
                           setForm({ ...form, nama_produk: e.target.value })
                         }
-                        placeholder="Nama produk"
+                        placeholder="Product name"
                       />
                     </Field>
                     <Field
-                      label="Nama INCI"
+                      label="INCI name"
                       name="inci_name"
-                      hint="Dipakai pada sertifikat analisis."
+                      hint="Used on the certificate."
                     >
                       <Input
                         value={form.inci_name}
@@ -510,9 +496,9 @@ export default function ProdukPage() {
                       />
                     </Field>
                     <Field
-                      label="Nama produk (English)"
+                      label="Product name in English"
                       name="nama_produk_en"
-                      hint="Opsional jika nama dagang sama."
+                      hint="Optional if the trade name is the same."
                     >
                       <Input
                         value={form.nama_produk_en}
@@ -521,7 +507,7 @@ export default function ProdukPage() {
                         }
                       />
                     </Field>
-                    <Field label="Kategori" name="kategori">
+                    <Field label="Category" name="kategori">
                       <select
                         className={selectClass}
                         value={form.kategori}
@@ -529,7 +515,7 @@ export default function ProdukPage() {
                           setForm({ ...form, kategori: e.target.value })
                         }
                       >
-                        <option value="">Pilih…</option>
+                        <option value="">Select…</option>
                         {kategoriList.map((k) => (
                           <option key={k} value={k}>
                             {k}
@@ -537,7 +523,7 @@ export default function ProdukPage() {
                         ))}
                       </select>
                     </Field>
-                    <Field label="Satuan" name="satuan">
+                    <Field label="Unit" name="satuan">
                       <select
                         className={selectClass}
                         value={form.satuan}
@@ -545,7 +531,7 @@ export default function ProdukPage() {
                           setForm({ ...form, satuan: e.target.value })
                         }
                       >
-                        <option value="">Pilih…</option>
+                        <option value="">Select…</option>
                         {satuanList.map((s) => (
                           <option key={s} value={s}>
                             {s}
@@ -553,7 +539,7 @@ export default function ProdukPage() {
                         ))}
                       </select>
                     </Field>
-                    <Field label="Status Halal" name="status_halal">
+                    <Field label="Halal status" name="status_halal">
                       <select
                         className={selectClass}
                         value={form.status_halal}
@@ -565,7 +551,7 @@ export default function ProdukPage() {
                         <option value="Non-Halal">Non-Halal</option>
                       </select>
                     </Field>
-                    <Field label="Tipe Kemasan" name="tipe_kemasan">
+                    <Field label="Packaging type" name="tipe_kemasan">
                       <select
                         className={selectClass}
                         value={form.tipe_kemasan}
@@ -573,7 +559,7 @@ export default function ProdukPage() {
                           setForm({ ...form, tipe_kemasan: e.target.value })
                         }
                       >
-                        <option value="">Pilih…</option>
+                        <option value="">Select…</option>
                         {kemasanList.map((k) => (
                           <option key={k} value={k}>
                             {k}
@@ -584,33 +570,33 @@ export default function ProdukPage() {
                   </div>
 
                   {editingId && (
-                    <Field label="Catatan revisi" name="revision_note">
+                    <Field label="Revision note" name="revision_note">
                       <Input
                         value={form.revision_note}
                         onChange={(e) =>
                           setForm({ ...form, revision_note: e.target.value })
                         }
-                        placeholder="Alasan perubahan spesifikasi"
+                        placeholder="Reason for this revision"
                       />
                     </Field>
                   )}
                   {/* Spesifikasi section */}
                   <div className="border-t border-border pt-5">
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                      <span className="micro-label">Spesifikasi Pengujian</span>
+                      <span className="micro-label">Test specifications</span>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={addSpesifikasiRow}
                       >
-                        <Plus className="size-3.5" /> Tambah Parameter
+                        <Plus className="size-3.5" /> Add parameter
                       </Button>
                     </div>
 
                     {spesifikasi.length === 0 && (
                       <p className="text-[13px] text-muted">
-                        Belum ada parameter. Klik &ldquo;Tambah Parameter&rdquo;
-                        untuk menambahkan.
+                        No parameters yet. Select &ldquo;Add parameter&rdquo; to
+                        begin.
                       </p>
                     )}
 
@@ -639,7 +625,7 @@ export default function ProdukPage() {
                               />
                             </Field>
                             <Field
-                              label="Tipe"
+                              label="Type"
                               name={`spesifikasi.${idx}.tipe_batas`}
                             >
                               <select
@@ -681,7 +667,7 @@ export default function ProdukPage() {
                               />
                             </Field>
                             <Field
-                              label="Maks"
+                              label="Max"
                               name={`spesifikasi.${idx}.nilai_maks`}
                             >
                               <Input
@@ -698,11 +684,11 @@ export default function ProdukPage() {
                                     e.target.value,
                                   )
                                 }
-                                placeholder="Maks"
+                                placeholder="Max"
                               />
                             </Field>
                             <Field
-                              label="Satuan"
+                              label="Unit"
                               name={`spesifikasi.${idx}.satuan`}
                             >
                               <Input
@@ -714,11 +700,11 @@ export default function ProdukPage() {
                                     e.target.value,
                                   )
                                 }
-                                placeholder="Satuan"
+                                placeholder="Unit"
                               />
                             </Field>
                             <Field
-                              label="Parameter (English)"
+                              label="Parameter in English"
                               name={`spesifikasi.${idx}.parameter_en`}
                             >
                               <Input
@@ -733,9 +719,9 @@ export default function ProdukPage() {
                               />
                             </Field>
                             <Field
-                              label="Standar observasi"
+                              label="Observation standard"
                               name={`spesifikasi.${idx}.keterangan`}
-                              hint="Untuk parameter tipe TEXT."
+                              hint="For text parameters."
                             >
                               <Input
                                 value={sp.keterangan}
@@ -749,7 +735,7 @@ export default function ProdukPage() {
                               />
                             </Field>
                             <Field
-                              label="Standar observasi (English)"
+                              label="Observation standard in English"
                               name={`spesifikasi.${idx}.keterangan_en`}
                             >
                               <Input
@@ -769,7 +755,7 @@ export default function ProdukPage() {
                             className="row-action mt-6 shrink-0"
                             data-tone="danger"
                             onClick={() => removeSpesifikasi(idx)}
-                            title="Hapus"
+                            title="Delete"
                           >
                             <Trash2 className="size-3.5" />
                           </button>
@@ -782,10 +768,10 @@ export default function ProdukPage() {
 
               <DialogFooter className="m-0 flex-row items-center justify-between gap-2 rounded-b-lg px-6 py-4 sm:justify-between">
                 <DialogClose
-                  render={<Button variant="outline">Batal</Button>}
+                  render={<Button variant="outline">Cancel</Button>}
                 />
                 <Button type="submit" loading={saving} disabled={saving}>
-                  {saving ? "Menyimpan…" : editingId ? "Simpan" : "Tambah"}
+                  {saving ? "Saving…" : editingId ? "Save" : "Add"}
                 </Button>
               </DialogFooter>
             </DomainForm>
@@ -795,11 +781,11 @@ export default function ProdukPage() {
 
       <div>
         <FilterTabs
-          label="Filter produk"
+          label="Filter products"
           value={filter}
           onChange={setFilter}
           items={[
-            { value: "all", label: "Semua produk" },
+            { value: "all", label: "All products" },
             { value: "Halal", label: "Halal" },
             { value: "Non-Halal", label: "Non-Halal" },
           ]}
@@ -807,7 +793,7 @@ export default function ProdukPage() {
         <DataToolbar
           search={searchInput}
           onSearch={onSearchChange}
-          placeholder="Cari produk…"
+          placeholder="Search products…"
           total={totalCount}
           loading={loading}
           onRefresh={() => void fetchData()}
@@ -830,12 +816,12 @@ export default function ProdukPage() {
         <Table data-actions>
           <TableHeader>
             <TableRow className="hover:bg-surface-alt">
-              <TableHead className="pl-4">Produk</TableHead>
-              <TableHead>Kategori</TableHead>
-              <TableHead>Satuan</TableHead>
+              <TableHead className="pl-4">Products</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead>Unit</TableHead>
               <TableHead>Halal</TableHead>
-              <TableHead>Kemasan</TableHead>
-              <TableHead className="pr-4">Aksi</TableHead>
+              <TableHead>Packaging</TableHead>
+              <TableHead className="pr-4">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -845,15 +831,15 @@ export default function ProdukPage() {
                 <TableCell colSpan={6} className="!p-0">
                   <EmptyState
                     error
-                    title="Data belum berhasil dimuat"
-                    description="Koneksi mungkin terputus. Muat ulang untuk mencoba kembali."
+                    title="Could not load data"
+                    description="Check your connection and reload."
                   >
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => fetchData()}
                     >
-                      Coba Lagi
+                      Retry
                     </Button>
                   </EmptyState>
                 </TableCell>
@@ -868,13 +854,13 @@ export default function ProdukPage() {
                     </div>
                     <p className="text-base font-semibold tracking-tight">
                       {search || filter !== "all"
-                        ? "Tidak ada hasil yang cocok"
-                        : "Katalog produk masih kosong"}
+                        ? "No matching results"
+                        : "No products yet"}
                     </p>
                     <p className="text-xs text-muted">
                       {search || filter !== "all"
-                        ? "Coba kata kunci lain atau hapus pencarian Anda."
-                        : "Mulai dengan menambahkan data pertama ke ruang kerja ini."}
+                        ? "Try another keyword or clear your search."
+                        : "Add your first record to get started."}
                     </p>
                     {!search && filter === "all" && canCreate && (
                       <Button
@@ -882,7 +868,7 @@ export default function ProdukPage() {
                         size="sm"
                         onClick={() => setDialogOpen(true)}
                       >
-                        <Plus className="size-3.5" /> Produk Baru
+                        <Plus className="size-3.5" /> New product
                       </Button>
                     )}
                     {(search || filter !== "all") && (
@@ -894,7 +880,7 @@ export default function ProdukPage() {
                           setFilter("all");
                         }}
                       >
-                        Reset filter
+                        Clear filters
                       </Button>
                     )}
                   </div>
@@ -921,16 +907,16 @@ export default function ProdukPage() {
                   <TableCell>{statusHalalBadge(p.status_halal)}</TableCell>
                   <TableCell className="text-muted">{p.tipe_kemasan}</TableCell>
                   <TableCell className="pr-4">
-                    <div className="row-actions">
+                    <RowActions>
                       <CopyValue
                         value={p.kode_produk}
-                        label="Salin kode produk"
+                        label="Copy product code"
                       />
                       <button
                         type="button"
                         className="row-action"
                         onClick={() => void openDetail(p)}
-                        title="Detail produk"
+                        title="Product details"
                       >
                         <Eye className="size-3.5" />
                       </button>
@@ -950,12 +936,12 @@ export default function ProdukPage() {
                           className="row-action"
                           data-tone="danger"
                           onClick={() => handleDelete(p.id)}
-                          title="Hapus"
+                          title="Delete"
                         >
                           <Trash2 className="size-3.5" />
                         </button>
                       )}
-                    </div>
+                    </RowActions>
                   </TableCell>
                 </TableRow>
               ))}
@@ -974,21 +960,21 @@ export default function ProdukPage() {
       >
         <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <p className="micro-label">Spesifikasi produk</p>
+            <p className="micro-label">Product specifications</p>
             <DialogTitle>{detail?.nama_produk}</DialogTitle>
             <DialogDescription>
-              {detail?.kode_produk} · Versi {detail?.spec_version || 1} ·
-              Standar pengujian yang sedang berlaku.
+              {detail?.kode_produk} · Version {detail?.spec_version || 1} ·
+              Current test specifications.
             </DialogDescription>
           </DialogHeader>
           {detail && (
             <>
               <dl className="my-6 grid grid-cols-2 gap-5 rounded-xl border border-border-soft bg-surface-alt p-5">
                 {[
-                  ["Kategori", detail.kategori],
-                  ["Satuan", detail.satuan],
-                  ["Status halal", detail.status_halal],
-                  ["Kemasan", detail.tipe_kemasan],
+                  ["Category", detail.kategori],
+                  ["Unit", detail.satuan],
+                  ["Halal status", detail.status_halal],
+                  ["Packaging", detail.tipe_kemasan],
                 ].map(([label, value]) => (
                   <div key={label}>
                     <dt className="micro-label">{label}</dt>
@@ -996,32 +982,30 @@ export default function ProdukPage() {
                   </div>
                 ))}
               </dl>
-              <h3 className="mb-3 text-sm font-semibold">
-                Parameter pengujian
-              </h3>
+              <h3 className="mb-3 text-sm font-semibold">Test parameters</h3>
               {detailLoading ? (
                 <p
                   role="status"
                   className="py-8 text-center text-sm text-muted"
                 >
-                  Memuat spesifikasi…
+                  Loading specifications…
                 </p>
               ) : detailError ? (
                 <EmptyState
                   error
-                  title="Spesifikasi belum berhasil dimuat"
-                  description="Coba muat ulang untuk melihat standar produk ini."
+                  title="Could not load specifications"
+                  description="Reload to view this product's specifications."
                 >
                   <Button
                     variant="outline"
                     onClick={() => void openDetail(detail)}
                   >
-                    Coba lagi
+                    Retry
                   </Button>
                 </EmptyState>
               ) : detailSpecs.length === 0 ? (
                 <p className="rounded-xl bg-surface-alt p-5 text-sm text-muted">
-                  Belum ada parameter pengujian untuk produk ini.
+                  This product has no test parameters.
                 </p>
               ) : (
                 <div className="data-card">
@@ -1029,8 +1013,8 @@ export default function ProdukPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Parameter</TableHead>
-                        <TableHead>Batas</TableHead>
-                        <TableHead>Satuan</TableHead>
+                        <TableHead>Limits</TableHead>
+                        <TableHead>Unit</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1041,7 +1025,7 @@ export default function ProdukPage() {
                           </TableCell>
                           <TableCell className="font-data">
                             {sp.tipe_batas === "TEXT"
-                              ? sp.keterangan || "Teks"
+                              ? sp.keterangan || "Text"
                               : sp.tipe_batas === "MIN"
                                 ? `≥ ${sp.nilai_min}`
                                 : sp.tipe_batas === "MAX"
@@ -1055,11 +1039,15 @@ export default function ProdukPage() {
                   </Table>
                 </div>
               )}
-              <SpecHistory productId={detail.id} current={detailSpecs} />
+              <SpecHistory
+                key={detail.id}
+                productId={detail.id}
+                current={detailSpecs}
+              />
             </>
           )}
           <DialogFooter className="mt-6">
-            <DialogClose render={<Button variant="outline">Tutup</Button>} />
+            <DialogClose render={<Button variant="outline">Close</Button>} />
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1067,8 +1055,10 @@ export default function ProdukPage() {
         <DataPagination
           count={produkList.length}
           total={totalCount}
-          loading={loadingMore}
-          onMore={() => void loadMore()}
+          loading={paging}
+          page={Math.floor(offset / pageSize) + 1}
+          pageSize={pageSize}
+          onPageChange={(p) => void goToPage(p)}
         />
       )}
     </div>

@@ -1,4 +1,5 @@
 "use client";
+import { RowActions } from "@/components/workspace/row-actions";
 import { Download } from "lucide-react";
 import { PdfPreview } from "@/components/workspace/pdf-preview";
 import {
@@ -124,9 +125,9 @@ function coaStatusBadge(tanggalExpired: string) {
     .join("-");
   const expired = tanggalExpired !== "" && tanggalExpired < today;
   return expired ? (
-    <Badge variant="destructive">Kadaluarsa</Badge>
+    <Badge variant="destructive">Expired</Badge>
   ) : (
-    <Badge>Berlaku</Badge>
+    <Badge>Valid</Badge>
   );
 }
 
@@ -139,7 +140,7 @@ export default function COAPage() {
   });
   useSearchSeed(onSearchChange);
   const requestSeq = useRef(0);
-  const appending = useRef(false);
+  const navigating = useRef(false);
   const { user } = useUser();
 
   const [searchInput, setSearchInput] = useState("");
@@ -172,23 +173,18 @@ export default function COAPage() {
     setPreviewUrl(null);
   }
 
-  // Pagination: list queries are bounded with .range(); count:"exact" returns
-  // the filtered row total (ignoring the range window) in the same request, so
-  // "Muat lagi" knows how many rows are left without a second query.
+  // Fetch one bounded page and its filtered total.
   const [pageSize] = useState(50);
   const [offset, setOffset] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [paging, setPaging] = useState(false);
 
-  // Bounded query runner shared by the fresh fetch and load-more.
-  // append=false swaps the accumulated list (mount, search, retry, after a
-  // mutation); append=true fetches the page starting at `start` and appends.
   const runQuery = useCallback(
-    async (start: number, append: boolean) => {
-      if (append && appending.current) return;
-      appending.current = append;
+    async (start: number, pageRequest: boolean) => {
+      if (pageRequest && navigating.current) return;
+      navigating.current = pageRequest;
       const seq = ++requestSeq.current;
-      if (append) setLoadingMore(true);
+      if (pageRequest) setPaging(true);
       else setLoading(true);
       let q = sb
         .from("coa")
@@ -213,43 +209,39 @@ export default function COAPage() {
       if (seq !== requestSeq.current) {
         // Superseded by a newer request: release the loading flag this
         // request owned (the newer one manages its own).
-        if (append) setLoadingMore(false);
+        if (pageRequest) setPaging(false);
         return;
       }
       if (error) {
-        // A failed load-more keeps the accumulated rows and leaves the offset
-        // unchanged, so retrying "Muat lagi" re-requests the same page.
-        if (!append) {
+        if (!pageRequest) {
           setLoadError(true);
           setCoaList([]);
           setTotalCount(0);
         }
-        toast.error("Gagal memuat data. Coba lagi.");
+        toast.error("Could not load data. Retry.");
       } else {
         const rows = (raw as CoaRow[]) ?? [];
         setLoadError(false);
-        setCoaList((prev) => (append ? [...prev, ...rows] : rows));
+        setCoaList(rows);
         setTotalCount(count ?? 0);
-        setOffset(start + rows.length);
+        setOffset(start);
       }
-      appending.current = false;
-      setLoadingMore(false);
+      navigating.current = false;
+      setPaging(false);
       setLoading(false);
     },
     [search, pageSize, filter, order, advanced],
   );
 
-  // Fresh fetch: page 0 replaces any accumulated rows and resets the offset
-  // (also fires when the debounced search changes).
   const fetchData = useCallback(() => {
     setOffset(0);
     return runQuery(0, false);
   }, [runQuery]);
 
-  // Load-more: append the next page to the accumulated rows.
-  const loadMore = useCallback(() => {
-    return runQuery(offset, true);
-  }, [runQuery, offset]);
+  const goToPage = useCallback(
+    (page: number) => runQuery((page - 1) * pageSize, true),
+    [runQuery, pageSize],
+  );
 
   const [availableError, setAvailableError] = useState(false);
   const [availableLoading, setAvailableLoading] = useState(true);
@@ -294,7 +286,7 @@ export default function COAPage() {
       clearTimeout(timer);
       sequence.current++;
       sources.current++;
-      appending.current = false;
+      navigating.current = false;
     };
   }, [fetchData, fetchAvailableHasil]);
 
@@ -351,7 +343,7 @@ export default function COAPage() {
       });
       if (!r.ok) {
         const body = await r.json();
-        toast.error(body.message || "Pratinjau belum berhasil dibuat.");
+        toast.error(body.message || "Could not create the preview.");
         return;
       }
       const blob = await r.blob();
@@ -361,7 +353,7 @@ export default function COAPage() {
       previewRef.current = url;
       setPreviewUrl(url);
     } catch {
-      toast.error("Koneksi terputus. Coba lagi.");
+      toast.error("Connection lost. Retry.");
     } finally {
       setSaving(false);
     }
@@ -369,7 +361,7 @@ export default function COAPage() {
   async function handleSave() {
     if (editingId) {
       if (!form.no_coa) {
-        toast.error("No COA wajib diisi.");
+        toast.error("COA number is required.");
         return;
       }
       setSaving(true);
@@ -388,15 +380,15 @@ export default function COAPage() {
           delivery_date: form.delivery_date,
         });
         if (!res.ok) {
-          toast.error(res.error ?? "Gagal menyimpan COA. Coba lagi.");
+          toast.error(res.error ?? "Could not save the COA. Retry.");
           return;
         }
-        toast.success("COA diperbarui.");
+        toast.success("COA updated.");
         setDialogOpen(false);
         resetForm();
         fetchData();
       } catch {
-        toast.error("Gagal terhubung ke server. Coba lagi.");
+        toast.error("Could not reach the server. Retry.");
       } finally {
         setSaving(false);
       }
@@ -405,7 +397,7 @@ export default function COAPage() {
 
     // Create new COA from hasil_uji
     if (!form.id_hasil) {
-      toast.error("Pilih hasil uji.");
+      toast.error("Select an inspection.");
       return;
     }
     setSaving(true);
@@ -426,17 +418,17 @@ export default function COAPage() {
         delivery_date: form.delivery_date,
       });
       if (!res.ok) {
-        toast.error(res.error ?? "Gagal menerbitkan COA.");
+        toast.error(res.error ?? "Could not issue the COA.");
         return;
       }
       closePreview();
-      toast.success("COA berhasil diterbitkan.");
+      toast.success("COA issued.");
       setDialogOpen(false);
       resetForm();
       fetchData();
       fetchAvailableHasil();
     } catch {
-      toast.error("Gagal terhubung ke server. Coba lagi.");
+      toast.error("Could not reach the server. Retry.");
     } finally {
       setSaving(false);
     }
@@ -445,10 +437,9 @@ export default function COAPage() {
   async function handleDelete(id: string) {
     if (
       !(await confirm({
-        title: "Hapus COA ini?",
-        description:
-          "Data yang dihapus tidak dapat dipulihkan melalui aplikasi. Pastikan data tidak lagi diperlukan.",
-        confirmLabel: "Ya, hapus data",
+        title: "Delete this COA?",
+        description: "This cannot be undone.",
+        confirmLabel: "Delete record",
       }))
     )
       return;
@@ -457,14 +448,14 @@ export default function COAPage() {
     try {
       const res = await deleteCoaAction(id);
       if (!res.ok) {
-        toast.error(res.error ?? "Gagal menghapus COA. Coba lagi.");
+        toast.error(res.error ?? "Could not delete the COA. Retry.");
         return;
       }
-      toast.success("COA dihapus.");
+      toast.success("COA deleted.");
       fetchData();
       fetchAvailableHasil();
     } catch {
-      toast.error("Gagal terhubung ke server. Coba lagi.");
+      toast.error("Could not reach the server. Retry.");
     }
   }
 
@@ -476,7 +467,7 @@ export default function COAPage() {
       const r = await fetch(`/api/coa/${coa.id}/pdf?download=1`);
       if (!r.ok) {
         const data = await r.json();
-        toast.error(data.message || "PDF belum berhasil dibuat.");
+        toast.error(data.message || "Could not create the PDF.");
         return;
       }
       const url = URL.createObjectURL(await r.blob()),
@@ -486,7 +477,7 @@ export default function COAPage() {
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch {
-      toast.error("Koneksi terputus. Coba lagi.");
+      toast.error("Connection lost. Retry.");
     }
   }
 
@@ -509,9 +500,9 @@ export default function COAPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Sertifikasi"
+        eyebrow="Certification"
         title="Certificate of Analysis"
-        description="Penerbitan dan riwayat Certificate of Analysis."
+        description="Issue and manage certificates of analysis."
       >
         <DomainDialog
           dirtyValue={form}
@@ -527,7 +518,7 @@ export default function COAPage() {
             <DialogTrigger
               render={
                 <Button>
-                  <Plus className="size-4" /> Terbitkan COA
+                  <Plus className="size-4" /> Issue COA
                 </Button>
               }
             />
@@ -535,13 +526,12 @@ export default function COAPage() {
 
           <DialogContent className="flex max-h-[90svh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
             <DialogHeader className="gap-1 border-b border-border-soft px-6 py-4 pr-14">
-              <p className="micro-label">SERTIFIKAT</p>
+              <p className="micro-label">CERTIFICATE</p>
               <DialogTitle className="text-2xl font-semibold tracking-tight">
-                {editingId ? "Edit COA" : "Terbitkan COA Baru"}
+                {editingId ? "Edit COA" : "Issue COA"}
               </DialogTitle>
               <DialogDescription className="mt-2 text-xs leading-relaxed">
-                Pilih hasil uji yang lulus dan lengkapi informasi penerbitan
-                sertifikat.
+                Select a passed inspection and enter the certificate details.
               </DialogDescription>
             </DialogHeader>
             <DomainForm
@@ -554,11 +544,7 @@ export default function COAPage() {
                 <div className="space-y-5">
                   {!editingId && (
                     <div className="space-y-1.5">
-                      <Field
-                        label="Pilih Hasil Uji (PASS)"
-                        name="id_hasil"
-                        required
-                      >
+                      <Field label="Passed inspection" name="id_hasil" required>
                         <select
                           className={selectClass}
                           value={form.id_hasil}
@@ -570,7 +556,7 @@ export default function COAPage() {
                             setForm((prev) => ({ ...prev, id_hasil: val }));
                           }}
                         >
-                          <option value="">Pilih hasil uji…</option>
+                          <option value="">Select an inspection…</option>
                           {availableHasil.map((h) => (
                             <option key={h.id} value={h.id}>
                               {h.no_lot} — {h.master_produk?.nama_produk || ""}
@@ -580,28 +566,28 @@ export default function COAPage() {
                       </Field>
                       {availableError && (
                         <p role="alert">
-                          Gagal memuat hasil uji.{" "}
+                          Could not load test results.{" "}
                           <button
                             type="button"
                             onClick={() => void fetchAvailableHasil()}
                           >
-                            Coba Lagi
+                            Retry
                           </button>
                         </p>
                       )}
-                      {availableLoading && <p>Memuat hasil uji…</p>}
+                      {availableLoading && <p>Loading test results…</p>}
                       {!availableError &&
                         !availableLoading &&
                         availableHasil.length === 0 && (
                           <p className="text-[13px] text-muted">
-                            Tidak ada hasil uji PASS yang tersedia.
+                            No passed inspections available.
                           </p>
                         )}
                     </div>
                   )}
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="Bahasa dokumen" name="language">
+                    <Field label="Document language" name="language">
                       <select
                         value={form.language}
                         onChange={(e) =>
@@ -612,21 +598,21 @@ export default function COAPage() {
                         }
                       >
                         <option value="en">English</option>
-                        <option value="id">Bahasa Indonesia</option>
+                        <option value="id">Indonesian</option>
                       </select>
                     </Field>
-                    <Field label="Nama INCI" name="inci_name">
+                    <Field label="INCI name" name="inci_name">
                       <Input
                         value={form.inci_name}
                         onChange={(e) =>
                           setForm((v) => ({ ...v, inci_name: e.target.value }))
                         }
-                        placeholder="Nama INCI produk"
+                        placeholder="Product INCI name"
                       />
                     </Field>
                   </div>
                   <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                    <Field label="No COA" name="no_coa">
+                    <Field label="COA number" name="no_coa">
                       <Input
                         value={form.no_coa}
                         disabled={!canWrite}
@@ -636,10 +622,10 @@ export default function COAPage() {
                             no_coa: e.target.value,
                           }))
                         }
-                        placeholder="Otomatis jika dikosongkan"
+                        placeholder="Assigned automatically if empty"
                       />
                     </Field>
-                    <Field label="Tgl Rilis" name="tanggal_rilis" required>
+                    <Field label="Release date" name="tanggal_rilis" required>
                       <Input
                         type="date"
                         value={form.tanggal_rilis}
@@ -652,7 +638,7 @@ export default function COAPage() {
                         }
                       />
                     </Field>
-                    <Field label="Tgl Expired" name="tanggal_expired" required>
+                    <Field label="Expiry date" name="tanggal_expired" required>
                       <Input
                         type="date"
                         value={form.tanggal_expired}
@@ -681,8 +667,8 @@ export default function COAPage() {
                   </div>
 
                   <Field
-                    label="Nama penerbit"
-                    hint="Nama penanggung jawab yang ditampilkan pada sertifikat."
+                    label="Issuer name"
+                    hint="Approver shown on the certificate."
                     name="tanda_tangan"
                     required
                   >
@@ -695,12 +681,12 @@ export default function COAPage() {
                           tanda_tangan: e.target.value,
                         }))
                       }
-                      placeholder="Nama penanggung jawab"
+                      placeholder="Approver name"
                     />
                   </Field>
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="Tanggal pengiriman" name="delivery_date">
+                    <Field label="Delivery date" name="delivery_date">
                       <Input
                         type="date"
                         value={form.delivery_date}
@@ -713,9 +699,9 @@ export default function COAPage() {
                       />
                     </Field>
                     <Field
-                      label="Pernyataan kepatuhan"
+                      label="Compliance statement"
                       name="compliance_statement"
-                      hint="Isi standar yang memang berlaku untuk produk ini, sesuai bahasa dokumen."
+                      hint="Enter the applicable standard in the document language."
                     >
                       <textarea
                         className="w-full rounded-control border border-input p-3 text-sm"
@@ -732,7 +718,7 @@ export default function COAPage() {
                   </div>
                   {!editingId && selectedHasil && (
                     <div className="border-t border-border pt-4">
-                      <p className="micro-label">Pratinjau Hasil Uji</p>
+                      <p className="micro-label">Preview test results</p>
                       <div className="mt-3">
                         <ResultTable items={selectedHasil.hasil_detail ?? []} />
                       </div>
@@ -743,7 +729,7 @@ export default function COAPage() {
 
               <DialogFooter className="m-0 flex-row items-center justify-between gap-2 rounded-b-lg px-6 py-4 sm:justify-between">
                 <DialogClose
-                  render={<Button variant="outline">Batal</Button>}
+                  render={<Button variant="outline">Cancel</Button>}
                 />
                 {canWrite && (
                   <Button
@@ -754,11 +740,7 @@ export default function COAPage() {
                       (!editingId && (availableLoading || availableError))
                     }
                   >
-                    {saving
-                      ? "Menyimpan…"
-                      : editingId
-                        ? "Simpan"
-                        : "Pratinjau COA"}
+                    {saving ? "Saving…" : editingId ? "Save" : "Preview COA"}
                   </Button>
                 )}
               </DialogFooter>
@@ -769,19 +751,19 @@ export default function COAPage() {
 
       <div>
         <FilterTabs
-          label="Filter coa"
+          label="Filter COAs"
           value={filter}
           onChange={setFilter}
           items={[
-            { value: "all", label: "Semua COA" },
-            { value: "active", label: "Berlaku" },
-            { value: "expired", label: "Kedaluwarsa" },
+            { value: "all", label: "All COAs" },
+            { value: "active", label: "Valid" },
+            { value: "expired", label: "Expired" },
           ]}
         />
         <DataToolbar
           search={searchInput}
           onSearch={onSearchChange}
-          placeholder="Cari COA atau produk…"
+          placeholder="Search COAs or products…"
           total={totalCount}
           loading={loading}
           onRefresh={() => void fetchData()}
@@ -804,13 +786,13 @@ export default function COAPage() {
         <Table data-actions>
           <TableHeader>
             <TableRow className="hover:bg-surface-alt">
-              <TableHead className="pl-4">No COA</TableHead>
-              <TableHead>Produk</TableHead>
-              <TableHead>No Lot</TableHead>
-              <TableHead className="text-right">Tgl Rilis</TableHead>
-              <TableHead className="text-right">Tgl Expired</TableHead>
+              <TableHead className="pl-4">COA number</TableHead>
+              <TableHead>Products</TableHead>
+              <TableHead>Lot number</TableHead>
+              <TableHead className="text-right">Release date</TableHead>
+              <TableHead className="text-right">Expiry date</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="pr-4">Aksi</TableHead>
+              <TableHead className="pr-4">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -820,15 +802,15 @@ export default function COAPage() {
                 <TableCell colSpan={7} className="!p-0">
                   <EmptyState
                     error
-                    title="Data belum berhasil dimuat"
-                    description="Koneksi mungkin terputus. Muat ulang untuk mencoba kembali."
+                    title="Could not load data"
+                    description="Check your connection and reload."
                   >
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => fetchData()}
                     >
-                      Coba Lagi
+                      Retry
                     </Button>
                   </EmptyState>
                 </TableCell>
@@ -843,13 +825,13 @@ export default function COAPage() {
                     </div>
                     <p className="text-base font-semibold tracking-tight">
                       {search || filter !== "all"
-                        ? "Tidak ada hasil yang cocok"
-                        : "Belum ada sertifikat"}
+                        ? "No matching results"
+                        : "No certificates yet"}
                     </p>
                     <p className="text-xs text-muted">
                       {search || filter !== "all"
-                        ? "Coba kata kunci lain atau hapus pencarian Anda."
-                        : "Mulai dengan menambahkan data pertama ke ruang kerja ini."}
+                        ? "Try another keyword or clear your search."
+                        : "Add your first record to get started."}
                     </p>
                     {!search && filter === "all" && canIssue && (
                       <Button
@@ -860,7 +842,7 @@ export default function COAPage() {
                           setDialogOpen(true);
                         }}
                       >
-                        <Plus className="size-3.5" /> Terbitkan COA
+                        <Plus className="size-3.5" /> Issue COA
                       </Button>
                     )}
                     {(search || filter !== "all") && (
@@ -872,7 +854,7 @@ export default function COAPage() {
                           setFilter("all");
                         }}
                       >
-                        Reset filter
+                        Clear filters
                       </Button>
                     )}
                   </div>
@@ -902,8 +884,8 @@ export default function COAPage() {
                   </TableCell>
                   <TableCell>{coaStatusBadge(coa.tanggal_expired)}</TableCell>
                   <TableCell className="pr-4">
-                    <div className="row-actions">
-                      <CopyValue value={coa.no_coa} label="Salin nomor COA" />
+                    <RowActions>
+                      <CopyValue value={coa.no_coa} label="Copy COA number" />
                       <button
                         type="button"
                         className="row-action"
@@ -925,7 +907,7 @@ export default function COAPage() {
                       <button
                         type="button"
                         className="row-action"
-                        title="Unduh PDF"
+                        title="Download PDF"
                         onClick={() => void downloadPdf(coa)}
                       >
                         <Download className="size-3.5" />
@@ -934,7 +916,7 @@ export default function COAPage() {
                         type="button"
                         className="row-action"
                         onClick={() => handlePrint(coa)}
-                        title="Cetak"
+                        title="Print"
                       >
                         <Printer className="size-3.5" />
                       </button>
@@ -944,12 +926,12 @@ export default function COAPage() {
                           className="row-action"
                           data-tone="danger"
                           onClick={() => handleDelete(coa.id)}
-                          title="Hapus"
+                          title="Delete"
                         >
                           <Trash2 className="size-3.5" />
                         </button>
                       )}
-                    </div>
+                    </RowActions>
                   </TableCell>
                 </TableRow>
               ))}
@@ -961,8 +943,10 @@ export default function COAPage() {
         <DataPagination
           count={coaList.length}
           total={totalCount}
-          loading={loadingMore}
-          onMore={() => void loadMore()}
+          loading={paging}
+          page={Math.floor(offset / pageSize) + 1}
+          pageSize={pageSize}
+          onPageChange={(p) => void goToPage(p)}
         />
       )}
 
@@ -976,12 +960,12 @@ export default function COAPage() {
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="flex max-h-[90svh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
           <DialogHeader className="gap-1 border-b border-border-soft px-6 py-4 pr-14">
-            <p className="micro-label">SERTIFIKAT</p>
+            <p className="micro-label">CERTIFICATE</p>
             <DialogTitle className="text-2xl font-semibold tracking-tight">
-              Detail COA
+              COA details
             </DialogTitle>
             <DialogDescription>
-              Snapshot hasil pengujian saat sertifikat diterbitkan.
+              Test results captured when the certificate was issued.
             </DialogDescription>
           </DialogHeader>
 
@@ -990,19 +974,19 @@ export default function COAPage() {
               <div className="space-y-5">
                 <div className="detail-metadata grid grid-cols-1 gap-5 rounded-xl border border-border-soft bg-surface-alt p-5 sm:grid-cols-2">
                   <div>
-                    <p className="micro-label">No COA</p>
+                    <p className="micro-label">COA number</p>
                     <p className="font-data mt-0.5 text-sm">
                       {detailItem.no_coa}
                     </p>
                   </div>
                   <div>
-                    <p className="micro-label">Produk</p>
+                    <p className="micro-label">Products</p>
                     <p className="mt-0.5 text-sm font-medium">
                       {detailItem.hasil_uji_snapshot?.produk || "-"}
                     </p>
                   </div>
                   <div>
-                    <p className="micro-label">No Lot</p>
+                    <p className="micro-label">Lot number</p>
                     <p className="font-data mt-0.5 text-sm">
                       {detailItem.no_lot}
                     </p>
@@ -1014,13 +998,13 @@ export default function COAPage() {
                     </p>
                   </div>
                   <div>
-                    <p className="micro-label">Tgl Rilis</p>
+                    <p className="micro-label">Release date</p>
                     <p className="font-data mt-0.5 text-sm">
                       {detailItem.tanggal_rilis}
                     </p>
                   </div>
                   <div>
-                    <p className="micro-label">Tgl Expired</p>
+                    <p className="micro-label">Expiry date</p>
                     <p className="font-data mt-0.5 text-sm">
                       {detailItem.tanggal_expired}
                     </p>
@@ -1034,7 +1018,7 @@ export default function COAPage() {
                     </div>
                   )}
                   <div>
-                    <p className="micro-label">Tanda Tangan</p>
+                    <p className="micro-label">Approver</p>
                     <p className="mt-0.5 text-sm">
                       {detailItem.tanda_tangan_digital}
                     </p>
@@ -1043,7 +1027,7 @@ export default function COAPage() {
 
                 {detailItem.hasil_uji_snapshot?.items?.length > 0 && (
                   <div className="border-t border-border pt-4">
-                    <p className="micro-label">Hasil Uji</p>
+                    <p className="micro-label">Test results</p>
                     <ResultTable items={detailItem.hasil_uji_snapshot.items} />
                   </div>
                 )}
@@ -1052,7 +1036,7 @@ export default function COAPage() {
           </div>
 
           <DialogFooter className="m-0 flex-row items-center justify-end gap-2 rounded-b-lg px-6 py-4 sm:justify-end">
-            <DialogClose render={<Button variant="outline">Tutup</Button>} />
+            <DialogClose render={<Button variant="outline">Close</Button>} />
           </DialogFooter>
         </DialogContent>
       </Dialog>

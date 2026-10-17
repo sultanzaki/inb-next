@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { DataPagination } from "./page-ui";
 function signature(s: SpesifikasiItem) {
   return JSON.stringify([
     s.tipe_batas,
@@ -33,7 +34,8 @@ export function SpecHistory({
     [error, setError] = useState(false),
     [loading, setLoading] = useState(true),
     [retry, setRetry] = useState(0),
-    [hasMore, setHasMore] = useState(false);
+    [page, setPage] = useState(1),
+    [total, setTotal] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
     const t = setTimeout(async () => {
@@ -46,14 +48,17 @@ export function SpecHistory({
               id_produk: "eq." + productId,
               order: "version.desc",
               limit: "50",
+              offset: String((page - 1) * 50),
             }),
-          { signal: controller.signal },
+          { signal: controller.signal, headers: { Prefer: "count=exact" } },
         );
         if (!r.ok) throw Error();
         const rows = await r.json();
         setVersions(rows);
         setSelected(rows[0]?.id || "");
-        setHasMore(rows.length === 50);
+        setTotal(
+          Number(r.headers.get("content-range")?.split("/")[1] || rows.length),
+        );
         setError(false);
       } catch {
         if (!controller.signal.aborted) setError(true);
@@ -65,7 +70,7 @@ export function SpecHistory({
       clearTimeout(t);
       controller.abort();
     };
-  }, [productId, retry]);
+  }, [productId, retry, page]);
   const version = versions.find((v) => v.id === selected),
     historic = version?.specifications || [];
   const changes = historic
@@ -74,9 +79,9 @@ export function SpecHistory({
         (x) => x.parameter_uji.toLowerCase() === s.parameter_uji.toLowerCase(),
       );
       return !active
-        ? `${s.parameter_uji}: tidak ada di versi aktif`
+        ? `${s.parameter_uji}: removed from the current version`
         : signature(active) !== signature(s)
-          ? `${s.parameter_uji}: standar berbeda dari versi aktif`
+          ? `${s.parameter_uji}: standard differs from the current version`
           : null;
     })
     .filter(Boolean);
@@ -88,39 +93,40 @@ export function SpecHistory({
             h.parameter_uji.toLowerCase() === s.parameter_uji.toLowerCase(),
         ),
     )
-    .map((s) => `${s.parameter_uji}: ditambahkan setelah versi ini`);
+    .map((s) => `${s.parameter_uji}: added after this version`);
   return (
     <section className="spec-history">
-      <h3 className="text-sm font-semibold">Riwayat versi spesifikasi</h3>
+      <h3 className="text-sm font-semibold">Specification history</h3>
       {loading ? (
         <p role="status" className="py-5 text-xs text-muted">
-          Memuat riwayat…
+          Loading history…
         </p>
       ) : error ? (
         <div role="alert" className="py-4 text-xs text-danger">
-          Riwayat belum berhasil dimuat.
+          Could not load version history.
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setRetry((v) => v + 1)}
           >
-            Coba lagi
+            Retry
           </Button>
         </div>
       ) : versions.length === 0 ? (
-        <p className="mt-4 text-xs text-muted">Riwayat versi belum tersedia.</p>
+        <p className="mt-4 text-xs text-muted">No version history yet.</p>
       ) : (
         <>
           <label className="form-label mt-4">
-            Versi
+            Version
             <select
+              aria-label="Specification version"
               value={selected}
               onChange={(e) => setSelected(e.target.value)}
             >
               {versions.map((v) => (
                 <option key={v.id} value={v.id}>
-                  Versi {v.version} ·{" "}
-                  {new Intl.DateTimeFormat("id-ID", {
+                  Version {v.version} ·{" "}
+                  {new Intl.DateTimeFormat("en-GB", {
                     dateStyle: "medium",
                     timeZone: "Asia/Jakarta",
                   }).format(new Date(v.created_at))}
@@ -131,19 +137,19 @@ export function SpecHistory({
           {version && (
             <>
               <p className="my-4 text-xs leading-relaxed text-muted">
-                Oleh {version.actor}
+                By {version.actor}
                 {version.revision_note && <> · {version.revision_note}</>}
               </p>
               <p className="mb-3 text-xs text-muted">
-                Produk saat versi ini: {version.product_snapshot.nama_produk} ·{" "}
-                {version.product_snapshot.kode_produk}
+                Product in this version: {version.product_snapshot.nama_produk}{" "}
+                · {version.product_snapshot.kode_produk}
               </p>
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Parameter</TableHead>
-                    <TableHead>Standar</TableHead>
-                    <TableHead>Satuan</TableHead>
+                    <TableHead>Standard</TableHead>
+                    <TableHead>Unit</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -152,7 +158,7 @@ export function SpecHistory({
                       <TableCell>{s.parameter_uji}</TableCell>
                       <TableCell>
                         {s.tipe_batas === "TEXT"
-                          ? s.keterangan || "Observasi"
+                          ? s.keterangan || "Observation"
                           : s.tipe_batas === "MIN"
                             ? `≥ ${s.nilai_min}`
                             : s.tipe_batas === "MAX"
@@ -166,47 +172,29 @@ export function SpecHistory({
               </Table>
               <details className="mt-4 rounded-lg bg-surface-alt p-4">
                 <summary className="cursor-pointer text-xs font-medium">
-                  Perbedaan dengan versi aktif
+                  Changes from the current version
                 </summary>
                 <ul className="mt-3 space-y-2 text-xs text-muted">
                   {changes.length || added.length ? (
                     [...changes, ...added].map((c, i) => <li key={i}>{c}</li>)
                   ) : (
-                    <li>Parameter dan standar sama dengan versi aktif.</li>
+                    <li>Parameters match the current version.</li>
                   )}
                 </ul>
               </details>
             </>
           )}
-          {hasMore && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-4"
-              onClick={async () => {
-                try {
-                  const r = await fetch(
-                    "/api/data/product_spec_versions?" +
-                      new URLSearchParams({
-                        select: "*",
-                        id_produk: "eq." + productId,
-                        order: "version.desc",
-                        limit: "50",
-                        offset: String(versions.length),
-                      }),
-                  );
-                  if (!r.ok) throw Error();
-                  const rows = await r.json();
-                  setVersions((v) => [...v, ...rows]);
-                  setHasMore(rows.length === 50);
-                } catch {
-                  setError(true);
-                }
-              }}
-            >
-              Muat versi sebelumnya
-            </Button>
-          )}
+          <DataPagination
+            count={versions.length}
+            total={total}
+            page={page}
+            pageSize={50}
+            loading={loading}
+            onPageChange={(next) => {
+              setLoading(true);
+              setPage(next);
+            }}
+          />
         </>
       )}
     </section>

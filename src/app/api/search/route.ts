@@ -4,11 +4,11 @@ import { privateJson } from "@/lib/api-response";
 import { searchOr } from "@/lib/query-filters";
 export async function GET(request: Request) {
   if (!(await requireUser()))
-    return privateJson({ message: "Sesi berakhir." }, 401);
+    return privateJson({ message: "Session expired." }, 401);
   const q = new URL(request.url).searchParams.get("q")?.trim() || "";
   if (q.length < 2) return privateJson({ results: [] });
   if (q.length > 100)
-    return privateJson({ message: "Kata pencarian terlalu panjang." }, 400);
+    return privateJson({ message: "Search is too long." }, 400);
   const sb = createAdminClient();
   const [products, inspections, coas] = await Promise.all([
     sb
@@ -33,14 +33,11 @@ export async function GET(request: Request) {
       .limit(8),
   ]);
   if (products.error || inspections.error || coas.error)
-    return privateJson(
-      { message: "Pencarian belum berhasil. Coba lagi." },
-      503,
-    );
+    return privateJson({ message: "Search failed. Retry." }, 503);
   const results = [
     ...(products.data || []).map((p) => ({
       id: p.id,
-      type: "Produk",
+      type: "Products",
       title: p.nama_produk,
       description: p.kode_produk,
       href: "/dashboard/produk?q=" + encodeURIComponent(p.kode_produk),

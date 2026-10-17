@@ -16,8 +16,8 @@ export function ResultTable({ items }: { items: HasilUjiItem[] }) {
         <TableHeader>
           <TableRow>
             <TableHead>Parameter</TableHead>
-            <TableHead>Standar</TableHead>
-            <TableHead>Hasil</TableHead>
+            <TableHead>Standard</TableHead>
+            <TableHead>Results</TableHead>
             <TableHead>Status</TableHead>
           </TableRow>
         </TableHeader>
@@ -27,7 +27,7 @@ export function ResultTable({ items }: { items: HasilUjiItem[] }) {
               <TableCell className="font-medium">{item.p}</TableCell>
               <TableCell className="font-data text-xs text-muted">
                 {item.t === "TEXT"
-                  ? item.k || "Observasi"
+                  ? item.k || "Observation"
                   : item.t === "MIN"
                     ? `≥ ${item.mn}`
                     : item.t === "MAX"

@@ -36,9 +36,9 @@ export function DomainForm({
       for (const issue of result.error.issues)
         next[issue.path.join(".") || "_form"] ??=
           issue.code === "invalid_format" && issue.format === "uuid"
-            ? "Pilih data yang valid."
+            ? "Choose a valid value."
             : issue.code === "invalid_format" && issue.format === "date"
-              ? "Masukkan tanggal yang valid."
+              ? "Enter a valid date."
               : issue.message;
       setErrors(next);
       requestAnimationFrame(() =>
@@ -54,7 +54,7 @@ export function DomainForm({
       <form
         ref={ref}
         onSubmit={submit}
-        aria-label="Form data mutu"
+        aria-label="Quality data form"
         noValidate
         className="contents"
         onChange={(e) => {

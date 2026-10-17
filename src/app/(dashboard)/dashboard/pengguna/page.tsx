@@ -1,4 +1,5 @@
 "use client";
+import { RowActions } from "@/components/workspace/row-actions";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Plus, Pencil, KeyRound, Users, RefreshCw } from "lucide-react";
 import { useUser } from "../../user-context";
@@ -58,6 +59,7 @@ export default function UsersPage() {
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [total, setTotal] = useState(0),
+    [pageOffset, setPageOffset] = useState(0),
     [more, setMore] = useState(false);
   const [open, setOpen] = useState(false),
     [editing, setEditing] = useState<User | null>(null),
@@ -85,15 +87,16 @@ export default function UsersPage() {
         const result = await r.json();
         if (id !== seq.current) return;
         if (!r.ok) throw Error(result.message);
-        setData((prev) => (offset ? [...prev, ...result.data] : result.data));
+        setData(result.data);
+        setPageOffset(offset);
         setTotal(result.count || 0);
         setError("");
       } catch (e) {
         if (id === seq.current) {
           if (!offset) {
-            setError(e instanceof Error ? e.message : "Gagal memuat pengguna.");
+            setError(e instanceof Error ? e.message : "Could not load users.");
             setData([]);
-          } else toast.error("Gagal memuat pengguna berikutnya.");
+          } else toast.error("Could not load this page of users.");
         }
       } finally {
         if (id === seq.current) {
@@ -132,39 +135,39 @@ export default function UsersPage() {
     return (
       <EmptyState
         error
-        title="Akses terbatas"
-        description="Administrasi pengguna hanya tersedia untuk administrator dan admin QC."
+        title="Access restricted"
+        description="Only administrators and QC admins can manage users."
       />
     );
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Administrasi"
-        title="Pengguna"
-        description="Akun, kewenangan, dan status akses tim."
+        eyebrow="Administration"
+        title="Users"
+        description="Manage accounts, roles, and access."
       >
         <Button onClick={() => edit(null)}>
           <Plus className="size-4" />
-          Tambah pengguna
+          Add user
         </Button>
       </PageHeader>
       <DataToolbar
         search={search}
         onSearch={setSearch}
-        placeholder="Cari nama atau username…"
+        placeholder="Search names or usernames…"
         total={total}
         loading={loading}
         onRefresh={() => void load()}
       />
       <div className="data-card">
-        <Table>
+        <Table data-actions>
           <TableHeader>
             <TableRow>
-              <TableHead>Pengguna</TableHead>
-              <TableHead>Peran</TableHead>
+              <TableHead>Users</TableHead>
+              <TableHead>Role</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Password</TableHead>
-              <TableHead>Aksi</TableHead>
+              <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -175,12 +178,12 @@ export default function UsersPage() {
                 <TableCell colSpan={5}>
                   <EmptyState
                     error
-                    title="Pengguna belum berhasil dimuat"
+                    title="Could not load users"
                     description={error}
                   >
                     <Button onClick={() => void load()} variant="outline">
                       <RefreshCw className="size-4" />
-                      Coba lagi
+                      Retry
                     </Button>
                   </EmptyState>
                 </TableCell>
@@ -189,8 +192,8 @@ export default function UsersPage() {
               <TableRow>
                 <TableCell colSpan={5}>
                   <EmptyState
-                    title="Tidak ada pengguna yang cocok"
-                    description="Coba kata pencarian lain."
+                    title="No matching users"
+                    description="Try another search."
                   />
                 </TableCell>
               </TableRow>
@@ -201,29 +204,29 @@ export default function UsersPage() {
                     <p className="font-medium">
                       {u.nama_lengkap}
                       {u.id === user?.id && (
-                        <span className="ml-2 text-xs text-muted">Anda</span>
+                        <span className="ml-2 text-xs text-muted">You</span>
                       )}
                     </p>
                     <p className="mt-1 text-xs text-muted">
                       @{u.username}
-                      <CopyValue value={u.username} label="Salin username" />
+                      <CopyValue value={u.username} label="Copy username" />
                     </p>
                   </TableCell>
                   <TableCell>{u.role}</TableCell>
                   <TableCell>
                     <Badge variant={u.is_active ? "default" : "secondary"}>
-                      {u.is_active ? "Aktif" : "Nonaktif"}
+                      {u.is_active ? "Active" : "Inactive"}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-xs text-muted">
-                    {u.must_change_password ? "Wajib diganti" : "Sudah diatur"}
+                    {u.must_change_password ? "Change required" : "Set"}
                   </TableCell>
                   <TableCell>
-                    <div className="row-actions">
+                    <RowActions>
                       <button
                         type="button"
                         className="row-action"
-                        title="Edit pengguna"
+                        title="Edit user"
                         onClick={() => edit(u)}
                       >
                         <Pencil className="size-3.5" />
@@ -242,7 +245,7 @@ export default function UsersPage() {
                           <KeyRound className="size-3.5" />
                         </button>
                       )}
-                    </div>
+                    </RowActions>
                   </TableCell>
                 </TableRow>
               ))
@@ -255,7 +258,9 @@ export default function UsersPage() {
           count={data.length}
           total={total}
           loading={more}
-          onMore={() => void load(data.length)}
+          page={Math.floor(pageOffset / 50) + 1}
+          pageSize={50}
+          onPageChange={(p) => void load((p - 1) * 50)}
         />
       )}
       <DomainDialog
@@ -270,13 +275,11 @@ export default function UsersPage() {
         <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <Users className="mb-3 size-5 text-muted" />
-            <DialogTitle>
-              {editing ? "Edit pengguna" : "Tambah pengguna"}
-            </DialogTitle>
+            <DialogTitle>{editing ? "Edit user" : "Add user"}</DialogTitle>
             <DialogDescription>
               {editing
-                ? "Perubahan peran atau penonaktifan akan mencabut sesi pengguna terkait."
-                : "Pengguna wajib mengganti password sementara setelah masuk pertama kali."}
+                ? "Role changes and deactivation end the user's sessions."
+                : "The user must change their temporary password at first sign-in."}
             </DialogDescription>
           </DialogHeader>
           <form
@@ -301,22 +304,22 @@ export default function UsersPage() {
                     };
                 const r = await saveUserAction(payload);
                 if (!r.ok) {
-                  setFormError(r.error || "Gagal menyimpan akun.");
+                  setFormError(r.error || "Could not save the account.");
                   return;
                 }
                 setOpen(false);
                 setForm({ ...blank });
-                toast.success("Pengguna berhasil disimpan.");
+                toast.success("User saved.");
                 void load();
               } catch {
-                setFormError("Koneksi terputus. Coba lagi.");
+                setFormError("Connection lost. Retry.");
               } finally {
                 setBusy(false);
               }
             }}
           >
             <label className="form-label">
-              Nama lengkap
+              Full name
               <Input
                 value={form.nama_lengkap}
                 onChange={(e) =>
@@ -340,7 +343,7 @@ export default function UsersPage() {
               />
             </label>
             <label className="form-label">
-              Peran
+              Role
               <select
                 value={form.role}
                 disabled={editing?.id === user?.id}
@@ -355,7 +358,7 @@ export default function UsersPage() {
             </label>
             {editing ? (
               <label className="form-label">
-                Status akses
+                Access status
                 <select
                   value={String(form.is_active)}
                   disabled={editing.id === user?.id}
@@ -366,15 +369,15 @@ export default function UsersPage() {
                     }))
                   }
                 >
-                  <option value="true">Aktif</option>
-                  <option value="false">Nonaktif</option>
+                  <option value="true">Active</option>
+                  <option value="false">Inactive</option>
                 </select>
               </label>
             ) : (
               <label className="form-label">
-                Password sementara
+                Temporary password
                 <Input
-                  aria-label="Password sementara"
+                  aria-label="Temporary password"
                   type="password"
                   value={form.password}
                   onChange={(e) =>
@@ -386,8 +389,7 @@ export default function UsersPage() {
                   autoComplete="new-password"
                 />
                 <span className="form-hint">
-                  Minimal 16 karakter. Berikan kepada pengguna melalui saluran
-                  internal yang aman.
+                  At least 16 characters. Share it securely with the user.
                 </span>
               </label>
             )}
@@ -400,12 +402,12 @@ export default function UsersPage() {
               <DialogClose
                 render={
                   <Button variant="outline" disabled={busy}>
-                    Batal
+                    Cancel
                   </Button>
                 }
               />
               <Button type="submit" loading={busy}>
-                Simpan pengguna
+                Save user
               </Button>
             </DialogFooter>
           </form>
@@ -426,8 +428,8 @@ export default function UsersPage() {
           <DialogHeader>
             <DialogTitle>Reset password</DialogTitle>
             <DialogDescription>
-              Atur password sementara untuk @{resetTarget?.username}. Seluruh
-              sesi akun tersebut akan diakhiri.
+              Set a temporary password for @{resetTarget?.username}. All
+              sessions will end.
             </DialogDescription>
           </DialogHeader>
           <form
@@ -443,26 +445,26 @@ export default function UsersPage() {
                   password: temporary,
                 });
                 if (!r.ok) {
-                  setFormError(r.error || "Gagal mereset password.");
+                  setFormError(r.error || "Could not reset the password.");
                   return;
                 }
                 setResetTarget(null);
                 setTemporary("");
                 toast.success(
-                  "Password direset. Pengguna wajib menggantinya setelah login.",
+                  "Password reset. The user must change it at sign-in.",
                 );
                 void load();
               } catch {
-                setFormError("Koneksi terputus. Coba lagi.");
+                setFormError("Connection lost. Retry.");
               } finally {
                 setBusy(false);
               }
             }}
           >
             <label className="form-label">
-              Password sementara
+              Temporary password
               <Input
-                aria-label="Password sementara"
+                aria-label="Temporary password"
                 type="password"
                 autoComplete="new-password"
                 value={temporary}
@@ -481,7 +483,7 @@ export default function UsersPage() {
               <DialogClose
                 render={
                   <Button variant="outline" disabled={busy}>
-                    Batal
+                    Cancel
                   </Button>
                 }
               />

@@ -16,7 +16,7 @@ export function escapeHtml(s: string): string {
 // Keep a rounded display from claiming complete compliance when a lot failed.
 export function formatPassRate(passed: number, total: number): string {
   if (total <= 0) return "—";
-  const value = new Intl.NumberFormat("id-ID", {
+  const value = new Intl.NumberFormat("en-GB", {
     maximumFractionDigits: 2,
   }).format((passed / total) * 100);
   return passed < total && value === "100" ? "<100" : value;

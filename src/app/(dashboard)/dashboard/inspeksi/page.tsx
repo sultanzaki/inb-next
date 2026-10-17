@@ -1,4 +1,5 @@
 "use client";
+import { RowActions } from "@/components/workspace/row-actions";
 import { saveDraftAction } from "@/lib/actions/inspeksi-actions";
 import { DraftPanel } from "@/components/workspace/draft-panel";
 import { draftDataSchema } from "@/lib/domain/validation";
@@ -142,7 +143,7 @@ export default function InspeksiPage() {
   const editSeq = useRef(0);
   const [specProductId, setSpecProductId] = useState<string | null>(null);
   const [specLoading, setSpecLoading] = useState(false);
-  const appending = useRef(false);
+  const navigating = useRef(false);
   const { user } = useUser();
 
   const [searchInput, setSearchInput] = useState("");
@@ -169,28 +170,23 @@ export default function InspeksiPage() {
     {},
   );
 
-  // Pagination: list queries are bounded with .range(); count:"exact" returns
-  // the filtered row total (ignoring the range window) in the same request, so
-  // "Muat lagi" knows how many rows are left without a second query.
+  // Fetch one bounded page and its filtered total.
   const [pageSize] = useState(50);
   const [offset, setOffset] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [paging, setPaging] = useState(false);
 
   // Which product the current hasilValues belong to. Values are kept only
   // while the selected product is unchanged; any product switch wipes them,
   // because parameter names collide across products and stale values would
   // be saved under the wrong product's parameters.
 
-  // Bounded query runner shared by the fresh fetch and load-more.
-  // append=false swaps the accumulated list (mount, search, retry, after a
-  // mutation); append=true fetches the page starting at `start` and appends.
   const runQuery = useCallback(
-    async (start: number, append: boolean) => {
-      if (append && appending.current) return;
-      appending.current = append;
+    async (start: number, pageRequest: boolean) => {
+      if (pageRequest && navigating.current) return;
+      navigating.current = pageRequest;
       const seq = ++requestSeq.current;
-      if (append) setLoadingMore(true);
+      if (pageRequest) setPaging(true);
       else setLoading(true);
       let q = sb
         .from("hasil_uji")
@@ -219,43 +215,39 @@ export default function InspeksiPage() {
       if (seq !== requestSeq.current) {
         // Superseded by a newer request: release the loading flag this
         // request owned (the newer one manages its own).
-        if (append) setLoadingMore(false);
+        if (pageRequest) setPaging(false);
         return;
       }
       if (error) {
-        // A failed load-more keeps the accumulated rows and leaves the offset
-        // unchanged, so retrying "Muat lagi" re-requests the same page.
-        if (!append) {
+        if (!pageRequest) {
           setLoadError(true);
           setData([]);
           setTotalCount(0);
         }
-        toast.error("Gagal memuat data. Coba lagi.");
+        toast.error("Could not load data. Retry.");
       } else {
         const rows = (raw as HasilUjiRow[]) ?? [];
         setLoadError(false);
-        setData((prev) => (append ? [...prev, ...rows] : rows));
+        setData(rows);
         setTotalCount(count ?? 0);
-        setOffset(start + rows.length);
+        setOffset(start);
       }
-      appending.current = false;
-      setLoadingMore(false);
+      navigating.current = false;
+      setPaging(false);
       setLoading(false);
     },
     [search, pageSize, filter, order, advanced],
   );
 
-  // Fresh fetch: page 0 replaces any accumulated rows and resets the offset
-  // (also fires when the debounced search changes).
   const fetchData = useCallback(() => {
     setOffset(0);
     return runQuery(0, false);
   }, [runQuery]);
 
-  // Load-more: append the next page to the accumulated rows.
-  const loadMore = useCallback(() => {
-    return runQuery(offset, true);
-  }, [runQuery, offset]);
+  const goToPage = useCallback(
+    (page: number) => runQuery((page - 1) * pageSize, true),
+    [runQuery, pageSize],
+  );
 
   const fetchProduk = useCallback(async () => {
     const all: MasterProduk[] = [];
@@ -268,7 +260,7 @@ export default function InspeksiPage() {
         .range(offset, offset + 499);
       if (error) {
         setProdukList([]);
-        toast.error("Gagal memuat produk. Coba muat ulang.");
+        toast.error("Could not load products. Reload the page.");
         return;
       }
       all.push(...((data || []) as MasterProduk[]));
@@ -297,7 +289,7 @@ export default function InspeksiPage() {
       if (seq !== specSeq.current) return; // superseded by a newer fetch
       if (error) {
         setSpesifikasi([]);
-        toast.error("Gagal memuat data. Coba lagi.");
+        toast.error("Could not load data. Retry.");
         setSpecLoading(false);
         return false;
       }
@@ -318,7 +310,7 @@ export default function InspeksiPage() {
     return () => {
       clearTimeout(timer);
       sequence.current++;
-      appending.current = false;
+      navigating.current = false;
     };
   }, [fetchData, fetchProduk]);
 
@@ -443,13 +435,11 @@ export default function InspeksiPage() {
       specProductId !== form.id_produk ||
       spesifikasi.length === 0
     ) {
-      toast.error(
-        "Spesifikasi belum siap. Pilih produk dan tunggu pemuatan selesai.",
-      );
+      toast.error("Select a product and wait for its specifications to load.");
       return;
     }
     if (!form.id_produk || !form.no_lot) {
-      toast.error("Produk dan No Lot wajib diisi.");
+      toast.error("Product and lot number are required.");
       return;
     }
     setSaving(true);
@@ -473,18 +463,16 @@ export default function InspeksiPage() {
         status,
       });
       if (!res.ok) {
-        toast.error(res.error ?? "Gagal menyimpan hasil uji. Coba lagi.");
+        toast.error(res.error ?? "Could not save the inspection. Retry.");
         return;
       }
-      toast.success(
-        editingId ? "Hasil uji diperbarui." : "Hasil uji ditambahkan.",
-      );
+      toast.success(editingId ? "Inspection updated." : "Inspection added.");
       setDialogOpen(false);
       resetForm();
       setDraftRefresh((v) => v + 1);
       fetchData();
     } catch {
-      toast.error("Gagal terhubung ke server. Coba lagi.");
+      toast.error("Could not reach the server. Retry.");
     } finally {
       setSaving(false);
     }
@@ -503,15 +491,15 @@ export default function InspeksiPage() {
         },
       });
       if (!r.ok) {
-        toast.error(r.error || "Gagal menyimpan draft.");
+        toast.error(r.error || "Could not save the draft.");
         return;
       }
       setDialogOpen(false);
       resetForm();
       setDraftRefresh((v) => v + 1);
-      toast.success("Draft inspeksi disimpan.");
+      toast.success("Draft saved.");
     } catch {
-      toast.error("Koneksi terputus. Coba lagi.");
+      toast.error("Connection lost. Retry.");
     } finally {
       setSaving(false);
     }
@@ -519,7 +507,7 @@ export default function InspeksiPage() {
   async function resumeDraft(draft: InspectionDraft) {
     const parsed = draftDataSchema.safeParse(draft.payload);
     if (!parsed.success) {
-      toast.error("Format draft tidak valid. Hubungi administrator.");
+      toast.error("Invalid draft format. Contact your administrator.");
       return;
     }
     const values = parsed.data;
@@ -548,10 +536,9 @@ export default function InspeksiPage() {
   async function handleDelete(id: string) {
     if (
       !(await confirm({
-        title: "Hapus hasil uji ini?",
-        description:
-          "Data yang dihapus tidak dapat dipulihkan melalui aplikasi. Pastikan data tidak lagi diperlukan.",
-        confirmLabel: "Ya, hapus data",
+        title: "Delete this inspection?",
+        description: "This cannot be undone.",
+        confirmLabel: "Delete record",
       }))
     )
       return;
@@ -560,13 +547,13 @@ export default function InspeksiPage() {
     try {
       const res = await deleteInspeksiAction(id);
       if (!res.ok) {
-        toast.error(res.error ?? "Gagal menghapus hasil uji. Coba lagi.");
+        toast.error(res.error ?? "Could not delete the inspection. Retry.");
         return;
       }
-      toast.success("Hasil uji dihapus.");
+      toast.success("Inspection deleted.");
       fetchData();
     } catch {
-      toast.error("Gagal terhubung ke server. Coba lagi.");
+      toast.error("Could not reach the server. Retry.");
     }
   }
 
@@ -579,9 +566,9 @@ export default function InspeksiPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Pengendalian mutu"
-        title="Inspeksi"
-        description="Hasil pengujian, parameter, dan status setiap lot."
+        eyebrow="Quality control"
+        title="Inspections"
+        description="Results, parameters, and status by lot."
       >
         <DomainDialog
           dirtyValue={{ form, hasilValues, failureReason, englishValues }}
@@ -600,7 +587,7 @@ export default function InspeksiPage() {
             <DialogTrigger
               render={
                 <Button>
-                  <Plus className="size-4" /> Input Uji Baru
+                  <Plus className="size-4" /> New inspection
                 </Button>
               }
             />
@@ -608,13 +595,12 @@ export default function InspeksiPage() {
 
           <DialogContent className="flex max-h-[90svh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
             <DialogHeader className="gap-1 border-b border-border-soft px-6 py-4 pr-14">
-              <p className="micro-label">PENGUJIAN</p>
+              <p className="micro-label">INSPECTIONS</p>
               <DialogTitle className="text-2xl font-semibold tracking-tight">
-                {editingId ? "Edit Hasil Uji" : "Input Hasil Uji Baru"}
+                {editingId ? "Edit inspection" : "New inspection"}
               </DialogTitle>
               <DialogDescription className="mt-2 text-xs leading-relaxed">
-                Pilih produk, lengkapi informasi lot, lalu isi hasil untuk
-                setiap parameter.
+                Select a product and enter the lot and test results.
               </DialogDescription>
             </DialogHeader>
             <DomainForm
@@ -633,14 +619,14 @@ export default function InspeksiPage() {
                 <div className="space-y-6">
                   {resumedDraft && (
                     <p className="form-notice">
-                      Draft dilanjutkan. Periksa kembali hasil dan spesifikasi
-                      yang berlaku sebelum menyimpan sebagai inspeksi final.
+                      Draft restored. Check the current specifications before
+                      saving.
                     </p>
                   )}
                   {/* Uji fields: two-column grid */}
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <Field
-                      label="Produk *"
+                      label="Product *"
                       name="id_produk"
                       className="sm:col-span-2"
                       required
@@ -650,7 +636,7 @@ export default function InspeksiPage() {
                         value={form.id_produk}
                         onChange={(e) => changeProduct(e.target.value)}
                       >
-                        <option value="">Pilih produk…</option>
+                        <option value="">Select a product…</option>
                         {produkList.map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.kode_produk} — {p.nama_produk}
@@ -658,7 +644,7 @@ export default function InspeksiPage() {
                         ))}
                       </select>
                     </Field>
-                    <Field label="No Lot *" name="no_lot" required>
+                    <Field label="Lot number *" name="no_lot" required>
                       <Input
                         value={form.no_lot}
                         onChange={(e) =>
@@ -673,10 +659,10 @@ export default function InspeksiPage() {
                         onChange={(e) =>
                           setForm({ ...form, inspector: e.target.value })
                         }
-                        placeholder="Nama inspector"
+                        placeholder="Inspector name"
                       />
                     </Field>
-                    <Field label="Tgl Sampling" name="tgl_sampling" required>
+                    <Field label="Sampling date" name="tgl_sampling" required>
                       <Input
                         type="date"
                         value={form.tgl_sampling}
@@ -685,7 +671,7 @@ export default function InspeksiPage() {
                         }
                       />
                     </Field>
-                    <Field label="Tgl Uji" name="tgl_uji" required>
+                    <Field label="Test date" name="tgl_uji" required>
                       <Input
                         type="date"
                         value={form.tgl_uji}
@@ -696,14 +682,14 @@ export default function InspeksiPage() {
                     </Field>
                   </div>
 
-                  <Field label="Catatan" name="catatan">
+                  <Field label="Notes" name="catatan">
                     <textarea
                       className={textareaClass}
                       value={form.catatan}
                       onChange={(e) =>
                         setForm({ ...form, catatan: e.target.value })
                       }
-                      placeholder="Catatan (opsional)"
+                      placeholder="Notes (optional)"
                     />
                   </Field>
 
@@ -711,7 +697,7 @@ export default function InspeksiPage() {
                   {spesifikasi.length > 0 && (
                     <div className="border-t border-border pt-5">
                       <div className="mb-4 flex items-center justify-between gap-3">
-                        <span className="micro-label">Hasil Pengujian</span>
+                        <span className="micro-label">Test results</span>
                       </div>
 
                       <div className="space-y-2">
@@ -739,12 +725,12 @@ export default function InspeksiPage() {
                               </div>
                               <Input
                                 className="w-full"
-                                aria-label={`Hasil ${sp.parameter_uji}`}
+                                aria-label={`Result ${sp.parameter_uji}`}
                                 inputMode={
                                   sp.tipe_batas === "TEXT" ? "text" : "decimal"
                                 }
                                 placeholder={
-                                  sp.tipe_batas === "TEXT" ? "Nilai" : "0"
+                                  sp.tipe_batas === "TEXT" ? "Value" : "0"
                                 }
                                 value={val}
                                 onChange={(e) => {
@@ -765,7 +751,7 @@ export default function InspeksiPage() {
                               )}
                               {sp.tipe_batas === "TEXT" && (
                                 <label className="inspection-translation">
-                                  Hasil (English, opsional)
+                                  Result in English (optional)
                                   <Input
                                     value={
                                       englishValues[sp.parameter_uji] || ""
@@ -776,7 +762,7 @@ export default function InspeksiPage() {
                                         [sp.parameter_uji]: e.target.value,
                                       }))
                                     }
-                                    placeholder="Gunakan hasil asli jika kosong"
+                                    placeholder="Uses the original result if empty"
                                     maxLength={1000}
                                   />
                                 </label>
@@ -788,10 +774,10 @@ export default function InspeksiPage() {
 
                       <div className="mt-4 flex items-center gap-2">
                         <span className="text-xs font-medium">
-                          Status Final:
+                          Final status:
                         </span>
                         {overallStatus === null ? (
-                          <Badge variant="secondary">Belum diisi</Badge>
+                          <Badge variant="secondary">Not provided</Badge>
                         ) : (
                           <StatusBadge status={overallStatus} />
                         )}
@@ -800,10 +786,10 @@ export default function InspeksiPage() {
                   )}
                   {overallStatus === "FAIL" && (
                     <Field
-                      label="Penjelasan hasil FAIL"
+                      label="Failure reason"
                       name="failure_reason"
                       required
-                      hint="Jelaskan parameter yang gagal, temuan, dan tindak lanjut awal."
+                      hint="Describe the failed parameters, findings, and next steps."
                     >
                       <textarea
                         className={textareaClass}
@@ -816,7 +802,7 @@ export default function InspeksiPage() {
                   )}
                   {form.id_produk && spesifikasi.length === 0 && (
                     <p className="text-[13px] text-muted">
-                      Produk ini belum memiliki spesifikasi pengujian.
+                      This product has no test specifications.
                     </p>
                   )}
                 </div>
@@ -824,7 +810,7 @@ export default function InspeksiPage() {
 
               <DialogFooter className="m-0 flex-row items-center justify-between gap-2 rounded-b-lg px-6 py-4 sm:justify-between">
                 <DialogClose
-                  render={<Button variant="outline">Batal</Button>}
+                  render={<Button variant="outline">Cancel</Button>}
                 />
                 {!editingId && (
                   <Button
@@ -832,7 +818,7 @@ export default function InspeksiPage() {
                     onClick={() => void handleDraftSave()}
                     disabled={saving || specLoading}
                   >
-                    Simpan draft
+                    Save draft
                   </Button>
                 )}
                 <Button
@@ -845,7 +831,7 @@ export default function InspeksiPage() {
                     spesifikasi.length === 0
                   }
                 >
-                  {saving ? "Menyimpan…" : editingId ? "Simpan" : "Tambah"}
+                  {saving ? "Saving…" : editingId ? "Save" : "Add"}
                 </Button>
               </DialogFooter>
             </DomainForm>
@@ -858,19 +844,19 @@ export default function InspeksiPage() {
       )}
       <div>
         <FilterTabs
-          label="Filter inspeksi"
+          label="Filter inspections"
           value={filter}
           onChange={setFilter}
           items={[
-            { value: "all", label: "Semua hasil" },
-            { value: "PASS", label: "Lulus / PASS" },
-            { value: "FAIL", label: "Tidak lulus / FAIL" },
+            { value: "all", label: "All results" },
+            { value: "PASS", label: "Passed" },
+            { value: "FAIL", label: "Failed" },
           ]}
         />
         <DataToolbar
           search={searchInput}
           onSearch={onSearchChange}
-          placeholder="Cari no lot atau produk…"
+          placeholder="Search lots or products…"
           total={totalCount}
           loading={loading}
           onRefresh={() => void fetchData()}
@@ -893,13 +879,13 @@ export default function InspeksiPage() {
         <Table data-actions>
           <TableHeader>
             <TableRow className="hover:bg-surface-alt">
-              <TableHead className="pl-4">No Lot</TableHead>
-              <TableHead>Produk</TableHead>
-              <TableHead className="text-right">Tgl Sampling</TableHead>
-              <TableHead className="text-right">Tgl Uji</TableHead>
+              <TableHead className="pl-4">Lot number</TableHead>
+              <TableHead>Products</TableHead>
+              <TableHead className="text-right">Sampling date</TableHead>
+              <TableHead className="text-right">Test date</TableHead>
               <TableHead>Inspector</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="pr-4">Aksi</TableHead>
+              <TableHead className="pr-4">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -909,15 +895,15 @@ export default function InspeksiPage() {
                 <TableCell colSpan={7} className="!p-0">
                   <EmptyState
                     error
-                    title="Data belum berhasil dimuat"
-                    description="Koneksi mungkin terputus. Muat ulang untuk mencoba kembali."
+                    title="Could not load data"
+                    description="Check your connection and reload."
                   >
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => fetchData()}
                     >
-                      Coba Lagi
+                      Retry
                     </Button>
                   </EmptyState>
                 </TableCell>
@@ -932,13 +918,13 @@ export default function InspeksiPage() {
                     </div>
                     <p className="text-base font-semibold tracking-tight">
                       {search || filter !== "all"
-                        ? "Tidak ada hasil yang cocok"
-                        : "TIDAK ADA DATA UJI"}
+                        ? "No matching results"
+                        : "NO TEST DATA"}
                     </p>
                     <p className="text-xs text-muted">
                       {search || filter !== "all"
-                        ? "Coba kata kunci lain atau hapus pencarian Anda."
-                        : "Mulai dengan menambahkan data pertama ke ruang kerja ini."}
+                        ? "Try another keyword or clear your search."
+                        : "Add your first record to get started."}
                     </p>
                     {!search && filter === "all" && canCreate && (
                       <Button
@@ -949,7 +935,7 @@ export default function InspeksiPage() {
                           setDialogOpen(true);
                         }}
                       >
-                        <Plus className="size-3.5" /> Input Uji Baru
+                        <Plus className="size-3.5" /> New inspection
                       </Button>
                     )}
                     {(search || filter !== "all") && (
@@ -961,7 +947,7 @@ export default function InspeksiPage() {
                           setFilter("all");
                         }}
                       >
-                        Reset filter
+                        Clear filters
                       </Button>
                     )}
                   </div>
@@ -995,8 +981,8 @@ export default function InspeksiPage() {
                     className="pr-4"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <div className="row-actions">
-                      <CopyValue value={row.no_lot} label="Salin nomor lot" />
+                    <RowActions>
+                      <CopyValue value={row.no_lot} label="Copy lot number" />
                       <button
                         type="button"
                         className="row-action"
@@ -1021,12 +1007,12 @@ export default function InspeksiPage() {
                           className="row-action"
                           data-tone="danger"
                           onClick={() => handleDelete(row.id)}
-                          title="Hapus"
+                          title="Delete"
                         >
                           <Trash2 className="size-3.5" />
                         </button>
                       )}
-                    </div>
+                    </RowActions>
                   </TableCell>
                 </TableRow>
               ))}
@@ -1038,8 +1024,10 @@ export default function InspeksiPage() {
         <DataPagination
           count={data.length}
           total={totalCount}
-          loading={loadingMore}
-          onMore={() => void loadMore()}
+          loading={paging}
+          page={Math.floor(offset / pageSize) + 1}
+          pageSize={pageSize}
+          onPageChange={(p) => void goToPage(p)}
         />
       )}
 
@@ -1047,12 +1035,12 @@ export default function InspeksiPage() {
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="flex max-h-[90svh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
           <DialogHeader className="gap-1 border-b border-border-soft px-6 py-4 pr-14">
-            <p className="micro-label">PENGUJIAN</p>
+            <p className="micro-label">INSPECTIONS</p>
             <DialogTitle className="text-2xl font-semibold tracking-tight">
-              Detail Hasil Uji
+              Inspection details
             </DialogTitle>
             <DialogDescription>
-              Identitas lot, observasi, dan evaluasi terhadap standar pengujian.
+              Record the lot, observations, and test results.
             </DialogDescription>
           </DialogHeader>
 
@@ -1061,23 +1049,23 @@ export default function InspeksiPage() {
               <div className="space-y-5">
                 <div className="detail-metadata grid grid-cols-1 gap-5 rounded-xl border border-border-soft bg-surface-alt p-5 sm:grid-cols-2">
                   <div>
-                    <span className="text-xs text-muted">No Lot</span>
+                    <span className="text-xs text-muted">Lot number</span>
                     <p className="font-data text-sm">{detailItem.no_lot}</p>
                   </div>
                   <div>
-                    <span className="text-xs text-muted">Produk</span>
+                    <span className="text-xs text-muted">Products</span>
                     <p className="text-sm font-medium">
                       {detailItem.master_produk?.nama_produk || "-"}
                     </p>
                   </div>
                   <div>
-                    <span className="text-xs text-muted">Tgl Sampling</span>
+                    <span className="text-xs text-muted">Sampling date</span>
                     <p className="font-data text-sm">
                       {detailItem.tgl_sampling}
                     </p>
                   </div>
                   <div>
-                    <span className="text-xs text-muted">Tgl Uji</span>
+                    <span className="text-xs text-muted">Test date</span>
                     <p className="font-data text-sm">{detailItem.tgl_uji}</p>
                   </div>
                   <div>
@@ -1094,25 +1082,25 @@ export default function InspeksiPage() {
 
                 {detailItem.failure_reason && (
                   <section className="fail-explanation">
-                    <h3>Penjelasan hasil FAIL</h3>
+                    <h3>Failure reason</h3>
                     <p>{detailItem.failure_reason}</p>
                   </section>
                 )}
                 {detailItem.spec_version && (
                   <p className="text-xs text-muted">
-                    Spesifikasi versi {detailItem.spec_version}
+                    Specification version {detailItem.spec_version}
                   </p>
                 )}
                 {detailItem.catatan && (
                   <div className="border-t border-border-soft pt-4">
-                    <span className="text-xs text-muted">Catatan</span>
+                    <span className="text-xs text-muted">Notes</span>
                     <p className="mt-1 text-sm">{detailItem.catatan}</p>
                   </div>
                 )}
 
                 {detailItem.hasil_detail?.length > 0 && (
                   <div className="border-t border-border-soft pt-4">
-                    <p className="micro-label mb-3">Hasil Detail</p>
+                    <p className="micro-label mb-3">Result details</p>
                     <ResultTable items={detailItem.hasil_detail} />
                   </div>
                 )}
@@ -1121,7 +1109,7 @@ export default function InspeksiPage() {
           </div>
 
           <DialogFooter className="m-0 flex-row items-center justify-end gap-2 rounded-b-lg px-6 py-4">
-            <DialogClose render={<Button variant="outline">Tutup</Button>} />
+            <DialogClose render={<Button variant="outline">Close</Button>} />
           </DialogFooter>
         </DialogContent>
       </Dialog>

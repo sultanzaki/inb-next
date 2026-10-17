@@ -6,7 +6,7 @@ type Form = z.output<typeof issueSchema>;
 type Source = Awaited<ReturnType<typeof loadCoaSource>>;
 function sign(meta: string, form: Form, source: Source) {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key) throw Error("Database belum dikonfigurasi.");
+  if (!key) throw Error("Database not configured.");
   return createHmac("sha256", key)
     .update(JSON.stringify({ meta, form, source }))
     .digest("hex");
