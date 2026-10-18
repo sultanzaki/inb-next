@@ -31,6 +31,35 @@ const quoteLine = z.object({
   discount: qty,
 });
 export const actionSchemas = {
+  set_series: z.object({
+    product_id: id,
+    series: z
+      .string()
+      .regex(
+        /^[0-9]{1,20}$/,
+        "Enter the unique numeric product series, preserving leading zeros.",
+      ),
+  }),
+  hold_lot: z.object({ id, hold: z.boolean(), reason: short }),
+  create_return: z.object({
+    delivery_id: id,
+    lot_id: id,
+    location_id: id,
+    quantity: qty,
+    reason: short,
+  }),
+  receive_return: z.object({ id, reason: short }),
+  cancel_return: z.object({ id, reason: short }),
+  dispose_return: z.object({
+    id,
+    decision: z.enum(["release", "scrap"]),
+    reason: short,
+  }),
+  assign_task: z.object({
+    task_id: z.string().min(1).max(100),
+    user_id: optionalId,
+    due_date: z.union([z.iso.date(), z.literal("")]).optional(),
+  }),
   set_module: z.object({
     module: z.enum(["quality", "warehouse", "production", "sales"]),
     state: z.enum(["active", "read_only", "disabled"]),
@@ -246,6 +275,21 @@ export type ERPRow = {
   can_write?: boolean;
   can_approve?: boolean;
   user_id?: string;
+  series?: string;
+  held?: boolean;
+  batch_number?: number;
+  source_lot_id?: string;
+  inspection_id?: string;
+  delivery_id?: string;
+  delivery?: string;
+  quantity?: string;
+  decision_reason?: string;
+  title?: string;
+  description?: string;
+  href?: string;
+  assigned_to?: string;
+  due_date?: string;
+  assignee?: string;
 };
 export type ERPReservation = {
   id: string;

@@ -1,4 +1,6 @@
 "use client";
+import { ERPPicker } from "@/components/erp/picker";
+import type { ERPRow } from "@/lib/erp/schema";
 import { useERP } from "@/components/erp/context";
 import { RowActions } from "@/components/workspace/row-actions";
 import { saveDraftAction } from "@/lib/actions/inspeksi-actions";
@@ -27,7 +29,13 @@ import { inspectionSchema } from "@/lib/domain/validation";
 
 import { businessDate, evaluateParam } from "@/lib/domain/validation";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import {
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+  useEffectEvent,
+} from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "../../user-context";
 import { canAction } from "@/lib/types";
@@ -132,7 +140,12 @@ const textareaClass =
   "min-h-16 w-full rounded-md border border-input bg-surface px-2.5 py-1.5 text-sm transition-colors duration-150 outline-none";
 
 export default function InspeksiPage() {
-  const qualityWrite = useERP().can("quality", "write");
+  const erp = useERP();
+  const qualityWrite = erp.can("quality", "write");
+  const productionOn = erp.data?.modules.some(
+    (m) => m.key === "production" && m.state !== "disabled",
+  );
+  const [selectedLot, setSelectedLot] = useState<ERPRow | null>(null);
   const confirm = useConfirm();
   const [filter, setFilter] = useState("all");
   const [order, setOrder] = useState("default");
@@ -323,6 +336,46 @@ export default function InspeksiPage() {
     };
   }, []);
 
+  function selectInspectionLot(lot: ERPRow) {
+    setSelectedLot(lot);
+    changeProduct(lot.product_id!);
+    setForm((prev) => ({
+      ...prev,
+      id_produk: lot.product_id!,
+      no_lot: lot.number || "",
+    }));
+  }
+  const openLinkedLot = useEffectEvent((lot: ERPRow) => {
+    if (lot.inspection_id) {
+      setSearchInput(lot.number || "");
+      setSearch(lot.number || "");
+      toast.info(
+        "This lot already has an inspection. Open its existing record.",
+      );
+      return;
+    }
+    resetForm();
+    selectInspectionLot(lot);
+    setDialogOpen(true);
+  });
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("lot");
+    if (!id) return;
+    const abort = new AbortController();
+    void fetch("/api/erp/inspection_lots?id=" + encodeURIComponent(id), {
+      signal: abort.signal,
+    })
+      .then(async (r) => {
+        if (!r.ok) throw Error();
+        const d = await r.json();
+        if (!abort.signal.aborted && d.rows?.[0]) openLinkedLot(d.rows[0]);
+      })
+      .catch(() => {
+        if (!abort.signal.aborted)
+          toast.error("Could not open this lot. Check access and retry.");
+      });
+    return () => abort.abort();
+  }, []);
   function changeProduct(id: string) {
     editSeq.current++;
     setForm((prev) => ({ ...prev, id_produk: id }));
@@ -338,6 +391,7 @@ export default function InspeksiPage() {
   }
 
   function resetForm() {
+    setSelectedLot(null);
     setDraftId(null);
     setFailureReason("");
     setResumedDraft(false);
@@ -348,6 +402,7 @@ export default function InspeksiPage() {
     setSpecLoading(false);
     setForm({
       ...emptyForm,
+      inspector: user?.nama_lengkap || "",
       tgl_sampling: businessDate(),
       tgl_uji: businessDate(),
     });
@@ -595,14 +650,15 @@ export default function InspeksiPage() {
             />
           )}
 
-          <DialogContent className="flex max-h-[90svh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+          <DialogContent className="inspection-editor mobile-fullscreen-form flex max-h-[90svh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
             <DialogHeader className="gap-1 border-b border-border-soft px-6 py-4 pr-14">
               <p className="micro-label">INSPECTIONS</p>
               <DialogTitle className="text-2xl font-semibold tracking-tight">
                 {editingId ? "Edit inspection" : "New inspection"}
               </DialogTitle>
               <DialogDescription className="mt-2 text-xs leading-relaxed">
-                Select a product and enter the lot and test results.
+                Select a lot, then record its test results. Save a draft to
+                continue later.
               </DialogDescription>
             </DialogHeader>
             <DomainForm
@@ -627,34 +683,54 @@ export default function InspeksiPage() {
                   )}
                   {/* Uji fields: two-column grid */}
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <Field
-                      label="Product *"
-                      name="id_produk"
-                      className="sm:col-span-2"
-                      required
-                    >
-                      <select
-                        className={selectClass}
-                        value={form.id_produk}
-                        onChange={(e) => changeProduct(e.target.value)}
-                      >
-                        <option value="">Select a product…</option>
-                        {produkList.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.kode_produk} — {p.nama_produk}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field label="Lot number *" name="no_lot" required>
-                      <Input
-                        value={form.no_lot}
-                        onChange={(e) =>
-                          setForm({ ...form, no_lot: e.target.value })
-                        }
-                        placeholder="LOT-001"
-                      />
-                    </Field>
+                    {productionOn && !editingId ? (
+                      <div className="sm:col-span-2">
+                        <ERPPicker
+                          entity="inspection_lots"
+                          label="Production / received lot"
+                          value={selectedLot}
+                          onChange={selectInspectionLot}
+                        />
+                        {selectedLot && (
+                          <p className="erp-notice">
+                            {selectedLot.product} · Manufactured{" "}
+                            {selectedLot.mfg_date || "—"} · Expires{" "}
+                            {selectedLot.expiry_date || "—"}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        <Field
+                          label="Product *"
+                          name="id_produk"
+                          className="sm:col-span-2"
+                          required
+                        >
+                          <select
+                            className={selectClass}
+                            value={form.id_produk}
+                            onChange={(e) => changeProduct(e.target.value)}
+                          >
+                            <option value="">Select a product…</option>
+                            {produkList.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.kode_produk} — {p.nama_produk}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field label="Lot number *" name="no_lot" required>
+                          <Input
+                            value={form.no_lot}
+                            onChange={(e) =>
+                              setForm({ ...form, no_lot: e.target.value })
+                            }
+                            placeholder="LOT-001"
+                          />
+                        </Field>
+                      </>
+                    )}
                     <Field label="Inspector" name="inspector" required>
                       <Input
                         value={form.inspector}
@@ -700,6 +776,16 @@ export default function InspeksiPage() {
                     <div className="border-t border-border pt-5">
                       <div className="mb-4 flex items-center justify-between gap-3">
                         <span className="micro-label">Test results</span>
+                        <span className="text-xs text-muted">
+                          {
+                            spesifikasi.filter(
+                              (sp) =>
+                                (hasilValues[sp.parameter_uji] || "").trim() !==
+                                "",
+                            ).length
+                          }{" "}
+                          / {spesifikasi.length} completed
+                        </span>
                       </div>
 
                       <div className="space-y-2">
@@ -734,7 +820,23 @@ export default function InspeksiPage() {
                                 placeholder={
                                   sp.tipe_batas === "TEXT" ? "Value" : "0"
                                 }
+                                enterKeyHint="next"
                                 value={val}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    const inputs = Array.from(
+                                      e.currentTarget
+                                        .closest("form")!
+                                        .querySelectorAll<HTMLInputElement>(
+                                          'input[aria-label^="Result "]',
+                                        ),
+                                    );
+                                    inputs[
+                                      inputs.indexOf(e.currentTarget) + 1
+                                    ]?.focus();
+                                  }
+                                }}
                                 onChange={(e) => {
                                   setHasilValues({
                                     ...hasilValues,

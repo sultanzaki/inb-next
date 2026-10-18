@@ -33,7 +33,7 @@ export async function GET(request: Request, context: Context) {
         "units",
         "locations",
         "access",
-        "fulfillment",
+        "fulfillment", "series", "returns",
       ].includes(path[1])
     )
       return privateJson({ message: "Collection not found." }, 404);

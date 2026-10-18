@@ -1,3 +1,4 @@
+import { exerciseRelease } from "./release-browser";
 import { exerciseERP } from "./erp-browser";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -195,6 +196,20 @@ test(
         });
       }
       async function accessible() {
+        // Evaluate resting UI, rather than the low-opacity frame of an entering panel.
+        await page.evaluate(async () => {
+          await document.fonts.ready;
+          await Promise.all(
+            document
+              .getAnimations()
+              .filter(
+                (a) =>
+                  a.playState === "running" &&
+                  Number.isFinite(a.effect?.getComputedTiming().endTime),
+              )
+              .map((a) => a.finished.catch(() => {})),
+          );
+        });
         await page.addScriptTag({
           path: createRequire(import.meta.url).resolve("axe-core/axe.js"),
         });
@@ -230,6 +245,9 @@ test(
           [],
         );
       }
+      await db.query(
+        "update erp_modules set state='disabled' where key='production'",
+      );
       await page.goto(origin + "/login");
       await capture("01-login-desktop");
       await accessible();
@@ -237,9 +255,12 @@ test(
       await page.locator("[name=password]").fill(password);
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
       await page.waitForURL("**/dashboard");
+      await page.locator(".release-dashboard").waitFor();
+      await page.goto(origin + "/dashboard/quality");
       await page.locator(".quality-summary").waitFor();
       if (process.env.TEST_ERP_ONLY === "1") {
         await exerciseERP(page, db, origin, suffix, capture, accessible);
+        await exerciseRelease(page, db, origin, suffix, capture, accessible);
         assert.deepEqual(runtimeErrors, []);
         return;
       }
@@ -330,7 +351,7 @@ test(
       await analytics.getByRole("button", { name: "Retry analytics" }).click();
       await analytics.locator(".analytics-stage").waitFor();
       await accessible();
-      assert.equal(await page.locator(".app-sidebar").count(), 0);
+      assert.ok(await page.locator(".workspace-sidebar").isVisible());
       await page.keyboard.press("Control+k");
       await page
         .getByPlaceholder("Search lots, products, or COAs…")
@@ -631,6 +652,7 @@ test(
       assert.equal((await pdf.body()).subarray(0, 4).toString(), "%PDF");
       await printPage.close();
       await exerciseERP(page, db, origin, suffix, capture, accessible);
+      await exerciseRelease(page, db, origin, suffix, capture, accessible);
       await page.goto(origin + "/dashboard/arsip");
       await page.locator(".data-toolbar").waitFor();
       await page.waitForFunction(
@@ -697,7 +719,7 @@ test(
 
       for (const width of [768, 375, 320]) {
         await page.setViewportSize({ width, height: 900 });
-        await page.goto(origin + "/dashboard");
+        await page.goto(origin + "/dashboard/quality");
         await page.locator(".quality-summary").waitFor();
         const mobileAnalytics = page.getByRole("region", {
           name: "Quality analytics",
@@ -719,6 +741,7 @@ test(
             await mobileAnalytics.evaluate(
               (el) => el.scrollWidth <= el.clientWidth + 1,
             ),
+            `Quality analytics fits ${width}px while viewing ${name}`,
           );
           await mobileAnalytics.scrollIntoViewIfNeeded();
           await capture(`31-analytics-${name.toLowerCase()}-${width}`);
@@ -742,17 +765,15 @@ test(
             )),
         );
         await accessible();
+        await page.goto(origin + "/dashboard/work");
         await page
-          .getByRole("button", { name: "Open navigation menu" })
+          .locator(".work-directory")
+          .getByText("Master data", { exact: true })
           .click();
-        await page
-          .getByRole("dialog")
-          .getByRole("heading", { name: "Your workspace" })
-          .waitFor();
-        await capture("21-mobile-launcher-" + width);
+        await capture("21-mobile-work-" + width);
         await accessible();
         await page
-          .getByRole("navigation", { name: "Main navigation" })
+          .locator(".work-directory")
           .getByRole("link", { name: "Products", exact: true })
           .click();
         await page.waitForURL("**/dashboard/produk");
@@ -881,10 +902,9 @@ test(
         );
       }
       await page.setViewportSize({ width: 375, height: 650 });
-      await page.getByRole("button", { name: "Open navigation menu" }).click();
       await page
-        .getByRole("dialog")
-        .getByRole("button", { name: "Find a lot, product, or COA" })
+        .getByRole("navigation", { name: "Mobile navigation" })
+        .getByRole("button", { name: "Search", exact: true })
         .click();
       const launcherSearch = page.getByRole("combobox", {
         name: "Search all modules",
@@ -903,23 +923,11 @@ test(
         .click();
       await page.waitForURL("**/dashboard/inspeksi?q=*");
       await page.emulateMedia({ reducedMotion: "reduce" });
-      await page.getByRole("button", { name: "Open navigation menu" }).click();
-      await page.getByRole("heading", { name: "Your workspace" }).waitFor();
-      assert.equal(
-        await page
-          .locator(".launcher-tile")
-          .first()
-          .evaluate((el) => getComputedStyle(el).animationName),
-        "none",
-      );
+      await page.goto(origin + "/dashboard/work");
       assert.ok(
         await page
-          .getByRole("dialog")
+          .locator(".work-directory")
           .evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
-      );
-      await page.keyboard.press("Escape");
-      await page.waitForFunction(
-        () => !document.querySelector("[role=dialog]"),
       );
       await page.emulateMedia({ reducedMotion: "no-preference" });
       for (const width of [375, 320]) {

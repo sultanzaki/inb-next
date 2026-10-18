@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { before, after, test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -929,3 +930,457 @@ test("ERP concurrent reservations never oversell physical stock", async () => {
     await Promise.all(clients.map((c) => c.end()));
   }
 });
+
+// Release behavior runs against the forward migration after the original 004 regression cases.
+test("release migration applies and repeats without renumbering historical lots", async () => {
+  const sql = await readFile(
+    new URL(
+      "../src/lib/db/migrations/005_release_operations.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  await db.query(sql);
+  await db.query(sql);
+});
+async function autoStock(p?: string, date = today, quantity = "100") {
+  p = p || (await product());
+  if (
+    !(await db.query("select from erp_product_series where product_id=$1", [p]))
+      .rowCount
+  )
+    await rpc("set_series", {
+      product_id: p,
+      series: "00" + String(Math.floor(Math.random() * 1e12)),
+    });
+  const m = await rpc("save_move", {
+    kind: "production",
+    date: today,
+    to_location: main,
+    reason: "Release production",
+    lines: [{ product_id: p, unit_id: kg, quantity, mfg_date: date }],
+  });
+  const draft = (await read("production", m.id)).rows[0];
+  assert.match(draft.lines[0].lot, /^DRAFT-/);
+  await rpc("post_move", { id: m.id, version: draft.version });
+  const line = (await read("production", m.id)).rows[0].lines[0];
+  return { p, batch: line.lot, m, lot: line.lot_id };
+}
+tx(
+  "release production allocates yearly product batches, preserves zeros, locks identity and never reuses reversed numbers",
+  async () => {
+    const p = await product();
+    await rpc("set_series", { product_id: p, series: "01" });
+    const a = await autoStock(p, "2025-10-18"),
+      b = await autoStock(p, "2025-10-18"),
+      c = await autoStock(p, "2026-01-01");
+    assert.equal(a.batch, "01.01.18102025.2026");
+    assert.equal(b.batch, "01.02.18102025.2026");
+    assert.equal(c.batch, "01.01.01012026.2027");
+    await rpc("post_move", a.m);
+    assert.equal(
+      (
+        await db.query(
+          "select batch from erp_batch_counters where product_id=$1 and year=2025",
+          [p],
+        )
+      ).rows[0].batch,
+      2,
+    );
+    await failure("set_series", { product_id: p, series: "02" });
+    await rpc("reverse_move", { id: b.m.id, reason: "Correct output" });
+    assert.equal(
+      (await autoStock(p, "2025-10-18")).batch,
+      "01.03.18102025.2026",
+    );
+    await db.query("savepoint identity_lock");
+    await assert.rejects(() =>
+      db.query("update erp_lots set number='changed' where id=$1", [a.lot]),
+    );
+    await db.query("rollback to savepoint identity_lock");
+    await db.query(
+      "update erp_batch_counters set batch=99 where product_id=$1 and year=2025",
+      [p],
+    );
+    assert.equal(
+      (await autoStock(p, "2025-10-18")).batch,
+      "01.100.18102025.2026",
+    );
+  },
+);
+tx(
+  "release production rejects missing/duplicate series and stale posts without consuming a batch",
+  async () => {
+    const p = await product(),
+      p2 = await product();
+    await rpc("set_series", { product_id: p, series: "200" });
+    await failure("set_series", { product_id: p2, series: "200" }, "23505");
+    const m = await rpc("save_move", {
+      kind: "production",
+      date: today,
+      to_location: main,
+      reason: "Unconfigured",
+      lines: [{ product_id: p2, unit_id: kg, quantity: "10", mfg_date: today }],
+    });
+    await failure("post_move", m);
+    assert.equal(
+      (
+        await db.query("select from erp_batch_counters where product_id=$1", [
+          p2,
+        ])
+      ).rowCount,
+      0,
+    );
+  },
+);
+tx(
+  "release inspections select received lots, reject manual identities and pre-manufacturing dates, retain standalone QC",
+  async () => {
+    const s = await autoStock();
+    await release(s);
+    const spec = (
+      await db.query("select id from spesifikasi where id_produk=$1", [s.p])
+    ).rows[0].id;
+    const payload = {
+      id_produk: s.p,
+      no_lot: "MANUAL",
+      tgl_sampling: today,
+      tgl_uji: today,
+      inspector: "QA",
+      catatan: "",
+      failure_reason: "",
+      hasil_detail: [{ spec_id: spec, p: "pH", val: "7", st: "PASS" }],
+      status: "PASS",
+    };
+    await db.query("savepoint manual");
+    await assert.rejects(() => qc("create_uji", payload));
+    await db.query("rollback to savepoint manual");
+    await rpc("set_module", { module: "production", state: "disabled" });
+    await qc("create_uji", payload);
+  },
+);
+tx(
+  "release hold blocks allocations and keeps a PASS lot quarantined until approved hold removal",
+  async () => {
+    const s = await autoStock();
+    await release(s);
+    await rpc("hold_lot", {
+      id: s.lot,
+      hold: true,
+      reason: "Investigate complaint",
+    });
+    const o = await order(s.p);
+    await failure("reserve", {
+      order_line_id: (await read("orders", o.id)).rows[0].lines[0].id,
+      lot_id: s.lot,
+      location_id: main,
+      quantity: "1",
+    });
+    assert.equal(
+      (await db.query("select qc_status from erp_lots where id=$1", [s.lot]))
+        .rows[0].qc_status,
+      "quarantine",
+    );
+    await rpc("hold_lot", {
+      id: s.lot,
+      hold: false,
+      reason: "Investigation cleared",
+    });
+    await reserve(o, s.lot, "1");
+    const trace = await read("trace", s.lot);
+    assert.equal(trace.inspection.status, "PASS");
+    assert.equal(trace.stock[0].reserved, "1.000000");
+  },
+);
+async function shipped() {
+  const s = await autoStock();
+  const h = await release(s);
+  await certificate(h);
+  const o = await order(s.p, "20"),
+    r = await reserve(o, s.lot, "20");
+  const m = await rpc("create_delivery", {
+    order_id: o.id,
+    date: today,
+    reason: "Shipment",
+    lines: [{ reservation_id: r.id, quantity: "10" }],
+  });
+  await rpc("post_move", m);
+  return { ...s, delivery: m.id };
+}
+tx(
+  "release returns are capped, received once into held stock, cannot bypass disposition and scrap through immutable ledger",
+  async () => {
+    const s = await shipped();
+    await failure("create_return", {
+      delivery_id: s.delivery,
+      lot_id: s.lot,
+      location_id: main,
+      quantity: "11",
+      reason: "Damaged",
+    });
+    const ret = await rpc("create_return", {
+      delivery_id: s.delivery,
+      lot_id: s.lot,
+      location_id: main,
+      quantity: "5",
+      reason: "Damaged bag",
+    });
+    await rpc("receive_return", { id: ret.id, reason: "Physical receipt" });
+    await rpc("receive_return", { id: ret.id, reason: "Retry receipt" });
+    const row = (await read("returns", ret.id)).rows[0];
+    assert.equal(row.state, "received");
+    const returned = (
+      await db.query("select * from erp_lots where id=$1", [row.lot_id])
+    ).rows[0];
+    assert.equal(returned.held, true);
+    assert.equal(returned.source_lot_id, s.lot);
+    const bypass = await rpc("save_move", {
+      kind: "issue",
+      date: today,
+      from_location: main,
+      reason: "Unapproved return issue",
+      lines: [{ lot_id: row.lot_id, unit_id: kg, quantity: "1" }],
+    });
+    await failure("post_move", bypass);
+    await failure("reverse_move", {
+      id: row.receipt_id,
+      reason: "Unapproved receipt correction",
+    });
+    await failure("hold_lot", {
+      id: row.lot_id,
+      hold: false,
+      reason: "Bypass",
+    });
+    await failure("dispose_return", {
+      id: ret.id,
+      decision: "release",
+      reason: "No reinspection",
+    });
+    await failure("reverse_move", {
+      id: s.delivery,
+      reason: "Incorrect reversal",
+    });
+    await rpc("dispose_return", {
+      id: ret.id,
+      decision: "scrap",
+      reason: "Approved disposal",
+    });
+    assert.equal((await read("returns", ret.id)).rows[0].state, "scrapped");
+    assert.equal(
+      (
+        await db.query(
+          "select quantity::text q from erp_balances where lot_id=$1",
+          [row.lot_id],
+        )
+      ).rows[0].q,
+      "0.000000",
+    );
+  },
+);
+tx(
+  "release returned goods need fresh valid QC before release; returns do not rewrite delivered sales quantities",
+  async () => {
+    const s = await shipped(),
+      ret = await rpc("create_return", {
+        delivery_id: s.delivery,
+        lot_id: s.lot,
+        location_id: main,
+        quantity: "3",
+        reason: "Packaging check",
+      });
+    await rpc("receive_return", { id: ret.id, reason: "Received" });
+    let row = (await read("returns", ret.id)).rows[0];
+    const l = (
+      await db.query("select number from erp_lots where id=$1", [row.lot_id])
+    ).rows[0];
+    await release({ ...s, lot: row.lot_id, batch: l.number });
+    assert.equal(
+      (
+        await db.query("select qc_status from erp_lots where id=$1", [
+          row.lot_id,
+        ])
+      ).rows[0].qc_status,
+      "quarantine",
+    );
+    await rpc("dispose_return", {
+      id: ret.id,
+      decision: "release",
+      reason: "QC passed",
+    });
+    row = (await read("returns", ret.id)).rows[0];
+    assert.equal(row.state, "released");
+    assert.equal(
+      (
+        await db.query("select qc_status from erp_lots where id=$1", [
+          row.lot_id,
+        ])
+      ).rows[0].qc_status,
+      "released",
+    );
+  },
+);
+tx(
+  "release inbox assignment and analytics respect permissions and module modes",
+  async () => {
+    const s = await autoStock();
+    let inbox = await read("inbox");
+    const task = inbox.rows.find((r: { id: string }) => r.id === "qc:" + s.lot);
+    assert.ok(task);
+    await rpc("set_access", {
+      user_id: operatorId,
+      module: "quality",
+      read: true,
+      write: true,
+      approve: false,
+    });
+    await rpc("assign_task", {
+      task_id: task.id,
+      user_id: operatorId,
+      due_date: today,
+    });
+    inbox = await read("inbox");
+    assert.equal(
+      inbox.rows.find((r: { id: string }) => r.id === task.id).assigned_to,
+      operatorId,
+    );
+    await release(s);
+    assert.ok(
+      !(await read("inbox")).rows.some((r: { id: string }) => r.id === task.id),
+    );
+    await rpc("set_access", {
+      user_id: operatorId,
+      module: "quality",
+      read: false,
+      write: false,
+      approve: false,
+    });
+    assert.ok(
+      !(await read("inbox", undefined, operator)).rows.some(
+        (r: { module: string }) => r.module === "quality",
+      ),
+    );
+    await db.query("savepoint denied");
+    await assert.rejects(() =>
+      db.query("select erp_read($1,'overview','30','quality')", [operator]),
+    );
+    await db.query("rollback to savepoint denied");
+    const overview = (
+      await db.query("select erp_read($1,'overview','7','production') r", [
+        token,
+      ])
+    ).rows[0].r;
+    assert.equal(overview.series.length, 7);
+    assert.equal(overview.chart_label, "Posted production records");
+    for (const role of ["anon", "authenticated", "service_role"]) {
+      await db.query("savepoint direct");
+      await db.query(`set local role ${role}`);
+      await assert.rejects(() => db.query("select * from erp_returns"));
+      await db.query("rollback to savepoint direct");
+    }
+  },
+);
+test("release concurrent production posting allocates distinct batches atomically", async () => {
+  const p = await product();
+  await rpc("set_series", {
+    product_id: p,
+    series: "009" + String(Math.floor(Math.random() * 1e10)),
+  });
+  const drafts = [];
+  for (let i = 0; i < 2; i++)
+    drafts.push(
+      await rpc("save_move", {
+        kind: "production",
+        date: today,
+        to_location: main,
+        reason: "Concurrent output",
+        lines: [{ product_id: p, unit_id: kg, quantity: "1", mfg_date: today }],
+      }),
+    );
+  const other = new Client({ connectionString: url });
+  await other.connect();
+  try {
+    await Promise.all(
+      drafts.map((m, i) => rpc("post_move", m, token, i ? other : db)),
+    );
+  } finally {
+    await other.end();
+  }
+  const lots = (
+    await db.query(
+      "select batch_number from erp_lots where product_id=$1 and batch_number is not null order by batch_number",
+      [p],
+    )
+  ).rows;
+  assert.deepEqual(
+    lots.map((r) => r.batch_number),
+    [1, 2],
+  );
+});
+
+tx(
+  "release series setup adopts historical batch counters across dates without renaming lots",
+  async () => {
+    const p = await product();
+    await db.query(
+      "insert into erp_lots(product_id,number,mfg_date,expiry_date) values($1,'333.07.01012026.2027','2026-01-01','2027-01-01')",
+      [p],
+    );
+    await rpc("set_series", { product_id: p, series: "333" });
+    const s = await autoStock(p, "2026-02-01");
+    assert.equal(s.batch, "333.08.01022026.2027");
+    assert.equal(
+      (
+        await db.query(
+          "select number from erp_lots where product_id=$1 and batch_number is null",
+          [p],
+        )
+      ).rows[0].number,
+      "333.07.01012026.2027",
+    );
+  },
+);
+
+tx(
+  "release posting a legacy draft never renames an already stocked lot",
+  async () => {
+    const p = await product(),
+      batch = "LEGACY-" + randomUUID();
+    const payload = {
+      kind: "production",
+      date: today,
+      to_location: main,
+      reason: "Legacy draft",
+      lines: [
+        {
+          product_id: p,
+          unit_id: kg,
+          quantity: "5",
+          lot_number: batch,
+          mfg_date: today,
+        },
+      ],
+    };
+    // Simulate a 004 draft saved against a lot with physical history, then upgrade its posting.
+    const receipt = await rpc("save_move", { ...payload, kind: "receipt" });
+    await rpc("post_move", receipt);
+    const legacy = (
+      await db.query("select erp_mutate_v4($1,'save_move',$2) r", [
+        token,
+        JSON.stringify(payload),
+      ])
+    ).rows[0].r;
+    await rpc("set_series", { product_id: p, series: "444" });
+    await rpc("post_move", legacy);
+    const lots = (
+      await db.query(
+        "select number,batch_number from erp_lots where product_id=$1 order by batch_number nulls first",
+        [p],
+      )
+    ).rows;
+    assert.equal(lots[0].number, batch);
+    assert.equal(lots[1].batch_number, 1);
+    const draft = await rpc("save_move", payload),
+      draftLot = (await read("production", draft.id)).rows[0].lines[0].lot_id;
+    assert.equal((await read("lots", draftLot)).total, 0);
+  },
+);

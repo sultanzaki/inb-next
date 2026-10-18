@@ -58,7 +58,13 @@ export async function exerciseERP(
     ).rows[0].d;
   const code = "ERP-BROWSER-" + suffix,
     name = "ERP magnesium stearate " + suffix,
-    lotNumber = "ERP-LOT-" + suffix;
+    series = "00" + String(parseInt(suffix, 16)),
+    lotNumber =
+      series +
+      ".01." +
+      today.split("-").reverse().join("") +
+      "." +
+      expiry.slice(0, 4);
   const product = (
     await qc("create_produk", {
       kode_produk: code,
@@ -79,6 +85,8 @@ export async function exerciseERP(
       ],
     })
   ).id;
+  await post("set_module", { module: "production", state: "active" });
+  await post("set_series", { product_id: product, series });
   // Manual settings are real UI operations; no warehouse balances are seeded.
   await page.goto(origin + "/dashboard/settings");
   await page.getByRole("button", { name: "Locations", exact: true }).click();
@@ -110,7 +118,10 @@ export async function exerciseERP(
   await pick("Destination location", "ERP-" + suffix);
   await pick("Product", code);
   await top().getByLabel("Quantity", { exact: true }).fill("100");
-  await top().getByLabel("Lot / batch number", { exact: true }).fill(lotNumber);
+  assert.equal(
+    await top().getByLabel("Lot / batch number", { exact: true }).count(),
+    0,
+  );
   await top()
     .getByLabel("Reference / reason", { exact: true })
     .fill("Finished output QA");
