@@ -5100,10 +5100,19 @@ html.dark {
   margin: 0;
 }
 .theme-control-compact > div {
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
 }
 .theme-control-compact button {
-  flex: 1;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 8px 4px;
+}
+.theme-control-compact button svg {
+  flex-shrink: 0;
 }
 .theme-control:not(.theme-control-compact) button span {
   display: none;
