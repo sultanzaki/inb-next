@@ -15,8 +15,9 @@ export async function GET(request: Request, context: Context) {
     p = new URL(request.url).searchParams;
   if (path[0] === "export" && path.length === 2) {
     const q = p.get("q") || "",
-      state = p.get("state") || "";
-    if (q.length > 100 || state.length > 30)
+      state = p.get("state") || "",
+      id = p.get("id");
+    if (q.length > 100 || state.length > 30 || (id && id.length > 100))
       return privateJson({ message: "Invalid filters." }, 400);
     if (
       ![
@@ -33,7 +34,17 @@ export async function GET(request: Request, context: Context) {
         "units",
         "locations",
         "access",
-        "fulfillment", "series", "returns",
+        "fulfillment",
+        "series",
+        "returns",
+        "suppliers",
+        "materials",
+        "purchases",
+        "material_stock",
+        "material_ledger",
+        "opportunities",
+        "crm_activities",
+        "product_documents",
       ].includes(path[1])
     )
       return privateJson({ message: "Collection not found." }, 404);
@@ -41,6 +52,7 @@ export async function GET(request: Request, context: Context) {
     for (let page = 1; page <= 201; page++) {
       const { data, error } = await erpRpc("erp_read", {
         p_entity: path[1],
+        p_id: id,
         p_search: q,
         p_state: state,
         p_page: page,
@@ -59,6 +71,22 @@ export async function GET(request: Request, context: Context) {
     }
     const columns = [
       "number",
+      "title",
+      "supplier",
+      "company",
+      "owner",
+      "expected_value",
+      "expected_close",
+      "due_date",
+      "assignee",
+      "kind",
+      "language",
+      "revision",
+      "display_state",
+      "effective_date",
+      "expiry_date",
+      "quantity",
+      "unit",
       "name",
       "code",
       "product",
@@ -84,7 +112,8 @@ export async function GET(request: Request, context: Context) {
       rows.map((r) =>
         columns.map((c) =>
           c === "total"
-            ? (r.totals as Record<string, string> | undefined)?.total
+            ? ((r.totals as Record<string, string> | undefined)?.total ??
+              r.total)
             : r[c],
         ),
       ),
@@ -124,7 +153,7 @@ export async function GET(request: Request, context: Context) {
   if (
     path[0] === "documents" &&
     path.length >= 3 &&
-    ["quotes", "movements", "production"].includes(path[1])
+    ["quotes", "movements", "production", "purchases"].includes(path[1])
   ) {
     const { data, error } = await erpRpc("erp_read", {
       p_entity: path[1],
@@ -135,6 +164,26 @@ export async function GET(request: Request, context: Context) {
     if (!row) return privateJson({ message: "Document not found." }, 404);
     if (p.has("download"))
       await logAudit(session.user.nama_lengkap, "DOWNLOAD_ERP", row.number);
+    if (path[1] === "purchases" && path.length === 3) {
+      const supplier = row.supplier_data || {};
+      const bytes = await renderERPDocument(
+        {
+          ...row,
+          snapshot: undefined,
+          customer: supplier.name,
+          customer_data: { ...supplier, billing_address: supplier.address },
+          valid_until: row.expected_date,
+          lines: (row.lines || []).map((line: Record<string, string>) => ({
+            ...line,
+            product: line.name,
+            discount: "0",
+          })),
+          totals: { subtotal: row.total, total: row.total },
+        },
+        "purchase",
+      );
+      return pdf(bytes, row.number, p.has("download"));
+    }
     if (path[3] === "coa") {
       const index = Number(path[4]);
       if (

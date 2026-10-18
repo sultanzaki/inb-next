@@ -1,3 +1,4 @@
+import { exerciseGrowth } from "./growth-browser";
 import { exerciseMobileNavigation } from "./mobile-navigation-browser";
 import { exerciseRelease } from "./release-browser";
 import { exerciseERP } from "./erp-browser";
@@ -30,11 +31,13 @@ function jwt(role: string) {
 }
 
 test(
-  process.env.TEST_MOBILE_NAV_ONLY === "1"
-    ? "Mobile console navigation"
-    : process.env.TEST_ERP_ONLY === "1"
-      ? "ERP production browser workflows"
-      : "production app: authenticated reads, pagination, mutations, search, error handling and logout",
+  process.env.TEST_GROWTH_ONLY === "1"
+    ? "Purchase CRM and product document workflows"
+    : process.env.TEST_MOBILE_NAV_ONLY === "1"
+      ? "Mobile console navigation"
+      : process.env.TEST_ERP_ONLY === "1"
+        ? "ERP production browser workflows"
+        : "production app: authenticated reads, pagination, mutations, search, error handling and logout",
   { timeout: 600000 },
   async () => {
     const db = new Client({ connectionString: dbUrl });
@@ -272,6 +275,11 @@ test(
       await page.locator(".release-dashboard").waitFor();
       await page.goto(origin + "/dashboard/quality");
       await page.locator(".quality-summary").waitFor();
+      if (process.env.TEST_GROWTH_ONLY === "1") {
+        await exerciseGrowth(page, db, origin, suffix, capture, accessible);
+        assert.deepEqual(runtimeErrors, []);
+        return;
+      }
       if (process.env.TEST_MOBILE_NAV_ONLY === "1") {
         await exerciseMobileNavigation(page, origin, capture, accessible);
         assert.deepEqual(runtimeErrors, []);
@@ -673,6 +681,7 @@ test(
       await exerciseERP(page, db, origin, suffix, capture, accessible);
       await exerciseRelease(page, db, origin, suffix, capture, accessible);
       await exerciseMobileNavigation(page, origin, capture, accessible);
+      await exerciseGrowth(page, db, origin, suffix, capture, accessible);
       await page.goto(origin + "/dashboard/arsip");
       await page.locator(".data-toolbar").waitFor();
       await page.waitForFunction(
@@ -787,10 +796,13 @@ test(
         await accessible();
         await page.goto(origin + "/dashboard/work");
         await page.locator(".workspace-tile").first().waitFor();
+        // Measure resting layout after navigation and hover transitions finish.
+        await accessible();
         const tiles = await page.locator(".workspace-tile").evaluateAll((els) =>
           els.slice(0, 2).map((el) => {
             const r = el.getBoundingClientRect();
             return {
+              name: el.textContent,
               x: r.x,
               y: (el as HTMLElement).offsetTop,
               width: r.width,
@@ -801,6 +813,7 @@ test(
         assert.equal(tiles.length, 2);
         assert.ok(
           Math.abs(tiles[0].y - tiles[1].y) < 1 && tiles[1].x > tiles[0].x,
+          "Two-column launcher: " + JSON.stringify(tiles),
         );
         assert.ok(tiles.every((r) => Math.abs(r.width - r.height) < 1));
         await capture("21-mobile-work-" + width);

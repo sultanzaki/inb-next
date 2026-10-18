@@ -14,6 +14,9 @@ import {
   Settings2,
   LayoutDashboard,
   Inbox,
+  ShoppingCart,
+  ContactRound,
+  Files,
 } from "lucide-react";
 export function useWorkspaceGroups() {
   const erp = useERP(),
@@ -67,7 +70,46 @@ export function useWorkspaceGroups() {
               ["Dispatch", "/dashboard/warehouse?view=fulfillment"],
               ["Returns", "/dashboard/warehouse?view=returns"],
               ["Stock ledger", "/dashboard/warehouse?view=ledger"],
+              ["Material stock", "/dashboard/materials?view=material_stock"],
+              ["Material ledger", "/dashboard/materials?view=material_ledger"],
             ],
+          },
+        ]
+      : []),
+    ...(erp.can("purchase")
+      ? [
+          {
+            name: "Purchase",
+            description: "Suppliers and raw material purchasing",
+            icon: ShoppingCart,
+            links: [
+              ["Purchase orders", "/dashboard/purchase?view=purchases"],
+              ["Suppliers", "/dashboard/purchase?view=suppliers"],
+              ["Raw materials", "/dashboard/purchase?view=materials"],
+            ],
+          },
+        ]
+      : []),
+    ...(erp.can("crm")
+      ? [
+          {
+            name: "CRM",
+            description: "Opportunities and follow-up",
+            icon: ContactRound,
+            links: [
+              ["Pipeline", "/dashboard/crm?view=opportunities"],
+              ["Activities", "/dashboard/crm?view=crm_activities"],
+            ],
+          },
+        ]
+      : []),
+    ...(erp.can("documents")
+      ? [
+          {
+            name: "Product documents",
+            description: "SDS, TDS and controlled revisions",
+            icon: Files,
+            links: [["Product documents", "/dashboard/documents"]],
           },
         ]
       : []),

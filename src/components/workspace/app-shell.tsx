@@ -59,6 +59,14 @@ const navigation = [
     label: "Quality analytics",
     icon: LayoutDashboard,
   },
+  { href: "/dashboard/purchase", label: "Purchase", icon: Package },
+  { href: "/dashboard/crm", label: "CRM", icon: Users },
+  {
+    href: "/dashboard/documents",
+    label: "Product documents",
+    icon: FolderArchive,
+  },
+  { href: "/dashboard/materials", label: "Raw materials", icon: Package },
   { href: "/dashboard/warehouse", label: "Warehouse", icon: Warehouse },
   { href: "/dashboard/production", label: "Production", icon: Factory },
   { href: "/dashboard/sales", label: "Sales", icon: Handshake },
@@ -122,6 +130,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const items = navigation.filter((n) => {
     if (n.permission && !canAction(user?.role || "viewer", n.permission))
       return false;
+    if (n.href.endsWith("/purchase")) return erp.can("purchase");
+    if (n.href.endsWith("/crm")) return erp.can("crm");
+    if (n.href.endsWith("/documents")) return erp.can("documents");
+    if (n.href.endsWith("/materials")) return erp.can("warehouse");
     if (n.href.endsWith("/warehouse")) return erp.can("warehouse");
     if (n.href.endsWith("/production")) return erp.can("production");
     if (n.href.endsWith("/sales")) return erp.can("sales");
