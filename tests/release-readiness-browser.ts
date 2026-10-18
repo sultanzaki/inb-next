@@ -26,6 +26,35 @@ export async function exerciseReleaseReadiness(
       name,
     );
   }
+  const redirects = {
+    produk: "master-data/products",
+    inspeksi: "quality/inspections",
+    coa: "quality/certificates",
+    arsip: "product-documents",
+    pengguna: "admin/users",
+    audit: "admin/audit-log",
+    settings: "admin/settings",
+    materials: "warehouse/materials",
+    documents: "product-documents",
+    work: "workspaces",
+  };
+  await Promise.all(
+    Object.entries(redirects).map(async ([old, target]) => {
+      const r = await page.request.get(
+        origin + "/dashboard/" + old + "?q=lot%20one",
+        { maxRedirects: 0 },
+      );
+      assert.equal(r.status(), 308);
+      const location = new URL(r.headers().location, origin);
+      assert.equal(location.pathname, "/dashboard/" + target);
+      assert.equal(location.searchParams.get("q"), "lot one");
+    }),
+  );
+  for (const path of ["/favicon.ico", "/icon.png", "/apple-icon.png"]) {
+    const r = await fetch(origin + path);
+    assert.equal(r.status, 200);
+    assert.match(r.headers.get("content-type") || "", /image/);
+  }
   const activation = await page.request.post(origin + "/api/erp/set_module", {
     data: { module: "production", state: "active" },
     headers: { origin },
@@ -36,13 +65,13 @@ export async function exerciseReleaseReadiness(
   await theme("Dark");
   for (const route of [
     "dashboard",
-    "dashboard/produk",
-    "dashboard/inspeksi",
-    "dashboard/coa",
+    "dashboard/master-data/products",
+    "dashboard/quality/inspections",
+    "dashboard/quality/certificates",
     "dashboard/quality",
     "dashboard/purchase",
     "dashboard/crm",
-    "dashboard/documents",
+    "dashboard/product-documents",
     "dashboard/warehouse",
     "dashboard/production",
     "dashboard/sales",
@@ -52,10 +81,33 @@ export async function exerciseReleaseReadiness(
       () => document.querySelectorAll("main#main-content").length === 1,
     );
     await page.locator("main").waitFor();
+    const title = {
+      dashboard: "Overview",
+      "dashboard/master-data/products": "Products",
+      "dashboard/quality/inspections": "Inspections",
+      "dashboard/quality/certificates": "Certificates of analysis",
+      "dashboard/quality": "Quality overview",
+      "dashboard/product-documents": "Product documents",
+    }[route];
+    if (title)
+      await page.waitForFunction(
+        (expected) => document.title === expected,
+        title + " | INBIONUSA",
+      );
+    assert.match(
+      (await page.locator('meta[name="robots"]').getAttribute("content")) || "",
+      /noindex/,
+    );
+    assert.equal(await page.locator('a[href="/dashboard/arsip"]').count(), 0);
     if (
-      ["purchase", "crm", "documents", "warehouse", "production", "sales"].some(
-        (m) => route.endsWith("/" + m),
-      )
+      [
+        "purchase",
+        "crm",
+        "product-documents",
+        "warehouse",
+        "production",
+        "sales",
+      ].some((m) => route.endsWith("/" + m))
     ) {
       await page.getByRole("button", { name: /Operational insights/ }).click();
       await page.locator(".module-insights-metrics strong").first().waitFor();
@@ -86,7 +138,7 @@ export async function exerciseReleaseReadiness(
       ),
     );
   }
-  await page.goto(origin + "/dashboard/pengguna");
+  await page.goto(origin + "/dashboard/admin/users");
   await page.getByRole("button", { name: "Add user", exact: true }).click();
   const dialog = page.getByRole("dialog").last();
   await dialog
@@ -183,12 +235,12 @@ export async function exerciseReleaseReadiness(
       },
     ]);
     const officer = await context.newPage();
-    await officer.goto(origin + "/dashboard/inspeksi");
+    await officer.goto(origin + "/dashboard/quality/inspections");
     await officer
       .getByRole("button", { name: "New inspection", exact: true })
       .first()
       .waitFor();
-    await officer.goto(origin + "/dashboard/coa");
+    await officer.goto(origin + "/dashboard/quality/certificates");
     await officer
       .getByRole("heading", { name: "Certificate of Analysis" })
       .first()

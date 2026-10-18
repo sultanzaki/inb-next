@@ -2,6 +2,7 @@
 import {
   createContext,
   useCallback,
+  useMemo,
   useContext,
   useEffect,
   useState,
@@ -42,18 +43,22 @@ export function ERPProvider({ children }: { children: ReactNode }) {
       });
     return () => abort.abort();
   }, [version]);
-  const can = (
-    module: ModuleKey,
-    verb: "read" | "write" | "approve" = "read",
-  ) => {
-    const entry = data?.modules.find((m) => m.key === module);
-    return Boolean(
-      entry &&
-      entry.state !== "disabled" &&
-      (verb === "read" || entry.state === "active") &&
-      entry[verb],
-    );
-  };
-  return <Context value={{ data, error, refresh, can }}>{children}</Context>;
+  const can = useCallback(
+    (module: ModuleKey, verb: "read" | "write" | "approve" = "read") => {
+      const entry = data?.modules.find((m) => m.key === module);
+      return Boolean(
+        entry &&
+        entry.state !== "disabled" &&
+        (verb === "read" || entry.state === "active") &&
+        entry[verb],
+      );
+    },
+    [data],
+  );
+  const value = useMemo(
+    () => ({ data, error, refresh, can }),
+    [data, error, refresh, can],
+  );
+  return <Context value={value}>{children}</Context>;
 }
 export const useERP = () => useContext(Context);

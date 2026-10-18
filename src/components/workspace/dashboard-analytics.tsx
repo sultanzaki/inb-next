@@ -1,13 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  ArrowUpRight,
-  Activity,
-  ShieldCheck,
-  FileCheck2,
-  FolderClock,
-} from "lucide-react";
+import { ArrowUpRight, Activity, ShieldCheck, FileCheck2 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { formatPassRate } from "@/lib/format";
@@ -19,7 +13,6 @@ const views = [
   { id: "activity", label: "Activity", icon: Activity },
   { id: "quality", label: "Quality", icon: ShieldCheck },
   { id: "issuance", label: "COAs", icon: FileCheck2 },
-  { id: "documents", label: "Documents", icon: FolderClock },
 ] as const;
 type View = (typeof views)[number]["id"];
 const number = (n: number) => n.toLocaleString("en-GB");
@@ -91,7 +84,7 @@ export function DashboardAnalytics() {
           ? inspected
             ? `${formatPassRate(totals!.passed, inspected)}%`
             : "—"
-          : number(data?.documents.valid ?? 0);
+          : "—";
   const metricLabel =
     view === "activity"
       ? "inspections completed"
@@ -99,7 +92,7 @@ export function DashboardAnalytics() {
         ? "certificates released"
         : view === "quality"
           ? "of inspected lots passed"
-          : "valid documents";
+          : "";
   return (
     <section className="analytics-studio" aria-label="Quality analytics">
       <div className="analytics-heading">
@@ -112,7 +105,6 @@ export function DashboardAnalytics() {
           <select
             aria-label="Analytics period"
             value={period}
-            disabled={view === "documents"}
             onChange={(e) => {
               setPeriod(Number(e.target.value) as AnalyticsPeriod);
               setSelected(null);
@@ -164,11 +156,7 @@ export function DashboardAnalytics() {
                 <>
                   <div className="analytics-stage surface-enter" key={view}>
                     <div className="analytics-readout">
-                      <p className="analytics-context">
-                        {view === "documents"
-                          ? "Current document status"
-                          : caption}
-                      </p>
+                      <p className="analytics-context">{caption}</p>
                       <strong className="analytics-number">{metric}</strong>
                       <p>{metricLabel}</p>
                       <div className="analytics-insight">
@@ -186,25 +174,16 @@ export function DashboardAnalytics() {
                           )
                         ) : view === "issuance" ? (
                           "Grouped by certificate release date."
-                        ) : (
-                          `${number(data.documents.expiring)} expire in the next 30 days.`
-                        )}
+                        ) : null}
                       </div>
                       <Link
                         href={
-                          view === "documents"
-                            ? "/dashboard/arsip"
-                            : view === "issuance"
-                              ? "/dashboard/coa"
-                              : "/dashboard/inspeksi"
+                          view === "issuance"
+                            ? "/dashboard/quality/certificates"
+                            : "/dashboard/quality/inspections"
                         }
                       >
-                        Open{" "}
-                        {view === "documents"
-                          ? "documents"
-                          : view === "issuance"
-                            ? "COAs"
-                            : "inspections"}
+                        Open {view === "issuance" ? "COAs" : "inspections"}
                         <ArrowUpRight className="size-3.5" />
                       </Link>
                     </div>
@@ -362,54 +341,13 @@ export function DashboardAnalytics() {
                           </div>
                         </div>
                       )}
-                      {view === "documents" && (
-                        <div className="analytics-document-bars">
-                          {[
-                            {
-                              label: "Valid beyond 30 days",
-                              count: Math.max(
-                                0,
-                                data.documents.valid - data.documents.expiring,
-                              ),
-                              style: "analytics-passed",
-                            },
-                            {
-                              label: "Expiring within 30 days",
-                              count: data.documents.expiring,
-                              style: "analytics-expiring",
-                            },
-                            {
-                              label: "Expired",
-                              count: data.documents.expired,
-                              style: "analytics-failed",
-                            },
-                          ].map((d) => (
-                            <div key={d.label}>
-                              <div>
-                                <span>{d.label}</span>
-                                <strong>{number(d.count)}</strong>
-                              </div>
-                              <div className="analytics-document-track">
-                                <i
-                                  className={d.style}
-                                  style={{
-                                    width: `${(d.count / Math.max(1, data.documents.valid + data.documents.expired)) * 100}%`,
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   </div>
                   <div className="analytics-footer">
                     <span>
-                      {view === "documents"
-                        ? "Expiry dates checked today"
-                        : view === "quality"
-                          ? "Based on test dates · PASS and FAIL lots"
-                          : "Select an interval to inspect it"}
+                      {view === "quality"
+                        ? "Based on test dates · PASS and FAIL lots"
+                        : "Select an interval to inspect it"}
                     </span>
                     <span>
                       {views.findIndex((v) => v.id === view) + 1} /{" "}
@@ -421,48 +359,28 @@ export function DashboardAnalytics() {
                     <div>
                       <table>
                         <caption>
-                          {view === "documents"
-                            ? "Current document counts"
-                            : `Analytics: ${day(data.from)} – ${day(data.to)}`}
+                          {`Analytics: ${day(data.from)} – ${day(data.to)}`}
                         </caption>
                         <thead>
                           <tr>
-                            {(view === "documents"
-                              ? ["Status", "Documents"]
-                              : ["Interval", "Passed", "Failed", "COAs"]
-                            ).map((h) => (
-                              <th key={h}>{h}</th>
-                            ))}
+                            {["Interval", "Passed", "Failed", "COAs"].map(
+                              (h) => (
+                                <th key={h}>{h}</th>
+                              ),
+                            )}
                           </tr>
                         </thead>
                         <tbody>
-                          {view === "documents"
-                            ? [
-                                [
-                                  "Valid (includes expiring)",
-                                  data.documents.valid,
-                                ],
-                                [
-                                  "Expiring within 30 days",
-                                  data.documents.expiring,
-                                ],
-                                ["Expired", data.documents.expired],
-                              ].map(([label, count]) => (
-                                <tr key={label}>
-                                  <th scope="row">{label}</th>
-                                  <td>{count}</td>
-                                </tr>
-                              ))
-                            : data.buckets.map((b) => (
-                                <tr key={b.from}>
-                                  <th scope="row">
-                                    {day(b.from)} – {day(b.to)}
-                                  </th>
-                                  <td>{number(b.passed)}</td>
-                                  <td>{number(b.failed)}</td>
-                                  <td>{number(b.issued)}</td>
-                                </tr>
-                              ))}
+                          {data.buckets.map((b) => (
+                            <tr key={b.from}>
+                              <th scope="row">
+                                {day(b.from)} – {day(b.to)}
+                              </th>
+                              <td>{number(b.passed)}</td>
+                              <td>{number(b.failed)}</td>
+                              <td>{number(b.issued)}</td>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>

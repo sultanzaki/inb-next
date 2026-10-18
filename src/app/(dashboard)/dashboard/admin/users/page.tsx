@@ -4,7 +4,7 @@ import { AccessPreview } from "@/components/erp/access-preview";
 import { RowActions } from "@/components/workspace/row-actions";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Plus, Pencil, KeyRound, Users, RefreshCw } from "lucide-react";
-import { useUser } from "../../user-context";
+import { useUser } from "@/app/(dashboard)/user-context";
 import type { User, UserRole } from "@/lib/types";
 import { canAction } from "@/lib/types";
 import {

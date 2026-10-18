@@ -2,7 +2,7 @@
 import { RowActions } from "@/components/workspace/row-actions";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Eye } from "lucide-react";
-import { useUser } from "../../user-context";
+import { useUser } from "@/app/(dashboard)/user-context";
 import { canAction, type AuditLogEntry } from "@/lib/types";
 import {
   PageHeader,

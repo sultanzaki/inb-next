@@ -1,3 +1,8 @@
+import type { Metadata } from "next";
+export const metadata: Metadata = {
+  title: { absolute: "Change password | INBIONUSA" },
+  description: "Update your INBIONUSA account password securely.",
+};
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";

@@ -25,7 +25,7 @@ import { productSchema } from "@/lib/domain/validation";
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useUser } from "../../user-context";
+import { useUser } from "@/app/(dashboard)/user-context";
 import { canAction } from "@/lib/types";
 import type { MasterProduk, SpesifikasiItem, UserRole } from "@/lib/types";
 import { toast } from "sonner";
@@ -999,7 +999,7 @@ export default function ProdukPage() {
               {erp.can("documents") && (
                 <Link
                   className="erp-document-link mb-5"
-                  href={`/dashboard/documents?product=${detail.id}`}
+                  href={`/dashboard/product-documents?product=${detail.id}`}
                 >
                   View product documents
                 </Link>

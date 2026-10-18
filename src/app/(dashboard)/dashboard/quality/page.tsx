@@ -1,19 +1,10 @@
 "use client";
-import { useERP } from "@/components/erp/context";
-import { OperationsHome } from "@/components/erp/workspace";
 import { DashboardAnalytics } from "@/components/workspace/dashboard-analytics";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  FileCheck2,
-  ArrowUpRight,
-  ArrowRight,
-  AlertTriangle,
-} from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { ArrowUpRight, ArrowRight, AlertTriangle } from "lucide-react";
 import { formatPassRate } from "@/lib/format";
-import { businessDate } from "@/lib/domain/validation";
-import type { DashboardData, HasilUjiRow } from "@/lib/types";
+import type { DashboardData } from "@/lib/types";
 import { PageHeader } from "@/components/workspace/page-ui";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,9 +23,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-function localTodayStr() {
-  return businessDate();
-}
 function QualityDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -56,82 +44,22 @@ function QualityDashboardPage() {
     return () => clearTimeout(timer);
   }, []);
   const fetchData = useCallback(async () => {
-    const sb = createClient();
-    const today = localTodayStr();
-
     try {
-      const [
-        { count: total_produk, error: e_produk },
-        { count: total_lot, error: e_lot },
-        { count: lot_pass, error: e_pass },
-        { count: lot_fail, error: e_fail },
-        { count: total_coa, error: e_coa },
-        { count: total_dok, error: e_dok },
-        { count: dok_expired, error: e_expired },
-        { data: hasilRaw, error: e_inspeksi },
-      ] = await Promise.all([
-        sb.from("master_produk").select("*", { count: "exact", head: true }),
-        sb.from("hasil_uji").select("*", { count: "exact", head: true }),
-        sb
-          .from("hasil_uji")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "PASS"),
-        sb
-          .from("hasil_uji")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "FAIL"),
-        sb.from("coa").select("*", { count: "exact", head: true }),
-        sb
-          .from("dokumen_arsip")
-          .select("*", { count: "exact", head: true })
-          .gte("masa_kadaluarsa", today),
-        sb
-          .from("dokumen_arsip")
-          .select("*", { count: "exact", head: true })
-          .lt("masa_kadaluarsa", today),
-        sb
-          .from("hasil_uji")
-          .select("*, master_produk!inner(kode_produk, nama_produk)")
-          .order("created_at", { ascending: false })
-          .limit(8),
-      ]);
-
-      // Check .error on EVERY query: a failed count must never be rendered
-      // as a real 0 / "Belum ada data inspeksi."
-      const failures: string[] = [];
-      if (e_produk) failures.push("total_produk");
-      if (e_lot) failures.push("total_lot");
-      if (e_pass) failures.push("lot_pass");
-      if (e_fail) failures.push("lot_fail");
-      if (e_coa) failures.push("total_coa");
-      if (e_dok) failures.push("dok_berlaku");
-      if (e_expired) failures.push("dok_expired");
-      if (e_inspeksi) failures.push("recent_inspeksi");
-
-      setFailedKeys(failures);
-      setLoadError(failures.length > 0);
-
-      setData({
-        total_produk: total_produk ?? 0,
-        total_lot: total_lot ?? 0,
-        lot_pass: lot_pass ?? 0,
-        lot_fail: lot_fail ?? 0,
-        total_coa: total_coa ?? 0,
-        dok_berlaku: total_dok ?? 0,
-        dok_expired: dok_expired ?? 0,
-        recent_inspeksi: (hasilRaw as HasilUjiRow[]) ?? [],
+      const response = await fetch("/api/dashboard/summary", {
+        cache: "no-store",
       });
+      if (!response.ok) throw new Error("Summary unavailable");
+      setData(await response.json());
+      setFailedKeys([]);
+      setLoadError(false);
     } catch {
-      // Promise.all itself rejected (network throw): treat every query as
-      // failed so every KPI renders "—" instead of fake zeros.
+      // Failed aggregate reads render unavailable KPIs rather than fake zeros.
       setFailedKeys([
         "total_produk",
         "total_lot",
         "lot_pass",
         "lot_fail",
         "total_coa",
-        "dok_berlaku",
-        "dok_expired",
         "recent_inspeksi",
       ]);
       setLoadError(true);
@@ -141,8 +69,6 @@ function QualityDashboardPage() {
         lot_pass: 0,
         lot_fail: 0,
         total_coa: 0,
-        dok_berlaku: 0,
-        dok_expired: 0,
         recent_inspeksi: [],
       });
     }
@@ -187,19 +113,19 @@ function QualityDashboardPage() {
       key: "total_produk",
       label: "Products",
       value: data.total_produk,
-      href: "/dashboard/produk",
+      href: "/dashboard/master-data/products",
     },
     {
       key: "total_lot",
       label: "Lots inspected",
       value: data.total_lot,
-      href: "/dashboard/inspeksi",
+      href: "/dashboard/quality/inspections",
     },
     {
       key: "total_coa",
       label: "COAs issued",
       value: data.total_coa,
-      href: "/dashboard/coa",
+      href: "/dashboard/quality/certificates",
     },
   ];
   return (
@@ -280,7 +206,7 @@ function QualityDashboardPage() {
                 {resultFailed ? "—" : data.lot_fail.toLocaleString("en-GB")}
               </strong>
             </span>
-            <Link href="/dashboard/inspeksi">
+            <Link href="/dashboard/quality/inspections">
               View inspections
               <ArrowUpRight className="size-3.5" />
             </Link>
@@ -299,14 +225,14 @@ function QualityDashboardPage() {
         </div>
       </section>
       <DashboardAnalytics />
-      <div className="overview-records">
+      <div className="overview-records quality-recent-only">
         <section className="recent-section">
           <div className="section-heading">
             <div>
               <h2>Recent inspections</h2>
               <p>The eight most recent inspections.</p>
             </div>
-            <Link href="/dashboard/inspeksi">
+            <Link href="/dashboard/quality/inspections">
               View all
               <ArrowRight className="size-3.5" />
             </Link>
@@ -377,47 +303,6 @@ function QualityDashboardPage() {
             </TableBody>
           </Table>
         </section>
-        <aside className="document-summary">
-          <div className="section-heading">
-            <h2>Documents</h2>
-            <Link href="/dashboard/arsip" aria-label="Open documents">
-              <ArrowUpRight className="size-4" />
-            </Link>
-          </div>
-          <div className="document-count">
-            <strong>
-              {failedKeys.includes("dok_berlaku")
-                ? "—"
-                : data.dok_berlaku.toLocaleString("en-GB")}
-            </strong>
-            <span>valid documents</span>
-          </div>
-          <div className="document-review" data-warning={data.dok_expired > 0}>
-            <span className="document-review-count">
-              {failedKeys.includes("dok_expired")
-                ? "—"
-                : data.dok_expired.toLocaleString("en-GB")}
-            </span>
-            <div>
-              <p>Expired</p>
-              <span>
-                {failedKeys.includes("dok_expired")
-                  ? "Could not load documents."
-                  : data.dok_expired
-                    ? "Review and update these documents."
-                    : "No expired documents."}
-              </span>
-            </div>
-          </div>
-          <Link className="document-link" href="/dashboard/arsip">
-            Manage documents
-            <ArrowRight className="size-4" />
-          </Link>
-          <div className="document-footnote">
-            <FileCheck2 className="size-5" />
-            <p>Certificates use the results recorded at issuance.</p>
-          </div>
-        </aside>
       </div>
       <footer className="overview-footnote">
         <span>INBIONUSA</span>
@@ -428,7 +313,5 @@ function QualityDashboardPage() {
 }
 
 export default function DashboardPage() {
-  const erp = useERP();
-  if (!erp.data && !erp.error) return <p role="status">Preparing workspace…</p>;
-  return erp.can("quality") ? <QualityDashboardPage /> : <OperationsHome />;
+  return <QualityDashboardPage />;
 }

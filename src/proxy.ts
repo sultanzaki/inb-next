@@ -12,7 +12,7 @@ export function proxy(request: NextRequest) {
     pathname === "/login" ||
     pathname.startsWith("/api/data/") ||
     pathname.startsWith("/api/erp/") ||
-    pathname === "/api/dashboard/analytics" ||
+    pathname.startsWith("/api/dashboard/") ||
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico"
   ) {
@@ -31,5 +31,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|logo.png).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|logo.png|icon.png|apple-icon.png).*)"],
 };

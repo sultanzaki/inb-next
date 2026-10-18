@@ -7,12 +7,28 @@ import { ConfirmProvider } from "@/components/workspace/confirm-provider";
 
 const dmSans = localFont({
   src: [
-    { path: "../assets/fonts/DM-Sans-400.ttf", weight: "400", style: "normal" },
-    { path: "../assets/fonts/DM-Sans-500.ttf", weight: "500", style: "normal" },
-    { path: "../assets/fonts/DM-Sans-600.ttf", weight: "600", style: "normal" },
-    { path: "../assets/fonts/DM-Sans-700.ttf", weight: "700", style: "normal" },
     {
-      path: "../assets/fonts/DM-Sans-400-Italic.ttf",
+      path: "../assets/fonts/DM-Sans-400.woff2",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../assets/fonts/DM-Sans-500.woff2",
+      weight: "500",
+      style: "normal",
+    },
+    {
+      path: "../assets/fonts/DM-Sans-600.woff2",
+      weight: "600",
+      style: "normal",
+    },
+    {
+      path: "../assets/fonts/DM-Sans-700.woff2",
+      weight: "700",
+      style: "normal",
+    },
+    {
+      path: "../assets/fonts/DM-Sans-400-Italic.woff2",
       weight: "400",
       style: "italic",
     },
@@ -22,8 +38,21 @@ const dmSans = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "INBIONUSA — Operations",
-  description: "INBIONUSA production, quality, warehouse and sales workspace",
+  title: {
+    default: "INBIONUSA — Operations workspace",
+    template: "%s | INBIONUSA",
+  },
+  applicationName: "INBIONUSA",
+  robots: { index: false, follow: false },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.png", type: "image/png" },
+    ],
+    apple: "/apple-icon.png",
+  },
+  description:
+    "Secure operations workspace for PT Inovasi Biokem Nusantara. Manage production, quality, inventory, purchasing, CRM and sales.",
 };
 
 export default function RootLayout({

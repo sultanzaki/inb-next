@@ -11,7 +11,6 @@ export type DashboardAnalytics = {
   from: string;
   to: string;
   buckets: AnalyticsBucket[];
-  documents: { valid: number; expiring: number; expired: number };
 };
 export function shiftDate(date: string, days: number) {
   const value = new Date(date + "T00:00:00Z");

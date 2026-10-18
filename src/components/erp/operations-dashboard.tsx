@@ -3,15 +3,16 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useERP } from "./context";
 import { WorkInbox } from "./release-workflows";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from "recharts";
+import dynamic from "next/dynamic";
+const PerformanceChart = dynamic(() => import("./performance-chart"), {
+  loading: () => (
+    <div
+      className="h-[220px] skeleton-shimmer"
+      aria-label="Loading chart"
+      role="status"
+    />
+  ),
+});
 import { Button } from "@/components/ui/button";
 import { ArrowUpRight } from "lucide-react";
 type Snapshot = {
@@ -85,7 +86,7 @@ export function OperationsDashboard() {
           <h1>Your workspace</h1>
           <p>See what needs attention. Keep work moving.</p>
         </div>
-        <Link href="/dashboard/work">
+        <Link href="/dashboard/workspaces">
           Explore workspace <ArrowUpRight className="inline size-4" />
         </Link>
       </header>
@@ -156,40 +157,7 @@ export function OperationsDashboard() {
                     value.chart_label + " over the last " + value.days + " days"
                   }
                 >
-                  <ResponsiveContainer width="100%" height={220}>
-                    <AreaChart
-                      data={value.series}
-                      margin={{ top: 15, left: -20, right: 12, bottom: 0 }}
-                    >
-                      <CartesianGrid vertical={false} stroke="var(--border)" />
-                      <XAxis
-                        dataKey="date"
-                        tickFormatter={(v) => String(v).slice(5)}
-                        minTickGap={40}
-                        tick={{ fontSize: 11 }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <YAxis
-                        allowDecimals={false}
-                        tick={{ fontSize: 11 }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <Tooltip
-                        labelFormatter={(v) => String(v)}
-                        formatter={(v) => [v, "Records"]}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="count"
-                        stroke="var(--color-primary)"
-                        fill="var(--color-primary-soft)"
-                        strokeWidth={2}
-                        isAnimationActive={false}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                  <PerformanceChart series={value.series} />
                 </div>
                 <details className="chart-data">
                   <summary>View chart data</summary>

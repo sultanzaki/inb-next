@@ -88,7 +88,7 @@ export async function exerciseERP(
   await post("set_module", { module: "production", state: "active" });
   await post("set_series", { product_id: product, series });
   // Manual settings are real UI operations; no warehouse balances are seeded.
-  await page.goto(origin + "/dashboard/settings");
+  await page.goto(origin + "/dashboard/admin/settings");
   await page.getByRole("button", { name: "Locations", exact: true }).click();
   await page.getByRole("button", { name: "Add location", exact: true }).click();
   await top()
@@ -362,7 +362,7 @@ export async function exerciseERP(
   await post("set_module", { module: "quality", state: "active" });
   for (const width of [1440, 375, 320]) {
     await page.setViewportSize({ width, height: 900 });
-    for (const area of ["production", "warehouse", "sales", "settings"]) {
+    for (const area of ["production", "warehouse", "sales", "admin/settings"]) {
       await page.goto(origin + "/dashboard/" + area);
       await page.locator(".erp-workspace").waitFor();
       await page

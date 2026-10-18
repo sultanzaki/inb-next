@@ -54,7 +54,7 @@ import {
 import { MobileConsoleNavigation } from "./mobile-console-navigation";
 import { WorkspaceSidebar } from "./workspace-navigation";
 const navigation = [
-  { href: "/dashboard/work", label: "Work", icon: Grid2X2 },
+  { href: "/dashboard/workspaces", label: "Work", icon: Grid2X2 },
   { href: "/dashboard/inbox", label: "Inbox", icon: ClipboardList },
   {
     href: "/dashboard/quality",
@@ -64,33 +64,40 @@ const navigation = [
   { href: "/dashboard/purchase", label: "Purchase", icon: Package },
   { href: "/dashboard/crm", label: "CRM", icon: Users },
   {
-    href: "/dashboard/documents",
+    href: "/dashboard/product-documents",
     label: "Product documents",
     icon: FolderArchive,
   },
-  { href: "/dashboard/materials", label: "Raw materials", icon: Package },
+  {
+    href: "/dashboard/warehouse/materials",
+    label: "Raw materials",
+    icon: Package,
+  },
   { href: "/dashboard/warehouse", label: "Warehouse", icon: Warehouse },
   { href: "/dashboard/production", label: "Production", icon: Factory },
   { href: "/dashboard/sales", label: "Sales", icon: Handshake },
   {
-    href: "/dashboard/settings",
+    href: "/dashboard/admin/settings",
     label: "Settings",
     icon: Settings2,
     permission: "manage_users",
   },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/produk", label: "Products", icon: Package },
-  { href: "/dashboard/inspeksi", label: "Inspections", icon: ClipboardList },
-  { href: "/dashboard/coa", label: "COA", icon: FileCheck2 },
-  { href: "/dashboard/arsip", label: "Documents", icon: FolderArchive },
+  { href: "/dashboard/master-data/products", label: "Products", icon: Package },
   {
-    href: "/dashboard/pengguna",
+    href: "/dashboard/quality/inspections",
+    label: "Inspections",
+    icon: ClipboardList,
+  },
+  { href: "/dashboard/quality/certificates", label: "COA", icon: FileCheck2 },
+  {
+    href: "/dashboard/admin/users",
     label: "Users",
     icon: Users,
     permission: "manage_users",
   },
   {
-    href: "/dashboard/audit",
+    href: "/dashboard/admin/audit-log",
     label: "Audit",
     icon: History,
     permission: "read_audit",
@@ -147,9 +154,8 @@ export function AppShell({
     if (n.href.endsWith("/sales")) return erp.can("sales");
     if (
       [
-        "/dashboard/inspeksi",
-        "/dashboard/coa",
-        "/dashboard/arsip",
+        "/dashboard/quality/inspections",
+        "/dashboard/quality/certificates",
         "/dashboard/quality",
       ].includes(n.href)
     )
@@ -157,9 +163,6 @@ export function AppShell({
     return true;
   });
   const current = items.find((n) => n.href === pathname);
-  useEffect(() => {
-    document.title = `${current?.label || "INBIONUSA"} — INBIONUSA`;
-  }, [current?.label]);
   useEffect(() => {
     function keyboard(e: KeyboardEvent) {
       if (

@@ -87,10 +87,10 @@ export async function exerciseMobileNavigation(
     await workspaces
       .getByRole("link", { name: "Master data", exact: true })
       .click();
-    await page.waitForURL("**/dashboard/produk");
+    await page.waitForURL("**/dashboard/master-data/products");
     await nav.getByRole("button", { name: "Choose page" }).click();
     await pages.getByRole("link", { name: "Units", exact: true }).click();
-    await page.waitForURL("**/dashboard/settings?view=units");
+    await page.waitForURL("**/dashboard/admin/settings?view=units");
     await page.getByRole("button", { name: "Add unit", exact: true }).waitFor();
     await nav.getByRole("button", { name: "Switch workspace" }).click();
     await workspaces.waitFor();

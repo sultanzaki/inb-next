@@ -48,9 +48,8 @@ export function useWorkspaceGroups() {
             description: "Inspections and certificates",
             icon: FlaskConical,
             links: [
-              ["Inspections", "/dashboard/inspeksi"],
-              ["Certificates", "/dashboard/coa"],
-              ["Documents", "/dashboard/arsip"],
+              ["Inspections", "/dashboard/quality/inspections"],
+              ["Certificates", "/dashboard/quality/certificates"],
               ["Quality analytics", "/dashboard/quality"],
             ],
           },
@@ -70,8 +69,14 @@ export function useWorkspaceGroups() {
               ["Dispatch", "/dashboard/warehouse?view=fulfillment"],
               ["Returns", "/dashboard/warehouse?view=returns"],
               ["Stock ledger", "/dashboard/warehouse?view=ledger"],
-              ["Material stock", "/dashboard/materials?view=material_stock"],
-              ["Material ledger", "/dashboard/materials?view=material_ledger"],
+              [
+                "Material stock",
+                "/dashboard/warehouse/materials?view=material_stock",
+              ],
+              [
+                "Material ledger",
+                "/dashboard/warehouse/materials?view=material_ledger",
+              ],
             ],
           },
         ]
@@ -109,7 +114,7 @@ export function useWorkspaceGroups() {
             name: "Product documents",
             description: "SDS, TDS and controlled revisions",
             icon: Files,
-            links: [["Product documents", "/dashboard/documents"]],
+            links: [["Product documents", "/dashboard/product-documents"]],
           },
         ]
       : []),
@@ -132,12 +137,12 @@ export function useWorkspaceGroups() {
       description: "Products, units and locations",
       icon: Database,
       links: [
-        ["Products", "/dashboard/produk"],
+        ["Products", "/dashboard/master-data/products"],
         ...(erp.data?.admin
           ? [
-              ["Product series", "/dashboard/settings?view=series"],
-              ["Units & conversions", "/dashboard/settings?view=catalog"],
-              ["Locations", "/dashboard/settings?view=locations"],
+              ["Product series", "/dashboard/admin/settings?view=series"],
+              ["Units & conversions", "/dashboard/admin/settings?view=catalog"],
+              ["Locations", "/dashboard/admin/settings?view=locations"],
             ]
           : []),
       ],
@@ -149,10 +154,10 @@ export function useWorkspaceGroups() {
             description: "People, access and configuration",
             icon: Settings2,
             links: [
-              ["Users", "/dashboard/pengguna"],
-              ["Access", "/dashboard/settings?view=access"],
-              ["Module settings", "/dashboard/settings?view=modules"],
-              ["Audit log", "/dashboard/audit"],
+              ["Users", "/dashboard/admin/users"],
+              ["Access", "/dashboard/admin/settings?view=access"],
+              ["Module settings", "/dashboard/admin/settings?view=modules"],
+              ["Audit log", "/dashboard/admin/audit-log"],
             ],
           },
         ]

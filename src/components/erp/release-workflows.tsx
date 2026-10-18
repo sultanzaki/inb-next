@@ -159,7 +159,7 @@ export function ReturnDetail({
           </>
         )}
         {row.lot_id && (
-          <Link href={"/dashboard/inspeksi?lot=" + row.lot_id}>
+          <Link href={"/dashboard/quality/inspections?lot=" + row.lot_id}>
             Inspect returned lot <ArrowUpRight className="inline size-4" />
           </Link>
         )}
@@ -247,9 +247,9 @@ export function LotTrace({
           <Link
             href={
               row.inspection_id
-                ? "/dashboard/inspeksi?q=" +
+                ? "/dashboard/quality/inspections?q=" +
                   encodeURIComponent(row.number || "")
-                : "/dashboard/inspeksi?lot=" + row.id
+                : "/dashboard/quality/inspections?lot=" + row.id
             }
           >
             {row.inspection_id ? "View inspection" : "Create inspection"}{" "}

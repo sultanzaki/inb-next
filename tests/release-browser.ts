@@ -61,7 +61,7 @@ export async function exerciseRelease(
   assert.ok(lot);
   for (const width of [375, 320]) {
     await page.setViewportSize({ width, height: 800 });
-    await page.goto(origin + "/dashboard/inspeksi?lot=" + lot.id);
+    await page.goto(origin + "/dashboard/quality/inspections?lot=" + lot.id);
     await page.getByRole("dialog").waitFor();
     await page
       .getByRole("textbox", { name: "Result pH", exact: true })
@@ -135,7 +135,7 @@ export async function exerciseRelease(
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     );
-    await page.goto(origin + "/dashboard/work");
+    await page.goto(origin + "/dashboard/workspaces");
     await page.locator(".workspace-tile").first().waitFor();
     await capture("52-work-" + width);
     await accessible();

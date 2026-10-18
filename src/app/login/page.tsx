@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { LoginForm } from "./login-form";
 export const metadata: Metadata = {
-  title: "Sign in — INBIONUSA",
+  title: "Sign in",
   description:
     "Your INBIONUSA workspace for production, quality, warehouse and sales.",
 };

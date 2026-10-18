@@ -34,7 +34,7 @@ async function read(
   if (!target)
     return Response.json({ message: "Query not allowed." }, { status: 400 });
   if (table === "inspection_drafts") {
-    if (!canAction(session.user,"save_draft"))
+    if (!canAction(session.user, "save_draft"))
       return Response.json({ message: "Access denied." }, { status: 403 });
     if (!["admin qc", "administrator inbionusa"].includes(session.user.role))
       target.searchParams.set("owner_id", "eq." + session.user.id);
@@ -59,10 +59,10 @@ async function read(
       const value = upstream.headers.get(name);
       if (value) resultHeaders.set(name, value);
     }
-    return new Response(
-      request.method === "HEAD" ? null : await upstream.text(),
-      { status: upstream.status, headers: resultHeaders },
-    );
+    return new Response(request.method === "HEAD" ? null : upstream.body, {
+      status: upstream.status,
+      headers: resultHeaders,
+    });
   } catch {
     return Response.json({ message: "Database unavailable." }, { status: 503 });
   }

@@ -147,8 +147,6 @@ export interface DashboardData {
   lot_pass: number;
   lot_fail: number;
   total_coa: number;
-  dok_berlaku: number;
-  dok_expired: number;
   recent_inspeksi: HasilUjiRow[];
 }
 

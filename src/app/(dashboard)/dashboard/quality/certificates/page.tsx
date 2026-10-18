@@ -28,7 +28,7 @@ import { businessDate } from "@/lib/domain/validation";
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useUser } from "../../user-context";
+import { useUser } from "@/app/(dashboard)/user-context";
 import { canAction } from "@/lib/types";
 import type { CoaRow, HasilUjiRow, UserRole } from "@/lib/types";
 import { toast } from "sonner";

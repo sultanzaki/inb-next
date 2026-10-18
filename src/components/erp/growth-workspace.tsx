@@ -439,7 +439,7 @@ function GrowthView({ area }: { area: Area }) {
               onClick={() => {
                 setQ("");
                 setPage(1);
-                router.replace("/dashboard/documents");
+                router.replace("/dashboard/product-documents");
               }}
             >
               Show all products

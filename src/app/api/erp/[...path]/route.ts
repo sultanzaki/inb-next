@@ -4,8 +4,7 @@ import { requireUser, logAudit } from "@/lib/auth";
 import { privateJson } from "@/lib/api-response";
 import { erpRpc, erpError } from "@/lib/erp/server";
 import { actionSchemas, type ERPAction } from "@/lib/erp/schema";
-import { renderERPDocument } from "@/lib/erp/pdf";
-import { renderCoaPdf, type CoaDocument } from "@/lib/pdf/coa-document";
+import type { CoaDocument } from "@/lib/pdf/coa-document";
 export const maxDuration = 60;
 type Context = { params: Promise<{ path: string[] }> };
 export async function GET(request: Request, context: Context) {
@@ -166,7 +165,9 @@ export async function GET(request: Request, context: Context) {
       await logAudit(session.user.nama_lengkap, "DOWNLOAD_ERP", row.number);
     if (path[1] === "purchases" && path.length === 3) {
       const supplier = row.supplier_data || {};
-      const bytes = await renderERPDocument(
+      const bytes = await (
+        await import("@/lib/erp/pdf")
+      ).renderERPDocument(
         {
           ...row,
           snapshot: undefined,
@@ -196,16 +197,17 @@ export async function GET(request: Request, context: Context) {
       const coa = row.snapshot?.lines?.[index]?.coa;
       if (!coa)
         return privateJson({ message: "No COA attached to this line." }, 404);
-      const bytes = await renderCoaPdf(coa as CoaDocument);
+      const bytes = await (
+        await import("@/lib/pdf/coa-document")
+      ).renderCoaPdf(coa as CoaDocument);
       return pdf(bytes, "COA-" + row.number, p.has("download"));
     }
     if (path.length !== 3)
       return privateJson({ message: "Document not found." }, 404);
     try {
-      const bytes = await renderERPDocument(
-        row,
-        path[1] === "quotes" ? "quotation" : "movement",
-      );
+      const bytes = await (
+        await import("@/lib/erp/pdf")
+      ).renderERPDocument(row, path[1] === "quotes" ? "quotation" : "movement");
       return pdf(bytes, row.number, p.has("download"));
     } catch {
       return privateJson({ message: "Could not render this document." }, 422);

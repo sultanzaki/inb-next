@@ -1,4 +1,5 @@
 import { createAdminClient } from "./supabase/admin";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { User } from "@/lib/types";
 import { hashPassword } from "./password";
@@ -56,7 +57,7 @@ export async function createSession(
   return token;
 }
 
-export async function getSessionUser(): Promise<User | null> {
+export const getSessionUser = cache(async (): Promise<User | null> => {
   const cookieStore = await cookies();
   const token = cookieStore.get("session_token")?.value;
   if (
@@ -68,6 +69,14 @@ export async function getSessionUser(): Promise<User | null> {
     return null;
 
   const admin = createAdminClient();
+  const { data: effectiveUser, error: sessionRpcError } = await admin.rpc(
+    "qc_session_user",
+    { p_token: token },
+  );
+  if (!sessionRpcError) return effectiveUser as User | null;
+  // Compatibility only while migration 008 rolls out. Other failures deny access.
+  if (sessionRpcError.code !== "PGRST202" && sessionRpcError.code !== "42883")
+    return null;
 
   // NB: tanpa `new Date()` di sini — fungsi ini jalan di render path layout,
   // dan Cache Components menolak nilai unstable (new Date) saat prerender.
@@ -107,7 +116,7 @@ export async function getSessionUser(): Promise<User | null> {
       return { ...user, effective_actions: [] } as User;
   }
   return user as User;
-}
+});
 
 export async function clearSession(): Promise<void> {
   const cookieStore = await cookies();

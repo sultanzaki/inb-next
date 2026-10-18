@@ -80,7 +80,27 @@ test(
     // Supabase clients mount PostgREST at /rest/v1; the standalone test image
     // serves it at /. This local adapter mirrors only that path mounting.
     let failRevoke = false;
+    let missingPerformanceRPCs = false;
     const relay = createServer(async (req, res) => {
+      if (
+        missingPerformanceRPCs &&
+        req.method === "POST" &&
+        [
+          "qc_session_user",
+          "qc_quality_summary",
+          "qc_quality_analytics",
+          "qc_global_search",
+        ].some((name) => req.url === "/rest/v1/rpc/" + name)
+      ) {
+        res.writeHead(404, { "content-type": "application/json" });
+        res.end(
+          JSON.stringify({
+            code: "PGRST202",
+            message: "Local missing RPC rollout fixture",
+          }),
+        );
+        return;
+      }
       if (
         failRevoke &&
         req.method === "DELETE" &&
@@ -344,7 +364,7 @@ test(
         400,
       );
       await capture("02-dashboard-desktop");
-      for (const name of ["Quality", "COAs", "Documents", "Activity"]) {
+      for (const name of ["Quality", "COAs", "Activity"]) {
         await analytics.getByRole("tab", { name, exact: true }).click();
         await capture("30-analytics-desktop-" + name.toLowerCase());
         await accessible();
@@ -392,7 +412,7 @@ test(
         .getByPlaceholder("Search lots, products, or COAs…")
         .fill("Products");
       await page.keyboard.press("Enter");
-      await page.waitForURL("**/dashboard/produk");
+      await page.waitForURL("**/dashboard/master-data/products");
       await page.waitForFunction(
         () => !document.querySelector("[role=dialog]"),
       );
@@ -412,7 +432,7 @@ test(
         (await page.request.get(origin + "/api/data/sessions")).status(),
         400,
       );
-      await page.goto(origin + "/dashboard/produk");
+      await page.goto(origin + "/dashboard/master-data/products");
       await page.getByPlaceholder("Search products…").fill("E2E Product");
       await page.waitForFunction(() =>
         document.querySelector("body")?.innerText.includes("120 records"),
@@ -542,7 +562,7 @@ test(
         )
       ).rows[0];
       assert.ok(p);
-      await page.goto(origin + "/dashboard/inspeksi");
+      await page.goto(origin + "/dashboard/quality/inspections");
       await page
         .getByRole("button", { name: "New inspection", exact: true })
         .first()
@@ -608,7 +628,7 @@ test(
       from hasil_uji cross join generate_series(1,501) i where id=$1`,
         [h.id, randomUUID()],
       );
-      await page.goto(origin + "/dashboard/coa");
+      await page.goto(origin + "/dashboard/quality/certificates");
       await page
         .getByRole("button", { name: "Issue COA", exact: true })
         .first()
@@ -691,39 +711,6 @@ test(
       await exerciseMobileNavigation(page, origin, capture, accessible);
       await exerciseGrowth(page, db, origin, suffix, capture, accessible);
       await exerciseReleaseReadiness(page, db, origin, capture, accessible);
-      await page.goto(origin + "/dashboard/arsip");
-      await page.locator(".data-toolbar").waitFor();
-      await page.waitForFunction(
-        () =>
-          !document.querySelector<HTMLButtonElement>(
-            'button[aria-label="Refresh data"]',
-          )?.disabled,
-      );
-      await page
-        .getByRole("button", { name: "Add document", exact: true })
-        .first()
-        .click();
-      await capture("08-arsip-form");
-      await accessible();
-      await page
-        .getByPlaceholder("Document name", { exact: true })
-        .fill("Dokumen browser " + suffix);
-      await page.locator("[role=dialog] select").selectOption({ index: 1 });
-      await page
-        .locator("[role=dialog] input[type=date]")
-        .nth(0)
-        .fill("2026-01-01");
-      await page
-        .locator("[role=dialog] input[type=date]")
-        .nth(1)
-        .fill("2027-12-31");
-      await page
-        .getByPlaceholder("https://drive.google.com/...")
-        .fill("https://example.com/quality");
-      await page.getByRole("button", { name: "Add", exact: true }).click();
-      await page.waitForFunction(
-        () => !document.querySelector("[role=dialog]"),
-      );
       await page.evaluate(async () => {
         await document.fonts.ready;
       });
@@ -773,7 +760,7 @@ test(
             Math.max(...totalsY) - Math.min(...totalsY) < 2,
             "KPI numbers share a baseline",
           );
-        for (const name of ["Quality", "COAs", "Documents", "Activity"]) {
+        for (const name of ["Quality", "COAs", "Activity"]) {
           await mobileAnalytics.getByRole("tab", { name, exact: true }).click();
           assert.ok(
             await mobileAnalytics.evaluate(
@@ -803,7 +790,7 @@ test(
             )),
         );
         await accessible();
-        await page.goto(origin + "/dashboard/work");
+        await page.goto(origin + "/dashboard/workspaces");
         await page.locator(".workspace-tile").first().waitFor();
         // Measure resting layout after navigation and hover transitions finish.
         await accessible();
@@ -831,7 +818,7 @@ test(
           .locator(".work-directory")
           .getByRole("link", { name: /Master data/ })
           .click();
-        await page.waitForURL("**/dashboard/produk");
+        await page.waitForURL("**/dashboard/master-data/products");
         await page.locator(".data-toolbar").waitFor();
         await page.waitForFunction(
           () =>
@@ -862,7 +849,9 @@ test(
       }
       for (const width of [375, 320]) {
         await page.setViewportSize({ width, height: 900 });
-        await page.goto(origin + "/dashboard/produk?q=" + longCode);
+        await page.goto(
+          origin + "/dashboard/master-data/products?q=" + longCode,
+        );
         await page.getByText(longName, { exact: true }).waitFor();
         const actions = page
           .locator("tbody tr")
@@ -976,9 +965,9 @@ test(
         .filter({ hasText: browserLot })
         .first()
         .click();
-      await page.waitForURL("**/dashboard/inspeksi?q=*");
+      await page.waitForURL("**/dashboard/quality/inspections?q=*");
       await page.emulateMedia({ reducedMotion: "reduce" });
-      await page.goto(origin + "/dashboard/work");
+      await page.goto(origin + "/dashboard/workspaces");
       assert.ok(
         await page
           .locator(".work-directory")
@@ -987,7 +976,7 @@ test(
       await page.emulateMedia({ reducedMotion: "no-preference" });
       for (const width of [375, 320]) {
         await page.setViewportSize({ width, height: 900 });
-        await page.goto(origin + "/dashboard/produk");
+        await page.goto(origin + "/dashboard/master-data/products");
         await page
           .getByRole("button", { name: "Advanced filters", exact: true })
           .click();
@@ -1043,9 +1032,8 @@ test(
       }
       await page.setViewportSize({ width: 375, height: 900 });
       for (const [route, action] of [
-        ["inspeksi", "New inspection"],
-        ["coa", "Issue COA"],
-        ["arsip", "Add document"],
+        ["quality/inspections", "New inspection"],
+        ["quality/certificates", "Issue COA"],
       ]) {
         await page.goto(origin + "/dashboard/" + route);
         await page.locator(".data-toolbar").waitFor();
@@ -1075,7 +1063,7 @@ test(
       }
       await page.setViewportSize({ width: 1440, height: 1000 });
       // New account administration, forced password change and read-only boundaries.
-      await page.goto(origin + "/dashboard/pengguna");
+      await page.goto(origin + "/dashboard/admin/users");
       await page.getByRole("button", { name: "Add user", exact: true }).click();
       const managedUsername = "managed-" + suffix;
       await page
@@ -1180,7 +1168,7 @@ test(
         0,
       );
       await restricted.close();
-      await page.goto(origin + "/dashboard/audit");
+      await page.goto(origin + "/dashboard/admin/audit-log");
       await page
         .getByRole("heading", { name: "Audit log", exact: true })
         .waitFor();
@@ -1221,6 +1209,34 @@ test(
       assert.ok(
         searchResults.results.some((r: { type: string }) => r.type === "COA"),
       );
+      // Deploying the app before migration 008 must preserve existing reads.
+      const currentAnalytics = await (
+        await context.request.get(origin + "/api/dashboard/analytics?period=30")
+      ).json();
+      missingPerformanceRPCs = true;
+      try {
+        const rolloutAnalytics = await context.request.get(
+          origin + "/api/dashboard/analytics?period=30",
+        );
+        assert.equal(rolloutAnalytics.status(), 200);
+        assert.deepEqual(await rolloutAnalytics.json(), currentAnalytics);
+        const rolloutSummary = await context.request.get(
+          origin + "/api/dashboard/summary",
+        );
+        assert.equal(rolloutSummary.status(), 200);
+        assert.ok((await rolloutSummary.json()).recent_inspeksi.length <= 8);
+        const rolloutSearch = await context.request.get(
+          origin + "/api/search?q=" + encodeURIComponent(browserLot),
+        );
+        assert.equal(rolloutSearch.status(), 200);
+        assert.ok(
+          (await rolloutSearch.json()).results.some(
+            (r: { type: string }) => r.type === "COA",
+          ),
+        );
+      } finally {
+        missingPerformanceRPCs = false;
+      }
       // Every primary list replaces rows when changing pages.
       const pagingPrefix = "Paging-" + suffix + "-";
       await db.query(
@@ -1299,11 +1315,18 @@ test(
           first,
         );
       }
-      await verifyPages("arsip", "Search documents…", pagingPrefix);
-      await verifyPages("coa", "Search COAs or products…", pagingPrefix);
-      await verifyPages("pengguna", "Search names or usernames…", pagingPrefix);
       await verifyPages(
-        "audit",
+        "quality/certificates",
+        "Search COAs or products…",
+        pagingPrefix,
+      );
+      await verifyPages(
+        "admin/users",
+        "Search names or usernames…",
+        pagingPrefix,
+      );
+      await verifyPages(
+        "admin/audit-log",
         "Search users, actions, or references…",
         pagingPrefix,
       );
@@ -1314,12 +1337,12 @@ test(
         )
       ).rows[0].no_lot;
       await verifyPages(
-        "inspeksi",
+        "quality/inspections",
         "Search lots or products…",
         extraLot.slice(-36),
         50,
       );
-      await page.goto(origin + "/dashboard/produk?q=" + longCode);
+      await page.goto(origin + "/dashboard/master-data/products?q=" + longCode);
       await page.getByText(longName, { exact: true }).waitFor();
       await page
         .getByRole("button", { name: "Product details", exact: true })
@@ -1378,7 +1401,7 @@ test(
         user.id,
       ]);
       await signInAfterRoleChange();
-      await page.goto(origin + "/dashboard/produk");
+      await page.goto(origin + "/dashboard/master-data/products");
       await page
         .getByRole("button", { name: "Product details" })
         .first()
@@ -1405,13 +1428,17 @@ test(
         user.id,
       ]);
       await signInAfterRoleChange();
-      await page.goto(origin + "/dashboard/coa");
+      await page.goto(origin + "/dashboard/quality/certificates");
       await page.setViewportSize({ width: 375, height: 900 });
       const missing = await page.goto(origin + "/halaman-tidak-ada");
       assert.ok([200, 404].includes(missing?.status() ?? 0));
-      assert.equal(
-        await page.locator('meta[name="robots"]').getAttribute("content"),
-        "noindex",
+      const robots = await page
+        .locator('meta[name="robots"]')
+        .evaluateAll((elements) =>
+          elements.map((el) => el.getAttribute("content") || ""),
+        );
+      assert.ok(
+        robots.length > 0 && robots.every((value) => /noindex/.test(value)),
       );
       await page
         .getByRole("heading", { name: "Back to your workspace" })
@@ -1419,7 +1446,7 @@ test(
       await capture("17-not-found-mobile");
       await accessible();
       await page.setViewportSize({ width: 1440, height: 1000 });
-      await page.goto(origin + "/dashboard/coa");
+      await page.goto(origin + "/dashboard/quality/certificates");
       // Dependency errors must not masquerade as an empty source list.
       await page.route("**/api/data/available_hasil_uji?**", (route) =>
         route.fulfill({

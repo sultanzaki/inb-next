@@ -59,7 +59,7 @@ export function MobileConsoleNavigation({
   const pages: Destination[] = current.links.flatMap(([label, href]) =>
     href.endsWith("?view=catalog")
       ? [
-          ["Units", "/dashboard/settings?view=units"],
+          ["Units", "/dashboard/admin/settings?view=units"],
           ["Product conversions", href],
         ]
       : [[label, href]],
@@ -120,7 +120,7 @@ export function MobileConsoleNavigation({
             </div>
             <Link
               className="mobile-menu-footer"
-              href="/dashboard/work"
+              href="/dashboard/workspaces"
               onClick={() => setWorkspaceOpen(false)}
             >
               All workspaces

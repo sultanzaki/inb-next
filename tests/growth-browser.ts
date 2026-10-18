@@ -111,7 +111,7 @@ export async function exerciseGrowth(
   await accessible();
   await save("Post receipt");
   assert.equal((await read("purchases", po.id)).rows[0].state, "partial");
-  await page.goto(origin + "/dashboard/materials");
+  await page.goto(origin + "/dashboard/warehouse/materials");
   await page
     .getByRole("button", { name: "RM-" + suffix, exact: true })
     .waitFor();
@@ -161,7 +161,7 @@ export async function exerciseGrowth(
     .waitFor();
   await page.keyboard.press("Escape");
   await page.waitForFunction(() => !document.querySelector("[role=dialog]"));
-  await page.goto(origin + "/dashboard/documents");
+  await page.goto(origin + "/dashboard/product-documents");
   await page.getByRole("button", { name: "New document", exact: true }).click();
   await pick("Product", productName);
   await top().getByLabel("Title", { exact: true }).fill(title);
@@ -191,7 +191,7 @@ export async function exerciseGrowth(
       (r: { product_id: string }) => r.product_id === doc.product_id,
     ),
   );
-  await page.goto(origin + "/dashboard/documents?product=" + doc.product_id);
+  await page.goto(origin + "/dashboard/product-documents?product=" + doc.product_id);
   await page.getByRole("button", { name: "New document", exact: true }).click();
   assert.match(
     await top()
@@ -225,8 +225,8 @@ export async function exerciseGrowth(
     for (const [route, name] of [
       ["purchase?view=purchases", "New purchase order"],
       ["crm?view=opportunities", "New opportunity"],
-      ["documents", "New document"],
-      ["materials", "Issue material"],
+      ["product-documents", "New document"],
+      ["warehouse/materials", "Issue material"],
     ]) {
       await page.goto(origin + "/dashboard/" + route);
       await page.getByRole("button", { name, exact: true }).waitFor();
