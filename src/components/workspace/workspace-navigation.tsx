@@ -123,29 +123,21 @@ export function WorkspaceDirectory() {
     <div className="page-stack work-directory">
       <div>
         <p className="micro-label">WORKSPACE</p>
-        <h1>Work</h1>
+        <h1>All workspaces</h1>
         <p>Choose where to work. Everything stays connected.</p>
       </div>
-      {groups.map(({ name, description, icon: Icon, links }) => (
-        <details key={name} className="work-group">
-          <summary>
-            <Icon />
-            <span>
-              <strong>{name}</strong>
-              <small>{description}</small>
+      <nav className="workspace-launcher" aria-label="All workspaces">
+        {groups.map(({ name, description, icon: Icon, links }) => (
+          <Link key={name} href={links[0][1]} className="workspace-tile">
+            <span className="workspace-tile-icon">
+              <Icon aria-hidden="true" />
             </span>
-            <ArrowRight />
-          </summary>
-          <nav aria-label={name}>
-            {links.map(([label, href]) => (
-              <Link key={href} href={href}>
-                {label}
-                <ArrowRight className="size-4" />
-              </Link>
-            ))}
-          </nav>
-        </details>
-      ))}
+            <strong>{name}</strong>
+            <span className="workspace-tile-description">{description}</span>
+            <ArrowRight className="workspace-tile-arrow" aria-hidden="true" />
+          </Link>
+        ))}
+      </nav>
     </div>
   );
 }

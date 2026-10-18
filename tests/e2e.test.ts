@@ -254,6 +254,17 @@ test(
       await page.goto(origin + "/login");
       await capture("01-login-desktop");
       await accessible();
+      for (const width of [320, 375, 430]) {
+        await page.setViewportSize({ width, height: 860 });
+        await capture("01-login-mobile-" + width);
+        await accessible();
+        assert.ok(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        );
+      }
+      await page.setViewportSize({ width: 1440, height: 1000 });
       await page.locator("[name=username]").fill(username);
       await page.locator("[name=password]").fill(password);
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -775,15 +786,28 @@ test(
         );
         await accessible();
         await page.goto(origin + "/dashboard/work");
-        await page
-          .locator(".work-directory")
-          .getByText("Master data", { exact: true })
-          .click();
+        await page.locator(".workspace-tile").first().waitFor();
+        const tiles = await page.locator(".workspace-tile").evaluateAll((els) =>
+          els.slice(0, 2).map((el) => {
+            const r = el.getBoundingClientRect();
+            return {
+              x: r.x,
+              y: (el as HTMLElement).offsetTop,
+              width: r.width,
+              height: r.height,
+            };
+          }),
+        );
+        assert.equal(tiles.length, 2);
+        assert.ok(
+          Math.abs(tiles[0].y - tiles[1].y) < 1 && tiles[1].x > tiles[0].x,
+        );
+        assert.ok(tiles.every((r) => Math.abs(r.width - r.height) < 1));
         await capture("21-mobile-work-" + width);
         await accessible();
         await page
           .locator(".work-directory")
-          .getByRole("link", { name: "Products", exact: true })
+          .getByRole("link", { name: /Master data/ })
           .click();
         await page.waitForURL("**/dashboard/produk");
         await page.locator(".data-toolbar").waitFor();
