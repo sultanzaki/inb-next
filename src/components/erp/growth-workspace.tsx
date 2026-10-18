@@ -1,4 +1,5 @@
 "use client";
+import { ModuleInsights } from "./module-insights";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -411,6 +412,7 @@ function GrowthView({ area }: { area: Area }) {
             ))}
           </nav>
         )}
+        <ModuleInsights module={scope} />
         {area === "crm" && tab.key === "opportunities" && (
           <div className="crm-stage-strip" aria-label="Pipeline stages">
             {states.opportunities.map((s) => (
@@ -621,57 +623,65 @@ function GrowthView({ area }: { area: Area }) {
                     Edit
                   </Button>
                 )}
-                {(write || approve) && tab.key === "purchases" && (
-                  <>
-                    {write && selected.state === "draft" && (
-                      <Button variant="outline" onClick={() => edit(selected)}>
-                        Edit draft
-                      </Button>
-                    )}
-                    {selected.state === "draft" && approve && (
-                      <ERPActionButton
-                        action="confirm_purchase"
-                        payload={{ id: selected.id, version: selected.version }}
-                        onDone={done}
-                      >
-                        Confirm purchase
-                      </ERPActionButton>
-                    )}
-                    {write &&
-                      ["confirmed", "partial"].includes(selected.state || "") &&
-                      erp.can("warehouse", "write") && (
+                {(write || approve || erp.can("warehouse", "write")) &&
+                  tab.key === "purchases" && (
+                    <>
+                      {write && selected.state === "draft" && (
                         <Button
-                          onClick={() => {
-                            setForm({
-                              entity: "purchases",
-                              row: selected,
-                              mode: "receive",
-                            });
-                            setSelected(null);
-                          }}
+                          variant="outline"
+                          onClick={() => edit(selected)}
                         >
-                          Receive materials
+                          Edit draft
                         </Button>
                       )}
-                    {["draft", "confirmed", "partial"].includes(
-                      selected.state || "",
-                    ) &&
-                      ((selected.state === "draft" && write) ||
-                        (selected.state !== "draft" && approve)) && (
+                      {selected.state === "draft" && approve && (
                         <ERPActionButton
-                          action="cancel_purchase"
+                          action="confirm_purchase"
                           payload={{
                             id: selected.id,
                             version: selected.version,
                           }}
-                          reason
                           onDone={done}
                         >
-                          Cancel outstanding
+                          Confirm purchase
                         </ERPActionButton>
                       )}
-                  </>
-                )}
+                      {["confirmed", "partial"].includes(
+                        selected.state || "",
+                      ) &&
+                        erp.can("warehouse", "write") && (
+                          <Button
+                            onClick={() => {
+                              setForm({
+                                entity: "purchases",
+                                row: selected,
+                                mode: "receive",
+                              });
+                              setSelected(null);
+                            }}
+                          >
+                            Receive materials
+                          </Button>
+                        )}
+                      {["draft", "confirmed", "partial"].includes(
+                        selected.state || "",
+                      ) &&
+                        ((selected.state === "draft" && write) ||
+                          (selected.state !== "draft" && approve)) && (
+                          <ERPActionButton
+                            action="cancel_purchase"
+                            payload={{
+                              id: selected.id,
+                              version: selected.version,
+                            }}
+                            reason
+                            onDone={done}
+                          >
+                            Cancel outstanding
+                          </ERPActionButton>
+                        )}
+                    </>
+                  )}
                 {write && tab.key === "opportunities" && (
                   <>
                     {!["won", "lost"].includes(selected.state || "") && (

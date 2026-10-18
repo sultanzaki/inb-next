@@ -615,9 +615,9 @@ export default function InspeksiPage() {
   }
 
   const role: UserRole = (user?.role as UserRole) ?? "viewer";
-  const canDelete = qualityWrite && canAction(role, "delete_uji");
-  const canCreate = qualityWrite && canAction(role, "create_uji");
-  const canUpdate = qualityWrite && canAction(role, "update_uji");
+  const canDelete = qualityWrite && canAction(user || role, "delete_uji");
+  const canCreate = qualityWrite && canAction(user || role, "create_uji");
+  const canUpdate = qualityWrite && canAction(user || role, "update_uji");
   const overallStatus = computeOverallStatus();
 
   return (

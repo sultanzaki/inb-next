@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 
-test("redesign preserves the original brand palette and logo", () => {
+test("light theme preserves the original brand palette and logo", () => {
   const original = JSON.parse(
     readFileSync(
       new URL("./fixtures/brand-palette.json", import.meta.url),
@@ -11,11 +11,12 @@ test("redesign preserves the original brand palette and logo", () => {
     ),
   );
   const css = readFileSync("src/app/globals.css", "utf8");
+  const lightRoot = css.match(/:root\s*\{([^}]+)\}/)?.[1];
+  assert.ok(lightRoot, "The base light palette must exist.");
   const actual = Object.fromEntries(
-    [...css.matchAll(/(--[\w-]+):\s*(#[0-9a-fA-F]{3,8})\s*;/g)].map((match) => [
-      match[1],
-      match[2],
-    ]),
+    [...lightRoot.matchAll(/(--[\w-]+):\s*(#[0-9a-fA-F]{3,8})\s*;/g)].map(
+      (match) => [match[1], match[2]],
+    ),
   );
   assert.deepEqual(actual, original);
   assert.equal(

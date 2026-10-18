@@ -142,7 +142,7 @@ export function useWorkspaceGroups() {
           : []),
       ],
     },
-    ...(canAction(user?.role || "viewer", "manage_users")
+    ...(canAction(user || "viewer", "manage_users")
       ? [
           {
             name: "Administration",

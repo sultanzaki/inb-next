@@ -90,6 +90,22 @@ export async function getSessionUser(): Promise<User | null> {
     .single();
 
   if (userError || !user) return null;
+  if (!user.must_change_password) {
+    const { data: access } = await admin.rpc("erp_permissions", {
+      p_token: token,
+    });
+    if (Array.isArray(access))
+      return { ...user, effective_actions: access } as User;
+    if (
+      ![
+        "admin qc",
+        "administrator inbionusa",
+        "qc supervisor",
+        "viewer",
+      ].includes(user.role)
+    )
+      return { ...user, effective_actions: [] } as User;
+  }
   return user as User;
 }
 

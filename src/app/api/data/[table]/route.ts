@@ -1,3 +1,4 @@
+import { canAction } from "@/lib/types";
 import { moduleGate } from "@/lib/erp/server";
 import { requireUser } from "@/lib/auth";
 import { dataUrl } from "@/lib/data-access";
@@ -33,7 +34,7 @@ async function read(
   if (!target)
     return Response.json({ message: "Query not allowed." }, { status: 400 });
   if (table === "inspection_drafts") {
-    if (session.user.role === "viewer")
+    if (!canAction(session.user,"save_draft"))
       return Response.json({ message: "Access denied." }, { status: 403 });
     if (!["admin qc", "administrator inbionusa"].includes(session.user.role))
       target.searchParams.set("owner_id", "eq." + session.user.id);

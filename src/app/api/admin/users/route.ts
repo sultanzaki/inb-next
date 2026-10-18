@@ -6,7 +6,7 @@ import { privateJson } from "@/lib/api-response";
 export async function GET(request: Request) {
   const session = await requireUser();
   if (!session) return privateJson({ message: "Session expired." }, 401);
-  if (!canAction(session.user.role, "manage_users"))
+  if (!canAction(session.user, "manage_users"))
     return privateJson({ message: "Access denied." }, 403);
   const params = new URL(request.url).searchParams,
     q = (params.get("q") || "").slice(0, 100),

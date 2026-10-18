@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     const denied = await moduleGate("quality");
     if (denied) return denied;
   }
-  if (v.module === "audit" && !canAction(session.user.role, "read_audit"))
+  if (v.module === "audit" && !canAction(session.user, "read_audit"))
     return privateJson({ message: "Access denied." }, 403);
   const cfg = modules[v.module],
     today = businessDate(),

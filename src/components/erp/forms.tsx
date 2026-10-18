@@ -1001,9 +1001,9 @@ export function ConfigurationForm({
             </label>
           ))}
           <p className="erp-notice">
-            Administrators retain access. QC actions also follow the existing QC
-            role. Sales reservation needs Warehouse read access; delivery
-            posting needs Warehouse write access.
+            Explicit exceptions replace role defaults and sign the user out.
+            Administrators retain full access. Restore a role default from the
+            user’s access preview.
           </p>
         </>
       ) : (

@@ -419,9 +419,9 @@ export default function ProdukPage() {
   }
 
   const role: UserRole = (user?.role as UserRole) ?? "viewer";
-  const canDelete = canAction(role, "delete_produk");
-  const canCreate = canAction(role, "create_produk");
-  const canUpdate = canAction(role, "update_produk");
+  const canDelete = canAction(user || role, "delete_produk");
+  const canCreate = canAction(user || role, "create_produk");
+  const canUpdate = canAction(user || role, "update_produk");
 
   return (
     <div className="page-stack">

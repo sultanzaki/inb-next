@@ -1,3 +1,4 @@
+import { exerciseReleaseReadiness } from "./release-readiness-browser";
 import { exerciseGrowth } from "./growth-browser";
 import { exerciseMobileNavigation } from "./mobile-navigation-browser";
 import { exerciseRelease } from "./release-browser";
@@ -31,13 +32,15 @@ function jwt(role: string) {
 }
 
 test(
-  process.env.TEST_GROWTH_ONLY === "1"
-    ? "Purchase CRM and product document workflows"
-    : process.env.TEST_MOBILE_NAV_ONLY === "1"
-      ? "Mobile console navigation"
-      : process.env.TEST_ERP_ONLY === "1"
-        ? "ERP production browser workflows"
-        : "production app: authenticated reads, pagination, mutations, search, error handling and logout",
+  process.env.TEST_RELEASE_READY_ONLY === "1"
+    ? "Release theme RBAC and insights"
+    : process.env.TEST_GROWTH_ONLY === "1"
+      ? "Purchase CRM and product document workflows"
+      : process.env.TEST_MOBILE_NAV_ONLY === "1"
+        ? "Mobile console navigation"
+        : process.env.TEST_ERP_ONLY === "1"
+          ? "ERP production browser workflows"
+          : "production app: authenticated reads, pagination, mutations, search, error handling and logout",
   { timeout: 600000 },
   async () => {
     const db = new Client({ connectionString: dbUrl });
@@ -275,6 +278,11 @@ test(
       await page.locator(".release-dashboard").waitFor();
       await page.goto(origin + "/dashboard/quality");
       await page.locator(".quality-summary").waitFor();
+      if (process.env.TEST_RELEASE_READY_ONLY === "1") {
+        await exerciseReleaseReadiness(page, db, origin, capture, accessible);
+        assert.deepEqual(runtimeErrors, []);
+        return;
+      }
       if (process.env.TEST_GROWTH_ONLY === "1") {
         await exerciseGrowth(page, db, origin, suffix, capture, accessible);
         assert.deepEqual(runtimeErrors, []);
@@ -682,6 +690,7 @@ test(
       await exerciseRelease(page, db, origin, suffix, capture, accessible);
       await exerciseMobileNavigation(page, origin, capture, accessible);
       await exerciseGrowth(page, db, origin, suffix, capture, accessible);
+      await exerciseReleaseReadiness(page, db, origin, capture, accessible);
       await page.goto(origin + "/dashboard/arsip");
       await page.locator(".data-toolbar").waitFor();
       await page.waitForFunction(
@@ -1345,10 +1354,30 @@ test(
       await page.waitForFunction(
         () => !document.querySelector("[role=dialog]"),
       );
+      async function signInAfterRoleChange() {
+        assert.equal(
+          (await db.query("select from sessions where user_id=$1", [user.id]))
+            .rowCount,
+          0,
+          "a role change revokes the previous session",
+        );
+        assert.equal(
+          (await page.request.get(origin + "/api/data/master_produk")).status(),
+          401,
+        );
+        await page.goto(origin + "/login");
+        await page.locator("[name=username]").fill(username);
+        await page.locator("[name=password]").fill(password);
+        await page
+          .getByRole("button", { name: "Sign in", exact: true })
+          .click();
+        await page.waitForURL("**/dashboard");
+      }
       await db.query("update users set role=$1 where id=$2", [
         "viewer",
         user.id,
       ]);
+      await signInAfterRoleChange();
       await page.goto(origin + "/dashboard/produk");
       await page
         .getByRole("button", { name: "Product details" })
@@ -1375,6 +1404,7 @@ test(
         "admin qc",
         user.id,
       ]);
+      await signInAfterRoleChange();
       await page.goto(origin + "/dashboard/coa");
       await page.setViewportSize({ width: 375, height: 900 });
       const missing = await page.goto(origin + "/halaman-tidak-ada");

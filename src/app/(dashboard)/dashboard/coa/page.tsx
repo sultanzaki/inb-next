@@ -134,7 +134,9 @@ function coaStatusBadge(tanggalExpired: string) {
 }
 
 export default function COAPage() {
-  const qualityWrite = useERP().can("quality", "write");
+  const erp = useERP();
+  const qualityWrite = erp.can("quality", "write");
+  const qualityApprove = erp.can("quality", "approve");
   const confirm = useConfirm();
   const [filter, setFilter] = useState("all");
   const [order, setOrder] = useState("default");
@@ -490,9 +492,9 @@ export default function COAPage() {
   }
 
   const role: UserRole = (user?.role as UserRole) ?? "viewer";
-  const canDelete = qualityWrite && canAction(role, "delete_coa");
-  const canIssue = qualityWrite && canAction(role, "issue_coa");
-  const canEdit = qualityWrite && canAction(role, "update_coa");
+  const canDelete = qualityWrite && canAction(user || role, "delete_coa");
+  const canIssue = qualityApprove && canAction(user || role, "issue_coa");
+  const canEdit = qualityApprove && canAction(user || role, "update_coa");
   // The dialog exists in the tree for every role (so Edit never dead-ends);
   // without a write role every input in it renders disabled (read-only mode).
   const canWrite = canIssue || canEdit;
