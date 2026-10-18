@@ -26,7 +26,7 @@ export function LoginForm() {
   const [show, setShow] = useState(false);
   return (
     <div className="login-form-card surface-enter">
-      <div className="mb-10 flex items-center gap-3 lg:hidden">
+      <div className="login-mobile-brand">
         <Image
           src="/logo.png"
           alt="INBIONUSA logo"
@@ -39,11 +39,11 @@ export function LoginForm() {
         </span>
       </div>
       <p className="mb-3 text-xs font-medium text-muted">INBIONUSA account</p>
-      <h1>Sign in</h1>
+      <h1>Welcome back.</h1>
       <p className="mt-4 text-[13px] leading-relaxed text-muted">
-        Sign in to your quality workspace.
+        Sign in to your INBIONUSA workspace.
       </p>
-      <form action={action} className="mt-9 space-y-5">
+      <form action={action} className="mt-8 space-y-5">
         <div className="space-y-2">
           <label htmlFor="username" className="text-xs font-semibold">
             Username

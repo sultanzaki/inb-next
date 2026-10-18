@@ -108,6 +108,11 @@ export async function exerciseMobileNavigation(
     await page
       .getByRole("menuitem", { name: "Change password", exact: true })
       .waitFor();
+    assert.ok(
+      await page.locator(".account-identity .account-avatar").isVisible(),
+    );
+    await capture("64-account-profile-" + width);
+    await accessible();
     await page.keyboard.press("Escape");
     assert.ok(
       await page.evaluate(

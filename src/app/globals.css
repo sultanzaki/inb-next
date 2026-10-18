@@ -3883,7 +3883,7 @@ button[data-slot="button"][class*="ghost"] {
   padding: 24px;
 }
 .work-directory {
-  max-width: 780px;
+  max-width: 560px;
   margin: auto;
 }
 .work-directory h1,
@@ -3897,45 +3897,6 @@ button[data-slot="button"][class*="ghost"] {
   color: var(--color-muted);
   font-size: 13px;
   margin-top: 8px;
-}
-.work-group {
-  border-bottom: 1px solid var(--border);
-  padding: 8px 0;
-}
-.work-group summary {
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 0;
-  cursor: pointer;
-}
-.work-group summary > svg {
-  width: 22px;
-  color: var(--color-primary-dark);
-  flex-shrink: 0;
-}
-.work-group summary > svg:last-child {
-  margin-left: auto;
-  width: 16px;
-}
-.work-group summary span {
-  display: grid;
-  gap: 4px;
-}
-.work-group small {
-  color: var(--color-muted);
-  font-size: 12px;
-}
-.work-group nav {
-  padding: 0 0 10px 38px;
-  display: grid;
-}
-.work-group nav a {
-  padding: 12px 0;
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
 }
 .release-section-heading,
 .release-home-header {
@@ -4623,4 +4584,266 @@ button[data-slot="button"][class*="ghost"] {
 .mobile-menu-footer > svg {
   width: 14px;
   height: 14px;
+}
+
+/* A module launcher, rather than another navigation tree. */
+.workspace-launcher {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.workspace-tile {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 18px;
+  background: var(--color-surface);
+  text-align: center;
+  transition:
+    transform 0.2s var(--ease-workspace),
+    border-color 0.2s,
+    box-shadow 0.2s;
+  min-width: 0;
+}
+.workspace-tile:hover {
+  transform: translateY(-3px);
+  border-color: var(--color-primary);
+  box-shadow: 0 10px 24px #003e2910;
+}
+.workspace-tile-icon {
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  border-radius: 20px;
+  background: var(--color-surface-alt);
+  color: var(--color-primary-deep);
+}
+.workspace-tile-icon svg {
+  width: 30px;
+  height: 30px;
+  stroke-width: 1.6;
+}
+.workspace-tile strong {
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+.workspace-tile-description {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-muted);
+  max-width: 210px;
+}
+.workspace-tile-arrow {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 16px;
+  color: var(--color-muted);
+}
+.account-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-primary-deep);
+  color: white;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.025em;
+  border: 2px solid var(--color-surface);
+  box-shadow: 0 0 0 1px var(--color-border-soft);
+}
+.account-identity {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 18px 14px;
+  max-width: 300px;
+}
+.account-avatar-large {
+  width: 48px;
+  height: 48px;
+  font-size: 16px;
+}
+.account-identity > div {
+  min-width: 0;
+}
+.account-full-name {
+  font-size: 14px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.account-handle {
+  font-size: 12px;
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+  margin-top: 2px;
+}
+.account-role {
+  display: inline-block;
+  margin-top: 8px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-size: 10px;
+  text-transform: capitalize;
+  color: var(--color-primary-deep);
+  background: var(--color-surface-alt);
+}
+.login-operations {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+}
+.login-operations .login-story {
+  padding: 36px 48px;
+  background: var(--color-primary-deep);
+  color: white;
+}
+.login-brand-caption {
+  font-size: 9px;
+  letter-spacing: 0.13em;
+  margin-top: 4px;
+  opacity: 0.7;
+}
+.login-story-content {
+  max-width: 500px;
+  padding: 48px 0;
+}
+.login-eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  opacity: 0.7;
+  margin-bottom: 20px;
+}
+.login-story-content h2 {
+  font-size: clamp(44px, 5vw, 72px);
+  letter-spacing: -0.055em;
+  font-weight: 550;
+  line-height: 1.06;
+}
+.login-story-description {
+  margin-top: 22px;
+  font-size: 14px;
+  line-height: 1.8;
+  max-width: 360px;
+  opacity: 0.8;
+}
+.login-modules {
+  margin-top: 36px;
+  border-top: 1px solid #ffffff30;
+}
+.login-module {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 15px 0;
+  border-bottom: 1px solid #ffffff30;
+}
+.login-module > svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.5;
+}
+.login-module > svg:last-child {
+  margin-left: auto;
+  width: 14px;
+  opacity: 0.5;
+}
+.login-module strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 550;
+}
+.login-module span {
+  display: block;
+  font-size: 11px;
+  margin-top: 3px;
+  opacity: 0.7;
+}
+.login-story-footer {
+  font-size: 11px;
+  opacity: 0.65;
+}
+.login-operations .login-form-panel {
+  background: var(--color-page-bg);
+}
+.login-operations .login-form-card {
+  max-width: 360px;
+}
+.login-operations .login-form-card h1 {
+  font-size: 36px;
+  letter-spacing: -0.04em;
+}
+.login-mobile-brand {
+  display: none;
+}
+@media (max-width: 767px) {
+  .workspace-launcher {
+    gap: 12px;
+  }
+  .workspace-tile {
+    padding: 18px 10px;
+    gap: 12px;
+    border-radius: 14px;
+  }
+  .workspace-tile-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+  }
+  .workspace-tile-icon svg {
+    width: 25px;
+    height: 25px;
+  }
+  .workspace-tile strong {
+    font-size: 14px;
+  }
+  .workspace-tile-description {
+    display: none;
+  }
+  .workspace-tile-arrow {
+    top: 10px;
+    right: 10px;
+    width: 12px;
+  }
+  .mobile-console-actions .app-account-button > .account-avatar {
+    display: inline-grid;
+  }
+}
+@media (max-width: 1023px) {
+  .login-operations {
+    grid-template-columns: 1fr;
+  }
+  .login-operations .login-story {
+    display: none;
+  }
+  .login-operations .login-form-panel {
+    padding: 32px 24px;
+    min-height: 100svh;
+  }
+  .login-mobile-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-tile {
+    transition: none;
+  }
+  .workspace-tile:hover {
+    transform: none;
+  }
 }

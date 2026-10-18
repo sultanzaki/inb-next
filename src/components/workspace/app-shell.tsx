@@ -19,7 +19,6 @@ import {
   Search,
   LogOut,
   Loader2,
-  UserRound,
   KeyRound,
   Users,
   History,
@@ -221,6 +220,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   const shownNavigation = items.filter((n) =>
     n.label.toLowerCase().includes(query.toLowerCase()),
   );
+  const initials = (user?.nama_lengkap || user?.username || "IN")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
   const accountMenu = (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -231,15 +237,28 @@ export function AppShell({ children }: { children: ReactNode }) {
           />
         }
       >
-        <UserRound className="size-4" />
-        <span>{user?.nama_lengkap?.split(" ")[0]}</span>
+        <span className="account-avatar" aria-hidden="true">
+          {initials}
+        </span>
+        <span className="account-trigger-name">
+          {user?.nama_lengkap?.split(" ")[0]}
+        </span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-56">
-        <div className="px-3 py-2">
-          <p className="text-xs font-semibold">{user?.nama_lengkap}</p>
-          <p className="mt-1 text-[11px] text-muted">
-            {user?.role} · @{user?.username}
-          </p>
+        <div className="account-identity">
+          <span
+            className="account-avatar account-avatar-large"
+            aria-hidden="true"
+          >
+            {initials}
+          </span>
+          <div>
+            <p className="account-full-name">{user?.nama_lengkap}</p>
+            <p className="account-handle">@{user?.username}</p>
+            <span className="account-role">
+              {user?.role?.replaceAll("_", " ")}
+            </span>
+          </div>
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => router.push("/account/password")}>
