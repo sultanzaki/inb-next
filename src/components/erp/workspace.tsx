@@ -261,24 +261,6 @@ export function ERPWorkspace({ area }: { area: Area }) {
             </Button>
           )}
         </PageHeader>
-        <label className="mobile-view-picker">
-          <span className="micro-label">VIEW</span>
-          <select
-            aria-label="Workspace view"
-            value={tab}
-            onChange={(e) =>
-              router.replace(pathname + "?view=" + e.target.value, {
-                scroll: false,
-              })
-            }
-          >
-            {tabs.map((t) => (
-              <option value={t.key} key={t.key}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </label>
         <nav
           className="erp-section-tabs"
           aria-label={names[area] + " sections"}

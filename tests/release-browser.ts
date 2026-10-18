@@ -114,7 +114,10 @@ export async function exerciseRelease(
     await page.goto(origin + "/dashboard");
     await page.locator(".performance-metrics strong").first().waitFor();
     if (width < 768) {
-      assert.equal(await page.locator(".app-topbar").isVisible(), true);
+      assert.equal(
+        await page.locator(".mobile-console-header").isVisible(),
+        true,
+      );
       await page
         .getByRole("combobox", { name: "Performance context", exact: true })
         .selectOption("warehouse");
