@@ -1,5 +1,6 @@
 "use client";
 import {
+  Suspense,
   useEffect,
   useRef,
   useState,
@@ -23,6 +24,10 @@ import {
   Users,
   History,
   ArrowUpRight,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Home,
+  Grid2X2,
 } from "lucide-react";
 import { useUser } from "@/app/(dashboard)/user-context";
 import { useLogout } from "@/hooks/use-logout";
@@ -46,8 +51,15 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { MobileNavigation } from "./mobile-navigation";
+import { WorkspaceSidebar } from "./workspace-navigation";
 const navigation = [
+  { href: "/dashboard/work", label: "Work", icon: Grid2X2 },
+  { href: "/dashboard/inbox", label: "Inbox", icon: ClipboardList },
+  {
+    href: "/dashboard/quality",
+    label: "Quality analytics",
+    icon: LayoutDashboard,
+  },
   { href: "/dashboard/warehouse", label: "Warehouse", icon: Warehouse },
   { href: "/dashboard/production", label: "Production", icon: Factory },
   { href: "/dashboard/sales", label: "Sales", icon: Handshake },
@@ -87,7 +99,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { user } = useUser(),
     pathname = usePathname(),
     router = useRouter();
-  const [mobileOpen, setMobileOpen] = useState(false),
+  const [collapsed, setCollapsed] = useState(false),
     [commandOpen, setCommandOpen] = useState(false),
     [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]),
@@ -96,6 +108,18 @@ export function AppShell({ children }: { children: ReactNode }) {
     [retry, setRetry] = useState(0);
   const { logout, loggingOut } = useLogout();
   const seq = useRef(0);
+  useEffect(() => {
+    const t = setTimeout(
+      () =>
+        setCollapsed(
+          localStorage.getItem("inb-sidebar") === null
+            ? window.matchMedia("(max-width:1099px)").matches
+            : localStorage.getItem("inb-sidebar") === "true",
+        ),
+      0,
+    );
+    return () => clearTimeout(t);
+  }, []);
   const items = navigation.filter((n) => {
     if (n.permission && !canAction(user?.role || "viewer", n.permission))
       return false;
@@ -103,44 +127,16 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (n.href.endsWith("/production")) return erp.can("production");
     if (n.href.endsWith("/sales")) return erp.can("sales");
     if (
-      ["/dashboard/inspeksi", "/dashboard/coa", "/dashboard/arsip"].includes(
-        n.href,
-      )
+      [
+        "/dashboard/inspeksi",
+        "/dashboard/coa",
+        "/dashboard/arsip",
+        "/dashboard/quality",
+      ].includes(n.href)
     )
       return erp.can("quality");
     return true;
   });
-  const area = pathname.includes("/warehouse")
-    ? "warehouse"
-    : pathname.includes("/production")
-      ? "production"
-      : pathname.includes("/sales")
-        ? "sales"
-        : pathname.includes("/settings") ||
-            pathname.includes("/pengguna") ||
-            pathname.includes("/audit")
-          ? "administration"
-          : pathname === "/dashboard" || pathname === "/dashboard/produk"
-            ? "overview"
-            : "quality";
-  const areaLinks: Record<string, string[]> = {
-    overview: ["/dashboard", "/dashboard/produk"],
-    quality: [
-      "/dashboard/produk",
-      "/dashboard/inspeksi",
-      "/dashboard/coa",
-      "/dashboard/arsip",
-    ],
-    warehouse: ["/dashboard/warehouse"],
-    production: ["/dashboard/production"],
-    sales: ["/dashboard/sales"],
-    administration: [
-      "/dashboard/settings",
-      "/dashboard/pengguna",
-      "/dashboard/audit",
-    ],
-  };
-  const desktopItems = items.filter((n) => areaLinks[area].includes(n.href));
   const current = items.find((n) => n.href === pathname);
   useEffect(() => {
     document.title = `${current?.label || "INBIONUSA"} — INBIONUSA`;
@@ -210,7 +206,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, [query, commandOpen, retry]);
   function navigate(href: string) {
-    setMobileOpen(false);
     setCommandOpen(false);
     setQuery("");
     const target = new URL(href, window.location.origin);
@@ -227,10 +222,23 @@ export function AppShell({ children }: { children: ReactNode }) {
     n.label.toLowerCase().includes(query.toLowerCase()),
   );
   return (
-    <div className="application">
+    <div
+      className={
+        "application release-shell" + (collapsed ? " sidebar-collapsed" : "")
+      }
+    >
       <a href="#main-content" className="skip-link">
         Skip to main content
       </a>
+      <aside className="workspace-sidebar">
+        <Link href="/dashboard" className="sidebar-brand">
+          <Image src="/logo.png" alt="INBIONUSA" width={32} height={32} />
+          <span>INBIONUSA</span>
+        </Link>
+        <Suspense fallback={<p className="sr-only">Loading navigation…</p>}>
+          <WorkspaceSidebar collapsed={collapsed} />
+        </Suspense>
+      </aside>
       <header className="app-topbar">
         <div className="app-topbar-inner">
           <Link
@@ -241,60 +249,19 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Image src="/logo.png" alt="" width={34} height={34} priority />
             <span>INBIONUSA</span>
           </Link>
-          <MobileNavigation
-            items={items}
-            pathname={pathname}
-            open={mobileOpen}
-            onOpenChange={setMobileOpen}
-            onSearch={() => {
-              setMobileOpen(false);
-              setCommandOpen(true);
+          <button
+            className="sidebar-toggle"
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            onClick={() => {
+              setCollapsed(!collapsed);
+              localStorage.setItem("inb-sidebar", String(!collapsed));
             }}
-          />
-          <select
-            className="erp-module-switch"
-            aria-label="Workspace module"
-            value={area}
-            onChange={(e) =>
-              router.push(
-                (
-                  {
-                    overview: "/dashboard",
-                    quality: "/dashboard/inspeksi",
-                    warehouse: "/dashboard/warehouse",
-                    production: "/dashboard/production",
-                    sales: "/dashboard/sales",
-                    administration: "/dashboard/settings",
-                  } as Record<string, string>
-                )[e.target.value],
-              )
-            }
           >
-            <option value="overview">Overview</option>
-            {erp.can("quality") && <option value="quality">Quality</option>}
-            {erp.can("warehouse") && (
-              <option value="warehouse">Warehouse</option>
-            )}
-            {erp.can("production") && (
-              <option value="production">Production</option>
-            )}
-            {erp.can("sales") && <option value="sales">Sales</option>}
-            {canAction(user?.role || "viewer", "manage_users") && (
-              <option value="administration">Administration</option>
-            )}
-          </select>
-          <nav className="app-desktop-nav" aria-label="Main navigation">
-            {desktopItems.map((n) => (
-              <Link
-                key={n.href}
-                href={n.href}
-                aria-current={pathname === n.href ? "page" : undefined}
-                transitionTypes={["workspace-navigation"]}
-              >
-                {n.label}
-              </Link>
-            ))}
-          </nav>
+            {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
+          </button>
+          <span className="workspace-current">
+            {current?.label || "Workspace"}
+          </span>
           <div className="app-topbar-actions">
             <button
               className="app-global-search"
@@ -354,6 +321,26 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </ViewTransition>
       </main>
+      <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
+        <Link
+          href="/dashboard"
+          aria-current={pathname === "/dashboard" ? "page" : undefined}
+        >
+          <Home />
+          <span>Home</span>
+        </Link>
+        <Link
+          href="/dashboard/work"
+          aria-current={pathname !== "/dashboard" ? "page" : undefined}
+        >
+          <Grid2X2 />
+          <span>Work</span>
+        </Link>
+        <button onClick={() => setCommandOpen(true)}>
+          <Search />
+          <span>Search</span>
+        </button>
+      </nav>
       <CommandDialog
         open={commandOpen}
         onOpenChange={(v) => {
@@ -361,7 +348,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           if (!v) setQuery("");
         }}
         title="Search INBIONUSA"
-        description="Find lots, products, certificates, or pages."
+        description="Find lots, products, certificates, orders, or pages."
       >
         <Command shouldFilter={false}>
           <CommandInput

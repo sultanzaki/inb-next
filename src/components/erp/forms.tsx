@@ -207,7 +207,7 @@ export function MoveForm({
             product_id: l.product?.id,
             unit_id: l.unit_id,
             quantity: l.quantity,
-            lot_number: l.lot_number,
+            lot_number: production ? undefined : l.lot_number,
             mfg_date: l.mfg_date,
           }
         : { lot_id: l.stock?.lot_id, unit_id: l.unit_id, quantity: l.quantity },
@@ -260,6 +260,12 @@ export function MoveForm({
         <p className="erp-notice">
           Select stock at its source location. Reserved quantities cannot be
           moved.
+        </p>
+      )}
+      {production && (
+        <p className="erp-notice">
+          Each line is one batch. The server assigns its official lot number
+          when you post. Configure the product series in Master data first.
         </p>
       )}
       {lines.map((line, i) => (
@@ -326,14 +332,18 @@ export function MoveForm({
             </ERPField>
             {inbound && (
               <>
-                <ERPField label="Lot / batch number">
-                  <Input
-                    value={line.lot_number}
-                    required
-                    maxLength={150}
-                    onChange={(e) => change(i, { lot_number: e.target.value })}
-                  />
-                </ERPField>
+                {!production && (
+                  <ERPField label="Lot / batch number">
+                    <Input
+                      value={line.lot_number}
+                      required
+                      maxLength={150}
+                      onChange={(e) =>
+                        change(i, { lot_number: e.target.value })
+                      }
+                    />
+                  </ERPField>
+                )}
                 <ERPField
                   label="Manufacturing date"
                   hint={

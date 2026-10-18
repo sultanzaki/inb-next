@@ -1,6 +1,13 @@
 "use client";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import {
+  SeriesForm,
+  ReturnForm,
+  ReturnDetail,
+  LotTrace,
+} from "./release-workflows";
 import Link from "next/link";
 import { Plus, Eye, FileDown, ExternalLink, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -56,7 +63,8 @@ const sections: Record<
     { key: "stock", label: "Stock" },
     { key: "movements", label: "Movements", create: "New movement" },
     { key: "counts", label: "Stock counts", create: "Plan count" },
-    { key: "lots", label: "Lots" },
+    { key: "lots", label: "Lots & traceability" },
+    { key: "returns", label: "Returns", create: "Request return" },
     { key: "fulfillment", label: "Dispatch" },
     { key: "ledger", label: "Stock ledger" },
   ],
@@ -70,6 +78,7 @@ const sections: Record<
   ],
   settings: [
     { key: "modules", label: "Modules" },
+    { key: "series", label: "Product series", create: "Set series" },
     { key: "units", label: "Units", create: "Add unit", action: "save_unit" },
     {
       key: "catalog",
@@ -104,6 +113,7 @@ const descriptions: Record<Area, string> = {
   settings: "Modules, manual units, storage locations, and team access.",
 };
 const states: Record<string, string[]> = {
+  returns: ["requested", "received", "released", "scrapped", "cancelled"],
   stock: ["quarantine", "released", "rejected"],
   lots: ["quarantine", "released", "rejected"],
   movements: ["draft", "posted", "reversed", "cancelled"],
@@ -149,6 +159,9 @@ function summary(entity: string, row: ERPRow) {
         )
         .join(" · ") || "Base unit not configured"
     );
+  if (entity === "series")
+    return row.series ? "Series " + row.series : "Series not configured";
+  if (entity === "returns") return `${row.product} · ${row.lot_number}`;
   if (entity === "access")
     return `${row.module} · Read ${row.can_read ? "yes" : "no"} · Write ${row.can_write ? "yes" : "no"} · Approve ${row.can_approve ? "yes" : "no"}`;
   return row.reason || row.location || row.destination || row.name || "";
@@ -167,6 +180,9 @@ function identity(row: ERPRow) {
 export function ERPWorkspace({ area }: { area: Area }) {
   const erp = useERP(),
     tabs = sections[area];
+  const params = useSearchParams(),
+    router = useRouter(),
+    pathname = usePathname();
   const [exporting, setExporting] = useState(false);
   const [tab, setTab] = useState(tabs[0].key),
     [search, setSearch] = useState(""),
@@ -175,13 +191,35 @@ export function ERPWorkspace({ area }: { area: Area }) {
     [create, setCreate] = useState(false),
     [detail, setDetail] = useState<{ entity: string; id: string } | null>(null),
     [refresh, setRefresh] = useState(0);
+  useEffect(() => {
+    const view = params.get("view");
+    if (view && tabs.some((t) => t.key === view)) {
+      const t = setTimeout(() => {
+        setTab(view);
+        setSearch(params.get("q") || "");
+        setState(params.get("state") || "");
+        const p = Number(params.get("page") || 1);
+        setPage(Number.isSafeInteger(p) && p > 0 && p <= 1000000 ? p : 1);
+      }, 0);
+      return () => clearTimeout(t);
+    }
+  }, [params, tabs]);
+  function listURL(q = search, s = state, p = page) {
+    const next = new URLSearchParams({ view: tab });
+    if (q) next.set("q", q);
+    if (s) next.set("state", s);
+    if (p > 1) next.set("page", String(p));
+    router.replace(pathname + "?" + next, { scroll: false });
+  }
   const config = tabs.find((t) => t.key === tab)!,
     result = useERPPage(tab === "modules" ? "units" : tab, search, state, page);
   useSearchSeed((q) => {
     const view = new URLSearchParams(window.location.search).get("view");
     if (view && tabs.some((t) => t.key === view)) setTab(view);
     setSearch(q);
-    setPage(1);
+    setPage(
+      Number(new URLSearchParams(window.location.search).get("page")) || 1,
+    );
   });
   const canWrite =
     area === "settings"
@@ -201,6 +239,7 @@ export function ERPWorkspace({ area }: { area: Area }) {
         "orders",
         "counts",
         "customers",
+        "returns",
       ].includes(entity || tab)
     ) {
       setDetail({ entity: entity || tab, id });
@@ -222,6 +261,24 @@ export function ERPWorkspace({ area }: { area: Area }) {
             </Button>
           )}
         </PageHeader>
+        <label className="mobile-view-picker">
+          <span className="micro-label">VIEW</span>
+          <select
+            aria-label="Workspace view"
+            value={tab}
+            onChange={(e) =>
+              router.replace(pathname + "?view=" + e.target.value, {
+                scroll: false,
+              })
+            }
+          >
+            {tabs.map((t) => (
+              <option value={t.key} key={t.key}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <nav
           className="erp-section-tabs"
           aria-label={names[area] + " sections"}
@@ -232,6 +289,7 @@ export function ERPWorkspace({ area }: { area: Area }) {
               aria-current={tab === t.key ? "page" : undefined}
               key={t.key}
               onClick={() => {
+                router.replace(pathname + "?view=" + t.key, { scroll: false });
                 setTab(t.key);
                 setSearch("");
                 setState("");
@@ -301,6 +359,7 @@ export function ERPWorkspace({ area }: { area: Area }) {
                 onChange={(e) => {
                   setSearch(e.target.value);
                   setPage(1);
+                  listURL(e.target.value, state, 1);
                 }}
               />
               {states[tab] && (
@@ -310,6 +369,7 @@ export function ERPWorkspace({ area }: { area: Area }) {
                   onChange={(e) => {
                     setState(e.target.value);
                     setPage(1);
+                    listURL(search, e.target.value, 1);
                   }}
                 >
                   <option value="">All statuses</option>
@@ -372,7 +432,11 @@ export function ERPWorkspace({ area }: { area: Area }) {
                 </Button>
               </div>
             ) : (
-              <div className="data-card">
+              <div
+                className={
+                  "data-card" + (tab === "stock" ? " mobile-stock-cards" : "")
+                }
+              >
                 <Table data-actions="true">
                   <TableHeader>
                     <TableRow>
@@ -422,6 +486,7 @@ export function ERPWorkspace({ area }: { area: Area }) {
                                   setSearch("");
                                   setState("");
                                   setPage(1);
+                                  listURL("", "", 1);
                                 }}
                               >
                                 Clear filters
@@ -450,7 +515,9 @@ export function ERPWorkspace({ area }: { area: Area }) {
                               value={row.number || row.code || row.id}
                             />
                           </TableCell>
-                          <TableCell>
+                          <TableCell
+                            data-label={tab === "stock" ? "On hand" : undefined}
+                          >
                             {tab === "stock"
                               ? `${decimal(row.on_hand)} ${row.unit}`
                               : tab === "ledger"
@@ -464,7 +531,11 @@ export function ERPWorkspace({ area }: { area: Area }) {
                                     row.code ||
                                     "—"}
                           </TableCell>
-                          <TableCell>
+                          <TableCell
+                            data-label={
+                              tab === "stock" ? "Available" : undefined
+                            }
+                          >
                             {tab === "stock" ? (
                               <>
                                 <strong>
@@ -513,7 +584,10 @@ export function ERPWorkspace({ area }: { area: Area }) {
               page={page}
               pageSize={50}
               loading={result.loading}
-              onPageChange={setPage}
+              onPageChange={(p) => {
+                setPage(p);
+                listURL(search, state, p);
+              }}
             />
           </>
         )}
@@ -527,7 +601,11 @@ export function ERPWorkspace({ area }: { area: Area }) {
             }
             onClose={() => setCreate(false)}
           >
-            {tab === "quotes" ? (
+            {tab === "series" ? (
+              <SeriesForm onDone={done} />
+            ) : tab === "returns" ? (
+              <ReturnForm onDone={done} />
+            ) : tab === "quotes" ? (
               <QuoteForm onDone={done} />
             ) : tab === "customers" ? (
               <CustomerForm onDone={done} />
@@ -621,6 +699,8 @@ function RecordDetail({
         <p>Record not found.</p>
       ) : (
         <>
+          {entity === "lots" && <LotTrace row={row} onDone={done} />}
+          {entity === "returns" && <ReturnDetail row={row} onDone={done} />}
           <div className="erp-detail-summary">
             {row.customer && (
               <p>

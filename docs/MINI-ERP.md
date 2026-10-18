@@ -76,3 +76,7 @@ Delivery snapshots preserve the customer/logistics data and COA content at posti
 `npm test` checks domain logic, decimal input, brand preservation and PDF content/pagination. `npm run test:db` resets **only the explicit disposable loopback database** and runs QC plus ERP transaction/security/concurrency cases. Never point tests at a live database. `npm run test:e2e` owns a production Next server and uses the existing disposable PostgREST adapter; its synthetic browser workflow covers production → QC-linked lot → quotation → order → reservation → partial delivery → stock count and mobile layouts.
 
 Keep migrations 001–004 in order for a fresh installation. Review later migrations before changing the QC wrapper chain. To pause a live module, use Settings/read-only rather than deleting tables or records.
+
+## Operations release follow-up
+
+For automatic production batch numbers, the new desktop/mobile navigation, contextual Home analytics, lot holds/traceability, returns and the work inbox, also apply migration 005 and follow [RELEASE-OPERATIONS.md](RELEASE-OPERATIONS.md). Its navigation replaces the topbar-only navigation described above.

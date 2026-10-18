@@ -10,12 +10,12 @@ export function useLogout() {
     pending = useRef(false);
   async function logout() {
     if (pending.current) return;
-    toast.dismiss("workspace-signout");
     pending.current = true;
     setLoggingOut(true);
     try {
       const result = await logoutAction();
       if (!result.ok) throw new Error("revoke_failed");
+      toast.dismiss("workspace-signout");
       // Cookie deletion invalidates authenticated router data.
       router.replace("/login");
       router.refresh();
@@ -27,7 +27,15 @@ export function useLogout() {
         id: "workspace-signout",
         position: "bottom-right",
         duration: Infinity,
-        action: { label: "Retry", onClick: () => void logout() },
+        // Keep the same toast mounted while retrying; Sonner otherwise removes it
+        // after onClick and can dismiss a fresh failure returned by a fast retry.
+        action: {
+          label: "Retry",
+          onClick: (event) => {
+            event.preventDefault();
+            void logout();
+          },
+        },
       });
     }
   }
