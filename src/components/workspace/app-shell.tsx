@@ -103,7 +103,13 @@ type SearchResult = {
   description: string;
   href: string;
 };
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  footer,
+}: {
+  children: ReactNode;
+  footer?: ReactNode;
+}) {
   const erp = useERP();
   const { user } = useUser(),
     pathname = usePathname(),
@@ -357,6 +363,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             {children}
           </div>
         </ViewTransition>
+        <footer className="workspace-copyright">{footer}</footer>
       </main>
       <CommandDialog
         open={commandOpen}

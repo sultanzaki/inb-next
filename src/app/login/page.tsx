@@ -1,3 +1,4 @@
+import { Copyright } from "@/components/brand/copyright";
 import type { Metadata } from "next";
 import Image from "next/image";
 import {
@@ -60,10 +61,15 @@ export default function LoginPage() {
             ))}
           </div>
         </div>
-        <p className="login-story-footer">Made for the way INBIONUSA works.</p>
+        <p className="login-story-footer">
+          <Copyright />
+        </p>
       </aside>
       <main className="login-form-panel">
         <LoginForm />
+        <p className="login-mobile-copyright">
+          <Copyright />
+        </p>
       </main>
     </div>
   );

@@ -1,3 +1,4 @@
+import { Copyright } from "@/components/brand/copyright";
 import { ERPProvider } from "@/components/erp/context";
 import { Suspense } from "react";
 import { getSessionUser } from "@/lib/auth";
@@ -22,7 +23,7 @@ async function SessionGate({ children }: { children: React.ReactNode }) {
   return (
     <UserContextProvider user={user}>
       <ERPProvider>
-        <AppShell>{children}</AppShell>
+        <AppShell footer={<Copyright />}>{children}</AppShell>
       </ERPProvider>
     </UserContextProvider>
   );
