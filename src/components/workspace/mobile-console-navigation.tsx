@@ -39,7 +39,13 @@ export function MobileConsoleNavigation({
       ? "stock"
       : path.endsWith("sales")
         ? "quotes"
-        : "modules");
+        : path.endsWith("purchase")
+          ? "purchases"
+          : path.endsWith("crm")
+            ? "opportunities"
+            : path.endsWith("materials")
+              ? "material_stock"
+              : "modules");
   function active(href: string) {
     const [p, q] = href.split("?");
     return p === path && (!q || new URLSearchParams(q).get("view") === view);

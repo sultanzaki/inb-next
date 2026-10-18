@@ -188,7 +188,9 @@ export function ERPWorkspace({ area }: { area: Area }) {
     [search, setSearch] = useState(""),
     [state, setState] = useState(""),
     [page, setPage] = useState(1),
-    [create, setCreate] = useState(false),
+    [create, setCreate] = useState(
+      area === "sales" && params.has("opportunity") && params.has("customer"),
+    ),
     [detail, setDetail] = useState<{ entity: string; id: string } | null>(null),
     [refresh, setRefresh] = useState(0);
   useEffect(() => {
@@ -297,7 +299,13 @@ export function ERPWorkspace({ area }: { area: Area }) {
                       ? "Inspections, lot release, and COAs."
                       : m.key === "warehouse"
                         ? "Stock, movements, counts, and dispatch."
-                        : "Customers, quotations, and sales orders."}
+                        : m.key === "purchase"
+                          ? "Suppliers, material purchases and partial receiving."
+                          : m.key === "crm"
+                            ? "Opportunities, customer relationships and follow-up."
+                            : m.key === "documents"
+                              ? "Product documents, controlled revisions and expiry."
+                              : "Customers, quotations, and sales orders."}
                 </p>
                 <div className="erp-actions">
                   {(["active", "read_only", "disabled"] as const)

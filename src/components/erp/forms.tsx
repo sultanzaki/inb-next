@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -427,8 +428,16 @@ type QuoteEditLine = {
   discount: string;
 };
 export function QuoteForm({ row, onDone }: { row?: ERPRow; onDone: Done }) {
+  const params = useSearchParams();
+  const [opportunity, setOpportunity] = useState(
+    row?.opportunity_id || (!row ? params.get("opportunity") : "") || "",
+  );
   const [customer, setCustomer] = useState<ERPRow | null>(
-    row?.customer_id ? { id: row.customer_id, label: row.customer } : null,
+    row?.customer_id
+      ? { id: row.customer_id, label: row.customer }
+      : !row && params.get("customer")
+        ? { id: params.get("customer")!, label: "Customer linked from CRM" }
+        : null,
   );
   const [value, setValue] = useState({
     id: row?.id,
@@ -473,6 +482,7 @@ export function QuoteForm({ row, onDone }: { row?: ERPRow; onDone: Done }) {
       payload={{
         ...value,
         customer_id: customer?.id,
+        opportunity_id: opportunity,
         lines: lines.map((l) => ({
           product_id: l.product?.id,
           unit_id: l.unit_id,
@@ -488,8 +498,23 @@ export function QuoteForm({ row, onDone }: { row?: ERPRow; onDone: Done }) {
         entity="customers"
         label="Customer"
         value={customer}
-        onChange={setCustomer}
+        onChange={(c) => {
+          setCustomer(c);
+          setOpportunity("");
+        }}
       />
+      {opportunity && (
+        <p className="erp-notice">
+          Linked to the originating CRM opportunity.{" "}
+          <button
+            type="button"
+            className="underline"
+            onClick={() => setOpportunity("")}
+          >
+            Remove link
+          </button>
+        </p>
+      )}
       <div className="erp-form-grid">
         {(["date", "valid_until", "currency", "lead_time"] as const).map(
           (key) => (
@@ -960,6 +985,9 @@ export function ConfigurationForm({
               <option value="production">Production</option>
               <option value="sales">Sales</option>
               <option value="quality">Quality</option>
+              <option value="purchase">Purchase</option>
+              <option value="crm">CRM</option>
+              <option value="documents">Documents</option>
             </select>
           </ERPField>
           {(["read", "write", "approve"] as const).map((v) => (

@@ -22,12 +22,14 @@ export function ERPPicker({
   value,
   onChange,
   filterProduct,
+  hideLabel = false,
 }: {
   entity: string;
   label: string;
   value: ERPRow | null;
   onChange: (row: ERPRow) => void;
   filterProduct?: string;
+  hideLabel?: boolean;
 }) {
   const [open, setOpen] = useState(false),
     [q, setQ] = useState(""),
@@ -45,7 +47,7 @@ export function ERPPicker({
     : result.data.rows;
   return (
     <div className="erp-picker">
-      <span className="erp-label">{label}</span>
+      {!hideLabel && <span className="erp-label">{label}</span>}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           render={

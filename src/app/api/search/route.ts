@@ -70,6 +70,17 @@ export async function GET(request: Request) {
     })),
   ];
   const collections = [
+    ...(enabled("purchase")
+      ? [
+          ["purchases", "purchase", "Purchase order"],
+          ["materials", "purchase", "Raw material"],
+          ["suppliers", "purchase", "Supplier"],
+        ]
+      : []),
+    ...(enabled("crm") ? [["opportunities", "crm", "Opportunity"]] : []),
+    ...(enabled("documents")
+      ? [["product_documents", "documents", "Product document"]]
+      : []),
     ...(enabled("warehouse") ? [["lots", "warehouse", "Lots"]] : []),
     ...(enabled("sales")
       ? [
@@ -89,15 +100,13 @@ export async function GET(request: Request) {
           p_search: q,
         });
         if (error) throw Error();
-        return (data.rows as ERPRow[])
-          .slice(0, 5)
-          .map((r) => ({
-            id: r.id,
-            type,
-            title: r.number || r.name || r.product || r.id,
-            description: r.product || r.customer || r.state || "",
-            href: `/dashboard/${area}?view=${entity}&q=${encodeURIComponent(r.number || r.name || r.id)}`,
-          }));
+        return (data.rows as ERPRow[]).slice(0, 5).map((r) => ({
+          id: r.id,
+          type,
+          title: r.number || r.name || r.product || r.id,
+          description: r.product || r.customer || r.state || "",
+          href: `/dashboard/${area}?view=${entity}&q=${encodeURIComponent(r.number || r.name || r.id)}`,
+        }));
       }),
     );
     return privateJson({ results: [...results, ...matches.flat()] });

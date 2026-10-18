@@ -147,3 +147,84 @@ test("ERP origin checks accept reverse-proxied same-origin requests and reject c
     false,
   );
 });
+
+test("purchase PDF names the supplier and preserves exact server line amounts", async () => {
+  const folder = await mkdtemp(join(tmpdir(), "inb-purchase-pdf-"));
+  try {
+    const bytes = await renderERPDocument(
+      {
+        id,
+        number: "PO-TEST",
+        date: "2026-10-18",
+        valid_until: "2026-10-20",
+        state: "confirmed",
+        currency: "IDR",
+        customer_data: {
+          name: "Original supplier",
+          billing_address: "Supplier address",
+        },
+        lines: [
+          {
+            product_id: id,
+            product: "Stearic acid",
+            code: "RM-01",
+            unit_id: id,
+            unit: "kg",
+            quantity: "0.3",
+            base_quantity: "0.3",
+            base_unit: "kg",
+            factor: "1",
+            price: "12500.25",
+            amount: "3750.075",
+          },
+        ],
+        totals: { subtotal: "3750.075", total: "3750.075" },
+      },
+      "purchase",
+    );
+    const file = join(folder, "purchase.pdf");
+    await writeFile(file, bytes);
+    const contents = execFileSync("pdftotext", ["-layout", file, "-"], {
+      encoding: "utf8",
+    });
+    assert.match(contents, /PURCHASE ORDER/);
+    assert.match(contents, /Original supplier/);
+    assert.match(contents, /3,750.075/);
+    assert.match(contents, /Expected receipt 2026-10-20/);
+    assert.doesNotMatch(contents, /Valid until|Disc\. %/);
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
+});
+test("growth document links reject unsafe schemes and embedded credentials", () => {
+  const payload = {
+    product_id: id,
+    kind: "SDS",
+    language: "en",
+    title: "SDS",
+    file_url: "https://example.com/sds.pdf",
+    effective_date: "2026-10-18",
+    expiry_date: "",
+    notes: "",
+  };
+  assert.equal(
+    actionSchemas.save_product_document.safeParse(payload).success,
+    true,
+  );
+  for (const url of [
+    "",
+    "not a URL",
+    "https://",
+    "javascript:alert(1)",
+    "http://example.com/sds",
+    "https://user:password@example.com/sds",
+  ]) {
+    assert.equal(
+      actionSchemas.save_product_document.safeParse({
+        ...payload,
+        file_url: url,
+      }).success,
+      false,
+    );
+  }
+});

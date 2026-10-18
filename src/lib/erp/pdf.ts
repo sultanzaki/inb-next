@@ -33,9 +33,10 @@ type Snapshot = {
 };
 export async function renderERPDocument(
   row: ERPRow,
-  type: "quotation" | "movement",
+  type: "quotation" | "movement" | "purchase",
 ) {
-  const quote = type === "quotation",
+  const purchase = type === "purchase",
+    quote = type === "quotation" || purchase,
     draft = quote
       ? ["draft", "pending"].includes(row.state || "")
       : row.state === "draft";
@@ -144,11 +145,13 @@ export async function renderERPDocument(
     draw("INBIONUSA", 92, 799, 14, true, brand);
     draw("Commercial & Operations", 92, 781, 8, false, muted);
     draw(
-      quote
-        ? "QUOTATION"
-        : data.kind === "delivery"
-          ? "DELIVERY ORDER"
-          : "STOCK MOVEMENT",
+      purchase
+        ? "PURCHASE ORDER"
+        : quote
+          ? "QUOTATION"
+          : data.kind === "delivery"
+            ? "DELIVERY ORDER"
+            : "STOCK MOVEMENT",
       330,
       800,
       13,
@@ -187,7 +190,7 @@ export async function renderERPDocument(
   }
   sheet();
   paragraph(
-    `${draft ? "DRAFT / NOT ISSUED" : String(row.state || "").toUpperCase()}  ·  ${data.date}${quote ? `  ·  Revision ${data.revision || 1}  ·  Valid until ${data.valid_until}` : ""}`,
+    `${draft ? "DRAFT / NOT ISSUED" : String(row.state || "").toUpperCase()}  ·  ${data.date}${purchase ? `  ·  Expected receipt ${data.valid_until}` : quote ? `  ·  Revision ${data.revision || 1}  ·  Valid until ${data.valid_until}` : ""}`,
     false,
     8,
   );
@@ -218,10 +221,16 @@ export async function renderERPDocument(
     );
   if (quote && data.lead_time) paragraph("Lead time: " + data.lead_time);
   y -= 8;
-  const widths = quote ? [180, 55, 40, 85, 65, 90] : [210, 140, 90, 75];
-  const headers = quote
-    ? ["Product", "Quantity", "Unit", "Unit price", "Disc. %", "Amount"]
-    : ["Product", "Lot / batch", "Quantity", "Unit"];
+  const widths = purchase
+    ? [180, 55, 40, 110, 130]
+    : quote
+      ? [180, 55, 40, 85, 65, 90]
+      : [210, 140, 90, 75];
+  const headers = purchase
+    ? ["Material", "Quantity", "Unit", "Unit price", "Amount"]
+    : quote
+      ? ["Product", "Quantity", "Unit", "Unit price", "Disc. %", "Amount"]
+      : ["Product", "Lot / batch", "Quantity", "Unit"];
   function tableHeader() {
     ensure(35);
     let x = 40;
@@ -240,21 +249,29 @@ export async function renderERPDocument(
   }
   tableHeader();
   for (const item of data.lines || []) {
-    const values = quote
+    const values = purchase
       ? [
           `${item.code} · ${item.product}`,
           decimal(item.quantity),
           item.unit,
           decimal(item.price),
-          decimal(item.discount),
           decimal(item.amount),
         ]
-      : [
-          `${item.code || ""} · ${item.product}`,
-          item.lot || "—",
-          decimal(item.base_quantity ?? item.quantity),
-          item.base_unit || item.unit,
-        ];
+      : quote
+        ? [
+            `${item.code} · ${item.product}`,
+            decimal(item.quantity),
+            item.unit,
+            decimal(item.price),
+            decimal(item.discount),
+            decimal(item.amount),
+          ]
+        : [
+            `${item.code || ""} · ${item.product}`,
+            item.lot || "—",
+            decimal(item.base_quantity ?? item.quantity),
+            item.base_unit || item.unit,
+          ];
     const wrapped = values.map((v, i) => wrap(v, widths[i] - 9, 9, i === 0)),
       count = Math.max(...wrapped.map((v) => v.length));
     for (let j = 0; j < count; j++) {
@@ -286,6 +303,7 @@ export async function renderERPDocument(
       ["freight", "Freight"],
       ["total", "Total"],
     ] as const) {
+      if (purchase && (key === "tax" || key === "freight")) continue;
       ensure(23);
       draw(label, 330, y, 10, key === "total");
       const value = `${data.currency} ${decimal(data.totals[key])}`;

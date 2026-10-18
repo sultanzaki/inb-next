@@ -15,6 +15,26 @@ const qty = z
       ),
   );
 const base = { id: optionalId, reason: text.optional() };
+const versioned = {
+  id: optionalId,
+  version: z.number().int().positive().optional(),
+};
+const transition = { id, version: z.number().int().positive() };
+const optionalDate = z.union([z.iso.date(), z.literal("")]);
+const contactFields = {
+  contact: text,
+  email: z.union([z.email(), z.literal("")]),
+  phone: text,
+};
+const modules = z.enum([
+  "quality",
+  "warehouse",
+  "production",
+  "sales",
+  "purchase",
+  "crm",
+  "documents",
+]);
 const moveLine = z.object({
   product_id: optionalId,
   lot_id: optionalId,
@@ -31,6 +51,116 @@ const quoteLine = z.object({
   discount: qty,
 });
 export const actionSchemas = {
+  save_supplier: z.object({
+    ...versioned,
+    name: short,
+    ...contactFields,
+    address: text,
+    tax_id: text,
+    payment_terms: text,
+    active: z.boolean(),
+  }),
+  save_material: z.object({
+    ...versioned,
+    code: z.string().trim().min(1).max(40),
+    name: short,
+    unit_id: id,
+    minimum_stock: qty,
+    active: z.boolean(),
+  }),
+  save_purchase: z.object({
+    ...versioned,
+    supplier_id: id,
+    date: z.iso.date(),
+    expected_date: z.iso.date(),
+    currency: z.string().regex(/^[A-Z]{3}$/),
+    terms: text,
+    lines: z
+      .array(z.object({ material_id: id, quantity: qty, price: qty }))
+      .min(1)
+      .max(100),
+  }),
+  confirm_purchase: z.object(transition),
+  cancel_purchase: z.object({ ...transition, reason: short }),
+  receive_purchase: z.object({
+    ...transition,
+    request_key: id,
+    date: z.iso.date(),
+    location_id: id,
+    reason: text,
+    lines: z
+      .array(
+        z.object({
+          line_id: id,
+          quantity: qty,
+          lot_number: short,
+          expiry_date: optionalDate,
+        }),
+      )
+      .min(1)
+      .max(100),
+  }),
+  reverse_material_transaction: z.object({ id, reason: short }),
+  issue_material: z.object({
+    request_key: id,
+    lot_id: id,
+    location_id: id,
+    quantity: qty,
+    date: z.iso.date(),
+    reason: short,
+  }),
+  save_opportunity: z.object({
+    ...versioned,
+    title: short,
+    company: short,
+    ...contactFields,
+    source: text,
+    notes: text,
+    owner_id: id,
+    expected_value: qty,
+    currency: z.string().regex(/^[A-Z]{3}$/),
+    probability: z.number().int().min(0).max(100),
+    expected_close: optionalDate,
+  }),
+  stage_opportunity: z.object({
+    ...transition,
+    stage: z.enum(["lead", "qualified", "proposal", "won", "lost"]),
+    reason: short,
+  }),
+  convert_opportunity: z.object({ ...transition, customer_id: optionalId }),
+  save_crm_activity: z.object({
+    opportunity_id: id,
+    title: short,
+    kind: z.enum(["call", "email", "meeting", "task"]),
+    due_date: z.iso.date(),
+    assigned_to: id,
+    notes: text,
+  }),
+  complete_crm_activity: z.object({
+    id,
+    state: z.enum(["done", "cancelled"]),
+    notes: text,
+  }),
+  save_product_document: z.object({
+    ...versioned,
+    product_id: id,
+    kind: z.enum(["SDS", "TDS", "HALAL", "ISO", "OTHER"]),
+    language: z.enum(["en", "id"]),
+    title: short,
+    file_url: z
+      .url()
+      .max(2000)
+      .refine((v) => {
+        if (!URL.canParse(v)) return false;
+        const u = new URL(v);
+        return u.protocol === "https:" && !u.username && !u.password;
+      }, "Use an HTTPS document link without embedded credentials."),
+    effective_date: z.iso.date(),
+    expiry_date: optionalDate,
+    notes: text,
+  }),
+  publish_product_document: z.object(transition),
+  withdraw_product_document: z.object({ ...transition, reason: short }),
   set_series: z.object({
     product_id: id,
     series: z
@@ -61,13 +191,13 @@ export const actionSchemas = {
     due_date: z.union([z.iso.date(), z.literal("")]).optional(),
   }),
   set_module: z.object({
-    module: z.enum(["quality", "warehouse", "production", "sales"]),
+    module: modules,
     state: z.enum(["active", "read_only", "disabled"]),
   }),
   set_access: z
     .object({
       user_id: id,
-      module: z.enum(["quality", "warehouse", "production", "sales"]),
+      module: modules,
       read: z.boolean(),
       write: z.boolean(),
       approve: z.boolean(),
@@ -136,6 +266,7 @@ export const actionSchemas = {
     ...base,
     version: z.number().int().positive().optional(),
     customer_id: id,
+    opportunity_id: optionalId,
     date: z.iso.date(),
     valid_until: z.iso.date(),
     currency: z.string().regex(/^[A-Z]{3}$/),
@@ -176,7 +307,14 @@ export const actionSchemas = {
   }),
 } as const;
 export type ERPAction = keyof typeof actionSchemas;
-export type ModuleKey = "quality" | "warehouse" | "production" | "sales";
+export type ModuleKey =
+  | "quality"
+  | "warehouse"
+  | "production"
+  | "sales"
+  | "purchase"
+  | "crm"
+  | "documents";
 export type ModuleAccess = {
   key: ModuleKey;
   state: "active" | "read_only" | "disabled";
@@ -227,7 +365,15 @@ export type ERPRow = {
   version?: number;
   customer_id?: string;
   customer?: string;
+  customer_data?: {
+    name?: string;
+    billing_address?: string;
+    contact?: string;
+    email?: string;
+    phone?: string;
+  };
   customer_reference?: string;
+  opportunity_id?: string;
   quote_id?: string;
   reason?: string;
   source?: string;

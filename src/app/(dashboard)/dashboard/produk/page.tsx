@@ -1,4 +1,6 @@
 "use client";
+import Link from "next/link";
+import { useERP } from "@/components/erp/context";
 import { SpecificationParameters } from "@/components/workspace/specification-parameters";
 import { RowActions } from "@/components/workspace/row-actions";
 import { SpecHistory } from "@/components/workspace/spec-history";
@@ -135,6 +137,7 @@ const selectClass =
 
 export default function ProdukPage() {
   const confirm = useConfirm();
+  const erp = useERP();
   const [filter, setFilter] = useState("all");
   const [order, setOrder] = useState("default");
   const [advanced, setAdvanced] = useState<AdvancedFilters>({
@@ -993,6 +996,14 @@ export default function ProdukPage() {
                   </div>
                 ))}
               </dl>
+              {erp.can("documents") && (
+                <Link
+                  className="erp-document-link mb-5"
+                  href={`/dashboard/documents?product=${detail.id}`}
+                >
+                  View product documents
+                </Link>
+              )}
               <h3 className="mb-3 text-sm font-semibold">Test parameters</h3>
               {detailLoading ? (
                 <p

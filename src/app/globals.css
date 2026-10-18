@@ -4847,3 +4847,146 @@ button[data-slot="button"][class*="ghost"] {
     transform: none;
   }
 }
+
+.growth-list-heading,
+.growth-line-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.growth-list-heading h2 {
+  font-size: 15px;
+  font-weight: 650;
+}
+.growth-context-note {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--color-muted);
+}
+.growth-record-link {
+  text-align: left;
+  color: var(--color-primary-deep);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.growth-record-link:hover {
+  text-decoration: underline;
+}
+.growth-record-subtitle {
+  font-size: 12px;
+  color: var(--color-muted);
+  margin: 5px 0;
+  overflow-wrap: anywhere;
+}
+.crm-stage-strip {
+  display: flex;
+  gap: 6px;
+  overflow: auto;
+  padding: 4px 0;
+}
+.crm-stage-strip button {
+  flex: 1;
+  white-space: nowrap;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 9px 14px;
+  font-size: 12px;
+  text-transform: capitalize;
+}
+.crm-stage-strip button[aria-pressed="true"] {
+  color: var(--color-primary-deep);
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary);
+}
+.growth-detail {
+  overflow: auto;
+  min-height: 0;
+  padding: 4px 0 12px;
+  display: grid;
+  gap: 20px;
+}
+.growth-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.growth-facts dt {
+  color: var(--color-muted);
+  font-size: 11px;
+  text-transform: capitalize;
+}
+.growth-facts dd {
+  font-size: 13px;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.growth-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-top: 1px solid var(--color-border);
+  padding-top: 16px;
+}
+.growth-line-summary {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border-soft);
+  border-radius: 8px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.growth-lines,
+.growth-edit-lines {
+  display: grid;
+  gap: 12px;
+}
+.growth-edit-line {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  min-width: 0;
+}
+.growth-line-title strong {
+  font-size: 13px;
+}
+@media (max-width: 767px) {
+  .growth-facts {
+    grid-template-columns: 1fr;
+  }
+  .growth-edit-line {
+    padding: 14px;
+  }
+  .growth-detail-actions > button {
+    flex-grow: 1;
+  }
+}
+
+/* New operational lists keep every detail and status readable on phones. */
+@media (max-width: 767px) {
+  .growth-records tbody {
+    gap: 10px;
+  }
+  .growth-records tbody tr {
+    border: 1px solid var(--color-border-soft);
+    border-radius: 10px;
+    padding: 16px;
+    background: var(--color-surface);
+  }
+  .growth-records tbody td:nth-child(2),
+  .growth-records tbody td:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+  .growth-records tbody td small {
+    display: block;
+    color: var(--color-muted);
+    font-size: 12px;
+    line-height: 1.6;
+    margin-top: 4px;
+  }
+}
