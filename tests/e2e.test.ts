@@ -1,3 +1,4 @@
+import { exerciseMobileNavigation } from "./mobile-navigation-browser";
 import { exerciseRelease } from "./release-browser";
 import { exerciseERP } from "./erp-browser";
 import { test } from "node:test";
@@ -29,9 +30,11 @@ function jwt(role: string) {
 }
 
 test(
-  process.env.TEST_ERP_ONLY === "1"
-    ? "ERP production browser workflows"
-    : "production app: authenticated reads, pagination, mutations, search, error handling and logout",
+  process.env.TEST_MOBILE_NAV_ONLY === "1"
+    ? "Mobile console navigation"
+    : process.env.TEST_ERP_ONLY === "1"
+      ? "ERP production browser workflows"
+      : "production app: authenticated reads, pagination, mutations, search, error handling and logout",
   { timeout: 600000 },
   async () => {
     const db = new Client({ connectionString: dbUrl });
@@ -258,6 +261,11 @@ test(
       await page.locator(".release-dashboard").waitFor();
       await page.goto(origin + "/dashboard/quality");
       await page.locator(".quality-summary").waitFor();
+      if (process.env.TEST_MOBILE_NAV_ONLY === "1") {
+        await exerciseMobileNavigation(page, origin, capture, accessible);
+        assert.deepEqual(runtimeErrors, []);
+        return;
+      }
       if (process.env.TEST_ERP_ONLY === "1") {
         await exerciseERP(page, db, origin, suffix, capture, accessible);
         await exerciseRelease(page, db, origin, suffix, capture, accessible);
@@ -653,6 +661,7 @@ test(
       await printPage.close();
       await exerciseERP(page, db, origin, suffix, capture, accessible);
       await exerciseRelease(page, db, origin, suffix, capture, accessible);
+      await exerciseMobileNavigation(page, origin, capture, accessible);
       await page.goto(origin + "/dashboard/arsip");
       await page.locator(".data-toolbar").waitFor();
       await page.waitForFunction(
@@ -1411,6 +1420,9 @@ test(
         .getByRole("button", { name: "Retry", exact: true })
         .click();
       await page.waitForURL("**/login");
+      // Sonner schedules dismissal on the next animation frame; navigation can
+      // finish first. Wait for that state change before checking active errors.
+      await logoutNotice.waitFor({ state: "detached", timeout: 2000 });
       assert.equal(
         await page
           .locator('[data-sonner-toast][data-removed="false"]')

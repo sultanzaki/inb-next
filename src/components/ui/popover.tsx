@@ -7,15 +7,24 @@ export function PopoverContent({
   children,
   className = "",
   align = "start",
+  label = "Choose an option",
+  collisionPadding,
 }: {
   children: ReactNode;
   className?: string;
   align?: "start" | "center" | "end";
+  label?: string;
+  collisionPadding?: number;
 }) {
   return (
     <Base.Portal>
-      <Base.Positioner sideOffset={6} align={align} className="z-[80]">
-        <Base.Popup aria-label="Choose an option" className={className}>
+      <Base.Positioner
+        sideOffset={6}
+        align={align}
+        collisionPadding={collisionPadding}
+        className="z-[80]"
+      >
+        <Base.Popup aria-label={label} className={className}>
           {children}
         </Base.Popup>
       </Base.Positioner>

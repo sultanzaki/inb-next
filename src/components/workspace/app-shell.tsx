@@ -26,7 +26,6 @@ import {
   ArrowUpRight,
   PanelLeftClose,
   PanelLeftOpen,
-  Home,
   Grid2X2,
 } from "lucide-react";
 import { useUser } from "@/app/(dashboard)/user-context";
@@ -51,6 +50,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { MobileConsoleNavigation } from "./mobile-console-navigation";
 import { WorkspaceSidebar } from "./workspace-navigation";
 const navigation = [
   { href: "/dashboard/work", label: "Work", icon: Grid2X2 },
@@ -221,6 +221,42 @@ export function AppShell({ children }: { children: ReactNode }) {
   const shownNavigation = items.filter((n) =>
     n.label.toLowerCase().includes(query.toLowerCase()),
   );
+  const accountMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button
+            className="app-account-button"
+            aria-label="Open account menu"
+          />
+        }
+      >
+        <UserRound className="size-4" />
+        <span>{user?.nama_lengkap?.split(" ")[0]}</span>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-56">
+        <div className="px-3 py-2">
+          <p className="text-xs font-semibold">{user?.nama_lengkap}</p>
+          <p className="mt-1 text-[11px] text-muted">
+            {user?.role} · @{user?.username}
+          </p>
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => router.push("/account/password")}>
+          <KeyRound />
+          Change password
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          variant="destructive"
+          disabled={loggingOut}
+          onClick={() => void logout()}
+        >
+          {loggingOut ? <Loader2 className="animate-spin" /> : <LogOut />}
+          Sign out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
   return (
     <div
       className={
@@ -239,6 +275,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           <WorkspaceSidebar collapsed={collapsed} />
         </Suspense>
       </aside>
+      <Suspense fallback={<div className="mobile-console-placeholder" />}>
+        <MobileConsoleNavigation
+          onSearch={() => setCommandOpen(true)}
+          account={accountMenu}
+        />
+      </Suspense>
       <header className="app-topbar">
         <div className="app-topbar-inner">
           <Link
@@ -271,46 +313,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Search className="size-4" />
               <span>Search…</span>
             </button>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <button
-                    className="app-account-button"
-                    aria-label="Open account menu"
-                  />
-                }
-              >
-                <UserRound className="size-4" />
-                <span>{user?.nama_lengkap?.split(" ")[0]}</span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-56">
-                <div className="px-3 py-2">
-                  <p className="text-xs font-semibold">{user?.nama_lengkap}</p>
-                  <p className="mt-1 text-[11px] text-muted">
-                    {user?.role} · @{user?.username}
-                  </p>
-                </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => router.push("/account/password")}
-                >
-                  <KeyRound />
-                  Change password
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  variant="destructive"
-                  disabled={loggingOut}
-                  onClick={() => void logout()}
-                >
-                  {loggingOut ? (
-                    <Loader2 className="animate-spin" />
-                  ) : (
-                    <LogOut />
-                  )}
-                  Sign out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {accountMenu}
           </div>
         </div>
       </header>
@@ -321,26 +324,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </ViewTransition>
       </main>
-      <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
-        <Link
-          href="/dashboard"
-          aria-current={pathname === "/dashboard" ? "page" : undefined}
-        >
-          <Home />
-          <span>Home</span>
-        </Link>
-        <Link
-          href="/dashboard/work"
-          aria-current={pathname !== "/dashboard" ? "page" : undefined}
-        >
-          <Grid2X2 />
-          <span>Work</span>
-        </Link>
-        <button onClick={() => setCommandOpen(true)}>
-          <Search />
-          <span>Search</span>
-        </button>
-      </nav>
       <CommandDialog
         open={commandOpen}
         onOpenChange={(v) => {
