@@ -5095,24 +5095,55 @@ html.dark {
 }
 .theme-control-compact {
   display: grid;
+  justify-content: stretch;
   gap: 8px;
   padding: 12px 14px;
   margin: 0;
 }
 .theme-control-compact > div {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  width: 100%;
   min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 .theme-control-compact button {
-  flex-direction: column;
-  gap: 5px;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
   min-width: 0;
-  min-height: 52px;
-  padding: 8px 4px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  font-size: 12px;
+  text-align: left;
+}
+.theme-control-compact button:hover,
+.theme-control-compact button:focus-visible {
+  background: var(--color-surface-alt);
+}
+.theme-control-compact button[aria-checked="true"] {
+  border-color: var(--color-border);
+  background: var(--color-surface-alt);
+  box-shadow: none;
+}
+.theme-control-compact button::after {
+  content: "";
+  width: 16px;
+  margin-left: auto;
+  text-align: center;
+}
+.theme-control-compact button[aria-checked="true"]::after {
+  content: "✓";
 }
 .theme-control-compact button svg {
   flex-shrink: 0;
+  width: 16px;
+  height: 16px;
 }
 .theme-control:not(.theme-control-compact) button span {
   display: none;
