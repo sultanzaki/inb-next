@@ -1,4 +1,5 @@
 "use client";
+import { roleLabel } from "@/lib/rbac";
 import {
   Suspense,
   useEffect,
@@ -7,6 +8,7 @@ import {
   ViewTransition,
   type ReactNode,
 } from "react";
+import { ThemeControl } from "@/components/theme/theme-control";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -128,7 +130,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, []);
   const items = navigation.filter((n) => {
-    if (n.permission && !canAction(user?.role || "viewer", n.permission))
+    if (n.permission && !canAction(user || "viewer", n.permission))
       return false;
     if (n.href.endsWith("/purchase")) return erp.can("purchase");
     if (n.href.endsWith("/crm")) return erp.can("crm");
@@ -268,10 +270,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             <p className="account-full-name">{user?.nama_lengkap}</p>
             <p className="account-handle">@{user?.username}</p>
             <span className="account-role">
-              {user?.role?.replaceAll("_", " ")}
+              {roleLabel(user?.role || "viewer")}
             </span>
           </div>
         </div>
+        <ThemeControl compact />
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => router.push("/account/password")}>
           <KeyRound />

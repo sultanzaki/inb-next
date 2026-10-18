@@ -39,7 +39,7 @@ export interface UpdateCoaPayload {
 
 export async function issueCoaAction(payload: IssueCoaPayload) {
   const session = await requireUser();
-  if (!session || !canAction(session.user.role, "issue_coa"))
+  if (!session || !canAction(session.user, "issue_coa"))
     return { ok: false, error: "Access denied." };
   const parsed = issueSchema.safeParse(payload);
   if (!parsed.success)
@@ -79,7 +79,7 @@ export async function issueCoaAction(payload: IssueCoaPayload) {
 }
 export async function updateCoaAction(payload: UpdateCoaPayload) {
   const session = await requireUser();
-  if (!session || !canAction(session.user.role, "update_coa"))
+  if (!session || !canAction(session.user, "update_coa"))
     return { ok: false, error: "Access denied." };
   const parsed = updateCoaSchema.safeParse(payload);
   if (!parsed.success)

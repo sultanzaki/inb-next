@@ -18,7 +18,7 @@ const schema = z
 export async function GET(request: Request) {
   const session = await requireUser();
   if (!session) return privateJson({ message: "Session expired." }, 401);
-  if (!canAction(session.user.role, "read_audit"))
+  if (!canAction(session.user, "read_audit"))
     return privateJson({ message: "Access denied." }, 403);
   const p = schema.safeParse(
     Object.fromEntries(new URL(request.url).searchParams),

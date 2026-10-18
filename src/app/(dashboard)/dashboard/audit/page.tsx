@@ -120,7 +120,7 @@ export default function AuditPage() {
       if (id === detailSeq.current) setDetailLoading(false);
     }
   }
-  if (!user || !canAction(user.role, "read_audit"))
+  if (!user || !canAction(user, "read_audit"))
     return (
       <EmptyState
         error

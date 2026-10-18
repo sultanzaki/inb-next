@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
+import { ThemeProvider } from "@/components/theme/theme-provider";
 import { ConfirmProvider } from "@/components/workspace/confirm-provider";
 
 const dmSans = localFont({
@@ -21,8 +22,8 @@ const dmSans = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "INBIONUSA — Quality Control System",
-  description: "INBIONUSA quality control workspace",
+  title: "INBIONUSA — Operations",
+  description: "INBIONUSA production, quality, warehouse and sales workspace",
 };
 
 export default function RootLayout({
@@ -33,8 +34,10 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={dmSans.variable}>
       <body className="min-h-screen font-sans">
-        <ConfirmProvider>{children}</ConfirmProvider>
-        <Toaster position="top-right" richColors closeButton />
+        <ThemeProvider>
+          <ConfirmProvider>{children}</ConfirmProvider>
+          <Toaster position="top-right" richColors closeButton />
+        </ThemeProvider>
       </body>
     </html>
   );

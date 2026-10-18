@@ -1,4 +1,5 @@
 "use client";
+import { ModuleInsights } from "./module-insights";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
@@ -284,6 +285,7 @@ export function ERPWorkspace({ area }: { area: Area }) {
             </button>
           ))}
         </nav>
+        {area !== "settings" && <ModuleInsights module={area} />}
         {tab === "modules" ? (
           <div className="erp-module-cards">
             {erp.data?.modules.map((m) => (

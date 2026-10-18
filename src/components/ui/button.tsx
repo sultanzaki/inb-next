@@ -1,14 +1,15 @@
-import { Loader2 } from "lucide-react"
-import { Button as ButtonPrimitive } from "@base-ui/react/button"
-import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "cn"
+import { Loader2 } from "lucide-react";
+import { Button as ButtonPrimitive } from "@base-ui/react/button";
+import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "cn";
 
 const buttonVariants = cva(
   "group/button workspace-button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-[13.5px] font-medium whitespace-nowrap transition-colors duration-150 outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-primary/30 active:not-aria-[haspopup]:translate-y-[0.5px] disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary-dark active:bg-primary-dark",
+        default:
+          "bg-primary text-primary-foreground hover:bg-[#065f46] active:bg-[#065f46]",
         outline:
           "border-border bg-surface hover:bg-surface-alt hover:text-foreground aria-expanded:bg-surface-alt aria-expanded:text-foreground",
         secondary:
@@ -16,7 +17,7 @@ const buttonVariants = cva(
         ghost:
           "hover:bg-surface-alt hover:text-foreground aria-expanded:bg-surface-alt aria-expanded:text-foreground",
         destructive:
-          "bg-danger text-white hover:bg-danger-dark focus-visible:border-danger/40 focus-visible:ring-danger/20",
+          "bg-[var(--destructive)] text-white hover:bg-[#991b1b] focus-visible:border-danger/40 focus-visible:ring-danger/20",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
@@ -28,8 +29,7 @@ const buttonVariants = cva(
         icon: "size-10",
         "icon-xs":
           "size-6 rounded-[var(--radius-chip)] in-data-[slot=button-group]:rounded-md [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm":
-          "size-9 rounded-md in-data-[slot=button-group]:rounded-md",
+        "icon-sm": "size-9 rounded-md in-data-[slot=button-group]:rounded-md",
         "icon-lg": "size-10",
       },
     },
@@ -37,8 +37,8 @@ const buttonVariants = cva(
       variant: "default",
       size: "default",
     },
-  }
-)
+  },
+);
 
 function Button({
   className,
@@ -49,7 +49,8 @@ function Button({
   children,
   disabled,
   ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants> & { loading?: boolean }) {
+}: ButtonPrimitive.Props &
+  VariantProps<typeof buttonVariants> & { loading?: boolean }) {
   return (
     <ButtonPrimitive
       type={type}
@@ -58,8 +59,13 @@ function Button({
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
-    >{loading && <Loader2 aria-hidden="true" className="size-4 animate-spin" />}{children}</ButtonPrimitive>
-  )
+    >
+      {loading && (
+        <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+      )}
+      {children}
+    </ButtonPrimitive>
+  );
 }
 
-export { Button, buttonVariants }
+export { Button, buttonVariants };

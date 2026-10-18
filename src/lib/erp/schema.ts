@@ -194,6 +194,7 @@ export const actionSchemas = {
     module: modules,
     state: z.enum(["active", "read_only", "disabled"]),
   }),
+  reset_access: z.object({ user_id: id, module: modules }),
   set_access: z
     .object({
       user_id: id,

@@ -5,10 +5,10 @@ export interface User {
   is_active?: boolean;
   must_change_password?: boolean;
   nama_lengkap: string;
+  effective_actions?: string[];
 }
 
-export type UserRole =
-  "admin qc" | "administrator inbionusa" | "qc supervisor" | "viewer";
+export type UserRole = (typeof import("./rbac").BUSINESS_ROLES)[number];
 
 export interface MasterProduk {
   spec_version?: number;
@@ -170,14 +170,28 @@ export const ROLE_ALLOW: Record<string, UserRole[]> = {
   update_uji: ["admin qc", "administrator inbionusa", "qc supervisor"],
 };
 
-export function canAction(role: UserRole, action: string): boolean {
+export function canAction(subject: UserRole | User, action: string): boolean {
+  if (typeof subject !== "string") {
+    if (subject.effective_actions)
+      return subject.effective_actions.includes(action);
+    // Safe compatibility with accounts predating the RBAC migration.
+    return (
+      [
+        "admin qc",
+        "administrator inbionusa",
+        "qc supervisor",
+        "viewer",
+      ].includes(subject.role) && canAction(subject.role, action)
+    );
+  }
+  const role = subject;
   const allowed = ROLE_ALLOW[action];
   if (!allowed) return false; // Unknown actions fail closed.
   return allowed.includes(role);
 }
 
 export function isWriteRole(role: UserRole): boolean {
-  return role !== "viewer";
+  return Object.values(ROLE_ALLOW).some((roles) => roles.includes(role));
 }
 
 export interface InspectionDraft {

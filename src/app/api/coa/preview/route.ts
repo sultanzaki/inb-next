@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   if (!session) return privateJson({ message: "Session expired." }, 401);
   const denied = await moduleGate("quality");
   if (denied) return denied;
-  if (!canAction(session.user.role, "issue_coa"))
+  if (!canAction(session.user, "issue_coa"))
     return privateJson({ message: "Access denied." }, 403);
   let body;
   try {

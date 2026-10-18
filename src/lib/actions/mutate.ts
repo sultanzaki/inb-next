@@ -13,7 +13,7 @@ export async function mutate(
   const session = await requireUser();
   if (!session)
     return { ok: false, error: "Session expired. Reload the page." };
-  if (!canAction(session.user.role, action))
+  if (!canAction(session.user, action))
     return { ok: false, error: "You cannot perform this action." };
   const parsed = schema.safeParse(raw);
   if (!parsed.success)

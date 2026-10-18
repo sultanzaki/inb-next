@@ -1,4 +1,5 @@
 "use client";
+import { ThemeControl } from "@/components/theme/theme-control";
 import Image from "next/image";
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
@@ -99,6 +100,7 @@ export function LoginForm() {
           <SubmitButton />
         </div>
       </form>
+      <ThemeControl />
       <p className="login-footer">Need access? Contact your administrator.</p>
     </div>
   );

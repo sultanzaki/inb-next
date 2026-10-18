@@ -1,3 +1,4 @@
+import { BUSINESS_ROLES } from "@/lib/rbac";
 import { z } from "zod";
 import { coaExpiryDate } from "./coa-dates";
 
@@ -219,12 +220,7 @@ export const passwordSchema = z
   .min(16, "Use at least 16 characters.")
   .max(1024)
   .refine((v) => v.trim() !== "INBIONUSA", "Choose a new password.");
-export const userRoleSchema = z.enum([
-  "admin qc",
-  "administrator inbionusa",
-  "qc supervisor",
-  "viewer",
-]);
+export const userRoleSchema = z.enum(BUSINESS_ROLES);
 export const createUserSchema = z.object({
   username: z
     .string()

@@ -1,4 +1,6 @@
 "use client";
+import { BUSINESS_ROLES, roleLabel } from "@/lib/rbac";
+import { AccessPreview } from "@/components/erp/access-preview";
 import { RowActions } from "@/components/workspace/row-actions";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Plus, Pencil, KeyRound, Users, RefreshCw } from "lucide-react";
@@ -38,12 +40,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TableSkeleton } from "@/components/table-skeleton";
-const roles: UserRole[] = [
-  "viewer",
-  "qc supervisor",
-  "admin qc",
-  "administrator inbionusa",
-];
+const roles = BUSINESS_ROLES;
 const blank = {
   username: "",
   nama_lengkap: "",
@@ -69,7 +66,7 @@ export default function UsersPage() {
   const [resetTarget, setResetTarget] = useState<User | null>(null),
     [temporary, setTemporary] = useState("");
   const seq = useRef(0);
-  const allowed = Boolean(user && canAction(user.role, "manage_users"));
+  const allowed = Boolean(user && canAction(user, "manage_users"));
   useEffect(() => {
     const t = setTimeout(() => setQuery(search), 300);
     return () => clearTimeout(t);
@@ -212,7 +209,7 @@ export default function UsersPage() {
                       <CopyValue value={u.username} label="Copy username" />
                     </p>
                   </TableCell>
-                  <TableCell>{u.role}</TableCell>
+                  <TableCell>{roleLabel(u.role)}</TableCell>
                   <TableCell>
                     <Badge variant={u.is_active ? "default" : "secondary"}>
                       {u.is_active ? "Active" : "Inactive"}
@@ -352,10 +349,20 @@ export default function UsersPage() {
                 }
               >
                 {roles.map((role) => (
-                  <option key={role}>{role}</option>
+                  <option key={role} value={role}>
+                    {roleLabel(role)}
+                  </option>
                 ))}
               </select>
+              <small className="text-muted">
+                Changing role clears user-specific overrides and signs out
+                existing sessions. Administrators retain full access.
+              </small>
             </label>
+            <AccessPreview
+              role={form.role}
+              userId={editing?.role === form.role ? editing.id : undefined}
+            />
             {editing ? (
               <label className="form-label">
                 Access status

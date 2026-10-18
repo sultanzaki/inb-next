@@ -49,7 +49,7 @@ async function manage(
 }
 export async function saveUserAction(raw: unknown): Promise<ActionResult> {
   const session = await requireUser();
-  if (!session || !canAction(session.user.role, "manage_users"))
+  if (!session || !canAction(session.user, "manage_users"))
     return { ok: false, error: "Access denied." };
   const isUpdate = typeof raw === "object" && raw !== null && "id" in raw;
   if (isUpdate) {
@@ -69,7 +69,7 @@ export async function resetUserPasswordAction(
   raw: unknown,
 ): Promise<ActionResult> {
   const session = await requireUser();
-  if (!session || !canAction(session.user.role, "manage_users"))
+  if (!session || !canAction(session.user, "manage_users"))
     return { ok: false, error: "Access denied." };
   const p = resetPasswordSchema.safeParse(raw);
   if (!p.success) return { ok: false, error: p.error.issues[0].message };
