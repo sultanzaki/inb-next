@@ -4170,7 +4170,7 @@ button[data-slot="button"][class*="ghost"] {
     gap: 5px;
   }
   .mobile-fullscreen-form,
-  .erp-dialog:has(form.erp-form) {
+  .erp-dialog:not(.erp-record-dialog):has(form.erp-form) {
     inset: 0 !important;
     top: 0 !important;
     left: 0 !important;
@@ -4226,7 +4226,8 @@ button[data-slot="button"][class*="ghost"] {
   .inspection-editor [data-slot="dialog-footer"] button {
     min-height: 44px;
   }
-  .erp-dialog:has(form.erp-form) > [data-slot="dialog-header"] {
+  .erp-dialog:not(.erp-record-dialog):has(form.erp-form)
+    > [data-slot="dialog-header"] {
     padding-right: 42px;
   }
 }
@@ -4236,7 +4237,7 @@ button[data-slot="button"][class*="ghost"] {
   }
 }
 /* Form bodies scroll independently; primary actions remain reachable. */
-.erp-dialog:has(form.erp-form) {
+.erp-dialog:not(.erp-record-dialog):has(form.erp-form) {
   overflow: hidden;
 }
 .erp-dialog > form.erp-form {
@@ -4262,13 +4263,13 @@ button[data-slot="button"][class*="ghost"] {
 }
 @media (max-width: 767px) {
   .mobile-fullscreen-form,
-  .erp-dialog:has(form.erp-form) {
+  .erp-dialog:not(.erp-record-dialog):has(form.erp-form) {
     translate: none !important;
     scale: 1 !important;
   }
-  .erp-dialog:has(form.erp-form) input,
-  .erp-dialog:has(form.erp-form) textarea,
-  .erp-dialog:has(form.erp-form) select {
+  .erp-dialog:not(.erp-record-dialog):has(form.erp-form) input,
+  .erp-dialog:not(.erp-record-dialog):has(form.erp-form) textarea,
+  .erp-dialog:not(.erp-record-dialog):has(form.erp-form) select {
     font-size: 16px;
     min-height: 44px;
   }
@@ -5527,4 +5528,24 @@ html.dark {
 }
 .overview-records.quality-recent-only {
   grid-template-columns: minmax(0, 1fr);
+}
+
+/* Record details scroll as one document, including inline conversion forms. */
+[data-slot="dialog-content"].erp-record-dialog {
+  overflow-y: auto;
+}
+.erp-record-dialog > section.erp-conversion-panel {
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface-alt);
+}
+.erp-conversion-panel > h3 {
+  margin-bottom: 14px;
+}
+.erp-record-dialog .erp-form-body {
+  overflow: visible;
+  flex: none;
+  padding-right: 0;
+  scrollbar-gutter: auto;
 }

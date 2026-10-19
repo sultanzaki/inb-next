@@ -38,12 +38,14 @@ export function ERPModal({
   children,
   onClose,
   dirty = false,
+  layout = "form",
 }: {
   title: string;
   description: string;
   children: ReactNode;
   onClose: () => void;
   dirty?: boolean;
+  layout?: "form" | "record";
 }) {
   const confirm = useConfirm();
   async function close() {
@@ -67,7 +69,11 @@ export function ERPModal({
         if (!v) void close();
       }}
     >
-      <DialogContent className="erp-dialog">
+      <DialogContent
+        className={
+          "erp-dialog" + (layout === "record" ? " erp-record-dialog" : "")
+        }
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>

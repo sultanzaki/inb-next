@@ -672,6 +672,7 @@ function RecordDetail({
   const docURL = "/api/erp/documents/" + entity + "/" + id;
   return (
     <ERPModal
+      layout="record"
       title={row?.number || row?.product || row?.name || "Record details"}
       description={
         row?.state
@@ -693,6 +694,35 @@ function RecordDetail({
         <>
           {entity === "lots" && <LotTrace row={row} onDone={done} />}
           {entity === "returns" && <ReturnDetail row={row} onDone={done} />}
+          {quote && row.state === "accepted" && (
+            <section
+              className="erp-conversion-panel"
+              aria-label="Sales order conversion"
+            >
+              <h3 className="text-sm font-semibold">Create sales order</h3>
+              {write ? (
+                <ERPForm
+                  action="convert_quote"
+                  payload={{ id, customer_reference: customerRef }}
+                  onDone={done}
+                  label="Create sales order"
+                >
+                  <ERPField label="Customer reference (optional)">
+                    <Input
+                      value={customerRef}
+                      maxLength={1000}
+                      onChange={(e) => setCustomerRef(e.target.value)}
+                    />
+                  </ERPField>
+                </ERPForm>
+              ) : (
+                <p className="text-xs text-muted">
+                  Sales write access and an active Sales module are required to
+                  create an order. Contact your administrator.
+                </p>
+              )}
+            </section>
+          )}
           <div className="erp-detail-summary">
             {row.customer && (
               <p>
@@ -956,22 +986,6 @@ function RecordDetail({
                 </ERPActionButton>
               )}
           </div>
-          {quote && row.state === "accepted" && write && (
-            <ERPForm
-              action="convert_quote"
-              payload={{ id, customer_reference: customerRef }}
-              onDone={done}
-              label="Create sales order"
-            >
-              <ERPField label="Customer reference (optional)">
-                <Input
-                  value={customerRef}
-                  maxLength={1000}
-                  onChange={(e) => setCustomerRef(e.target.value)}
-                />
-              </ERPField>
-            </ERPForm>
-          )}
           {(movement || quote) && (
             <div className="erp-detail-lines">
               {row.lines?.map((l, i) => (

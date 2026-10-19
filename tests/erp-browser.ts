@@ -185,9 +185,19 @@ export async function exerciseERP(
     .getByLabel("Shipping address", { exact: true })
     .fill("Warehouse destination");
   await top().getByRole("button", { name: "Save", exact: true }).click();
-  await page
-    .getByRole("heading", { name: "ERP customer " + suffix, exact: true })
-    .waitFor();
+  try {
+    await page
+      .getByRole("heading", { name: "ERP customer " + suffix, exact: true })
+      .waitFor();
+  } catch (error) {
+    await capture("40-customer-save-diagnostic");
+    assert.fail(
+      "Customer save failed: " +
+        (await page.getByRole("dialog").last().innerText()) +
+        " " +
+        String(error),
+    );
+  }
   await close();
   await page.getByRole("button", { name: "Quotations", exact: true }).click();
   await page
@@ -226,6 +236,39 @@ export async function exerciseERP(
   await status("issued");
   await action("Mark accepted");
   await status("accepted");
+  for (const viewport of [
+    { width: 320, height: 500 },
+    { width: 375, height: 650 },
+    { width: 1440, height: 700 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const conversion = top().getByRole("region", {
+      name: "Sales order conversion",
+    });
+    await conversion.waitFor();
+    assert.equal(
+      await top().evaluate((el) => getComputedStyle(el).overflowY),
+      "auto",
+      "inline conversion must not disable scrolling of record details",
+    );
+    const submit = conversion.getByRole("button", {
+      name: "Create sales order",
+      exact: true,
+    });
+    await submit.scrollIntoViewIfNeeded();
+    assert.ok(
+      await submit.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return el.contains(
+          document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2),
+        );
+      }),
+      "sales order action stays reachable on short screens",
+    );
+    await capture("42-accepted-quotation-" + viewport.width);
+    await accessible();
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await top()
     .getByLabel("Customer reference (optional)", { exact: true })
     .fill("Customer ref " + suffix);
