@@ -6,6 +6,9 @@ import { decimal, type ERPRow, type ERPLine } from "./schema";
 type Snapshot = {
   number: string;
   date: string;
+  due_date?: string;
+  related_number?: string;
+  external_reference?: string;
   revision?: number;
   valid_until?: string;
   currency?: string;
@@ -33,10 +36,11 @@ type Snapshot = {
 };
 export async function renderERPDocument(
   row: ERPRow,
-  type: "quotation" | "movement" | "purchase",
+  type: "quotation" | "movement" | "purchase" | "finance",
 ) {
   const purchase = type === "purchase",
-    quote = type === "quotation" || purchase,
+    finance = type === "finance",
+    quote = type === "quotation" || purchase || finance,
     draft = quote
       ? ["draft", "pending"].includes(row.state || "")
       : row.state === "draft";
@@ -145,13 +149,17 @@ export async function renderERPDocument(
     draw("INBIONUSA", 92, 799, 14, true, brand);
     draw("Commercial & Operations", 92, 781, 8, false, muted);
     draw(
-      purchase
-        ? "PURCHASE ORDER"
-        : quote
-          ? "QUOTATION"
-          : data.kind === "delivery"
-            ? "DELIVERY ORDER"
-            : "STOCK MOVEMENT",
+      finance
+        ? String((row as ERPRow & { kind?: string }).kind || "invoice")
+            .replaceAll("_", " ")
+            .toUpperCase()
+        : purchase
+          ? "PURCHASE ORDER"
+          : quote
+            ? "QUOTATION"
+            : data.kind === "delivery"
+              ? "DELIVERY ORDER"
+              : "STOCK MOVEMENT",
       330,
       800,
       13,
@@ -190,10 +198,17 @@ export async function renderERPDocument(
   }
   sheet();
   paragraph(
-    `${draft ? "DRAFT / NOT ISSUED" : String(row.state || "").toUpperCase()}  ·  ${data.date}${purchase ? `  ·  Expected receipt ${data.valid_until}` : quote ? `  ·  Revision ${data.revision || 1}  ·  Valid until ${data.valid_until}` : ""}`,
+    `${draft ? "DRAFT / NOT ISSUED" : String(row.state || "").toUpperCase()}  ·  ${data.date}${purchase ? `  ·  Expected receipt ${data.valid_until}` : quote && !finance ? `  ·  Revision ${data.revision || 1}  ·  Valid until ${data.valid_until}` : ""}`,
     false,
     8,
   );
+  if (finance) {
+    paragraph("Due date: " + (data.due_date || row.date), false, 9);
+    if (data.order_number) paragraph("Source order: " + data.order_number);
+    if (data.related_number) paragraph("Corrects: " + data.related_number);
+    if (data.external_reference)
+      paragraph("Supplier invoice: " + data.external_reference);
+  }
   if (data.customer) {
     paragraph(data.customer.name || "Customer", true, 12);
     paragraph(
@@ -303,7 +318,15 @@ export async function renderERPDocument(
       ["freight", "Freight"],
       ["total", "Total"],
     ] as const) {
-      if (purchase && (key === "tax" || key === "freight")) continue;
+      if (
+        (purchase ||
+          (finance &&
+            ["payment_request", "supplier_request"].includes(
+              String((row as ERPRow & { kind?: string }).kind),
+            ))) &&
+        (key === "tax" || key === "freight")
+      )
+        continue;
       ensure(23);
       draw(label, 330, y, 10, key === "total");
       const value = `${data.currency} ${decimal(data.totals[key])}`;

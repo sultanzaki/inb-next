@@ -21,6 +21,9 @@ export async function GET(request: Request, context: Context) {
       return privateJson({ message: "Invalid filters." }, 400);
     if (
       ![
+        "fin_documents",
+        "fin_payments",
+        "ops_cases",
         "stock",
         "lots",
         "movements",
@@ -70,6 +73,10 @@ export async function GET(request: Request, context: Context) {
       if (rows.length >= data.total) break;
     }
     const columns = [
+      "amount",
+      "outstanding",
+      "party",
+      "bank_reference",
       "number",
       "title",
       "supplier",
@@ -159,7 +166,13 @@ export async function GET(request: Request, context: Context) {
   if (
     path[0] === "documents" &&
     path.length >= 3 &&
-    ["quotes", "movements", "production", "purchases"].includes(path[1])
+    [
+      "quotes",
+      "movements",
+      "production",
+      "purchases",
+      "fin_documents",
+    ].includes(path[1])
   ) {
     const { data, error } = await erpRpc("erp_read", {
       p_entity: path[1],
@@ -170,6 +183,31 @@ export async function GET(request: Request, context: Context) {
     if (!row) return privateJson({ message: "Document not found." }, 404);
     if (p.has("download"))
       await logAudit(session.user.nama_lengkap, "DOWNLOAD_ERP", row.number);
+    if (path[1] === "fin_documents" && path.length === 3) {
+      const snapshot = row.snapshot || {};
+      const bytes = await (
+        await import("@/lib/erp/pdf")
+      ).renderERPDocument(
+        {
+          ...row,
+          state: row.document_state,
+          snapshot: {
+            ...snapshot,
+            number: row.number,
+            date: row.date,
+            lines: row.lines,
+            customer:
+              typeof snapshot.customer === "object"
+                ? snapshot.customer
+                : { name: row.party },
+          },
+          customer_data: { name: row.party },
+          totals: snapshot.totals,
+        },
+        "finance",
+      );
+      return pdf(bytes, row.number, p.has("download"));
+    }
     if (path[1] === "purchases" && path.length === 3) {
       const supplier = row.supplier_data || {};
       const bytes = await (
@@ -204,6 +242,21 @@ export async function GET(request: Request, context: Context) {
       const coa = row.snapshot?.lines?.[index]?.coa;
       if (!coa)
         return privateJson({ message: "No COA attached to this line." }, 404);
+      if (coa.id) {
+        const status = await erpRpc("erp_read", {
+          p_entity: "certificate_status",
+          p_id: coa.id,
+        });
+        if (status.error) return erpError(status.error);
+        if (status.data?.rows?.[0]?.withdrawn)
+          return privateJson(
+            {
+              message:
+                "This attached certificate has been withdrawn. Contact Quality.",
+            },
+            410,
+          );
+      }
       const bytes = await (
         await import("@/lib/pdf/coa-document")
       ).renderCoaPdf(coa as CoaDocument);

@@ -1,3 +1,5 @@
+> Latest operational expansion: see [Operational Finance rollout](OPERATIONAL-FINANCE.md) for migrations 010–013, opt-in modules and staging acceptance flows.
+
 # Penerapan perbaikan keamanan dan integritas QC
 
 ## Status dan urutan

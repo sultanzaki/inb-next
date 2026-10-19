@@ -23,6 +23,14 @@ export async function GET(
     .eq("id", id)
     .single();
   if (error || !data) return privateJson({ message: "COA not found." }, 404);
+  if (data.withdrawn)
+    return privateJson(
+      {
+        message:
+          "This certificate has been withdrawn. Contact Quality for the current certificate.",
+      },
+      410,
+    );
   if (data.template_version !== "inb-reference-v1")
     return privateJson({ message: "Unsupported template version." }, 422);
   try {

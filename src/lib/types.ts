@@ -69,6 +69,7 @@ export interface ProdukJoin {
  * jadi kolom; ambil dari join master_produk).
  */
 export interface HasilUji {
+  superseded?: boolean;
   failure_reason?: string;
   spec_version?: number;
   id: string;
@@ -92,6 +93,7 @@ export type HasilUjiRow = HasilUji & { master_produk: ProdukJoin };
  * server saat penerbitan; bentuknya dikunci oleh coa-actions.ts.
  */
 export interface COA {
+  withdrawn?: boolean;
   language?: "id" | "en";
   inci_name?: string;
   compliance_statement?: string;

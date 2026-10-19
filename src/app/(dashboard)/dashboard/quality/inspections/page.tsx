@@ -1090,6 +1090,9 @@ export default function InspeksiPage() {
                   <TableCell>{row.inspector || "-"}</TableCell>
                   <TableCell>
                     <StatusBadge status={row.status} />
+                    {row.superseded && (
+                      <Badge variant="secondary">Superseded</Badge>
+                    )}
                   </TableCell>
                   <TableCell
                     className="pr-4"
@@ -1105,7 +1108,7 @@ export default function InspeksiPage() {
                       >
                         <Eye className="size-3.5" />
                       </button>
-                      {canUpdate && (
+                      {canUpdate && !row.superseded && (
                         <button
                           type="button"
                           className="row-action"
@@ -1115,7 +1118,7 @@ export default function InspeksiPage() {
                           <Pencil className="size-3.5" />
                         </button>
                       )}
-                      {canDelete && (
+                      {canDelete && !row.superseded && (
                         <button
                           type="button"
                           className="row-action"
@@ -1190,6 +1193,9 @@ export default function InspeksiPage() {
                     <span className="text-xs text-muted">Status</span>
                     <p>
                       <StatusBadge status={detailItem.status} />
+                      {detailItem.superseded && (
+                        <Badge variant="secondary">Superseded inspection</Badge>
+                      )}
                     </p>
                   </div>
                 </div>

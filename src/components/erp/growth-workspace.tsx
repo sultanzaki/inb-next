@@ -1123,6 +1123,8 @@ function GrowthForm({
   onDone: () => void;
 }) {
   const { user } = useUser();
+  const erp = useERP();
+  const [holdReceipt, setHoldReceipt] = useState(false);
   const [requestKey] = useState(() => crypto.randomUUID());
   const [value, setValue] = useState<Record<string, string>>(() => {
     const defaults: Record<string, string> = {
@@ -1271,6 +1273,7 @@ function GrowthForm({
       id: row?.id,
       version: row?.version,
       request_key: requestKey,
+      hold: holdReceipt,
       lines: receiptLines.filter((l) => l.quantity.trim() !== ""),
     });
   }
@@ -1470,7 +1473,7 @@ function GrowthForm({
           <p className="erp-notice">
             This draft does not change stock. Confirmation requires approval
             access. Prices are recorded in the selected currency; invoices and
-            payment are outside this workflow.
+            payment are managed in Finance when enabled.
           </p>
         </div>
       )}
@@ -1481,6 +1484,16 @@ function GrowthForm({
             skip that line. Posting updates the purchase order and material
             stock together.
           </p>
+          {erp.can("service", "write") && (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={holdReceipt}
+                onChange={(e) => setHoldReceipt(e.target.checked)}
+              />
+              Hold received lots for review
+            </label>
+          )}
           {receiptLines.map((l, i) => {
             const source = row?.lines?.find((s) => s.id === l.line_id);
             function change(k: string, v: string) {

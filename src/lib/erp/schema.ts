@@ -1,3 +1,4 @@
+import { operationalSchemas } from "./operational-schema";
 import { z } from "zod";
 const id = z.uuid(),
   optionalId = z.union([id, z.literal("")]).optional();
@@ -34,6 +35,8 @@ const modules = z.enum([
   "purchase",
   "crm",
   "documents",
+  "finance",
+  "service",
 ]);
 const moveLine = z.object({
   product_id: optionalId,
@@ -51,6 +54,7 @@ const quoteLine = z.object({
   discount: qty,
 });
 export const actionSchemas = {
+  ...operationalSchemas,
   save_supplier: z.object({
     ...versioned,
     name: short,
@@ -83,6 +87,7 @@ export const actionSchemas = {
   confirm_purchase: z.object(transition),
   cancel_purchase: z.object({ ...transition, reason: short }),
   receive_purchase: z.object({
+    hold: z.boolean().optional(),
     ...transition,
     request_key: id,
     date: z.iso.date(),
@@ -315,7 +320,9 @@ export type ModuleKey =
   | "sales"
   | "purchase"
   | "crm"
-  | "documents";
+  | "documents"
+  | "finance"
+  | "service";
 export type ModuleAccess = {
   key: ModuleKey;
   state: "active" | "read_only" | "disabled";

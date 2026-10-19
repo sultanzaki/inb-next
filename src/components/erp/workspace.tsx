@@ -307,7 +307,11 @@ export function ERPWorkspace({ area }: { area: Area }) {
                             ? "Opportunities, customer relationships and follow-up."
                             : m.key === "documents"
                               ? "Product documents, controlled revisions and expiry."
-                              : "Customers, quotations, and sales orders."}
+                              : m.key === "finance"
+                                ? "Operational billing, verified payments and dispatch credit controls. Disabled until you activate it."
+                                : m.key === "service"
+                                  ? "Claims, customer receipt evidence, retests and accountable resolution."
+                                  : "Customers, quotations, and sales orders."}
                 </p>
                 <div className="erp-actions">
                   {(["active", "read_only", "disabled"] as const)

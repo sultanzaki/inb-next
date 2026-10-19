@@ -884,7 +884,13 @@ export default function COAPage() {
                   <TableCell className="font-data text-muted text-right">
                     {coa.tanggal_expired}
                   </TableCell>
-                  <TableCell>{coaStatusBadge(coa.tanggal_expired)}</TableCell>
+                  <TableCell>
+                    {coa.withdrawn ? (
+                      <Badge variant="destructive">Withdrawn</Badge>
+                    ) : (
+                      coaStatusBadge(coa.tanggal_expired)
+                    )}
+                  </TableCell>
                   <TableCell className="pr-4">
                     <RowActions>
                       <CopyValue value={coa.no_coa} label="Copy COA number" />
@@ -896,7 +902,7 @@ export default function COAPage() {
                       >
                         <Eye className="size-3.5" />
                       </button>
-                      {canEdit && (
+                      {canEdit && !coa.withdrawn && (
                         <button
                           type="button"
                           className="row-action"
@@ -910,6 +916,7 @@ export default function COAPage() {
                         type="button"
                         className="row-action"
                         title="Download PDF"
+                        disabled={coa.withdrawn}
                         onClick={() => void downloadPdf(coa)}
                       >
                         <Download className="size-3.5" />
@@ -919,10 +926,11 @@ export default function COAPage() {
                         className="row-action"
                         onClick={() => handlePrint(coa)}
                         title="Print"
+                        disabled={coa.withdrawn}
                       >
                         <Printer className="size-3.5" />
                       </button>
-                      {canDelete && (
+                      {canDelete && !coa.withdrawn && (
                         <button
                           type="button"
                           className="row-action"
@@ -996,7 +1004,13 @@ export default function COAPage() {
                   <div>
                     <p className="micro-label">Status</p>
                     <p className="mt-0.5">
-                      {coaStatusBadge(detailItem.tanggal_expired)}
+                      {detailItem.withdrawn ? (
+                        <Badge variant="destructive">
+                          Withdrawn certificate
+                        </Badge>
+                      ) : (
+                        coaStatusBadge(detailItem.tanggal_expired)
+                      )}
                     </p>
                   </div>
                   <div>

@@ -17,6 +17,8 @@ import {
   ShoppingCart,
   ContactRound,
   Files,
+  WalletCards,
+  LifeBuoy,
 } from "lucide-react";
 export function useWorkspaceGroups() {
   const erp = useERP(),
@@ -91,6 +93,40 @@ export function useWorkspaceGroups() {
               ["Purchase orders", "/dashboard/purchase?view=purchases"],
               ["Suppliers", "/dashboard/purchase?view=suppliers"],
               ["Raw materials", "/dashboard/purchase?view=materials"],
+            ],
+          },
+        ]
+      : []),
+    ...(erp.can("finance")
+      ? [
+          {
+            name: "Finance",
+            description: "Billing, payments and credit control",
+            icon: WalletCards,
+            links: [
+              ["Invoices & billing", "/dashboard/finance"],
+              ["Payments", "/dashboard/finance?view=payments"],
+              ["Dispatch clearance", "/dashboard/finance?view=orders"],
+              ["Purchase matching", "/dashboard/finance?view=purchases"],
+              ["Customer credit", "/dashboard/finance?view=credit_policies"],
+              ["AR / AP aging", "/dashboard/finance?view=aging"],
+            ],
+          },
+        ]
+      : []),
+    ...(erp.can("service")
+      ? [
+          {
+            name: "Service & exceptions",
+            description: "Claims, receipt evidence and resolution",
+            icon: LifeBuoy,
+            links: [
+              ["Cases", "/dashboard/service"],
+              ["Customer receipts", "/dashboard/service?view=receipts"],
+              ["Material holds", "/dashboard/service?view=material_stock"],
+              ...(erp.data?.admin
+                ? [["Operating policy", "/dashboard/service?view=policy"]]
+                : []),
             ],
           },
         ]

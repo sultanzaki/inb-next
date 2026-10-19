@@ -10,6 +10,10 @@ export const BUSINESS_ROLES = [
   "purchasing_officer",
   "sales_manager",
   "sales_officer",
+  "finance_manager",
+  "finance_officer",
+  "service_manager",
+  "service_officer",
   "viewer",
   "admin qc",
   "qc supervisor",
@@ -27,6 +31,10 @@ export const ROLE_LABELS: Record<string, string> = {
   purchasing_officer: "Purchasing Officer",
   sales_manager: "Sales Manager",
   sales_officer: "Sales Officer",
+  finance_manager: "Finance Manager",
+  finance_officer: "Finance Officer",
+  service_manager: "Service Manager",
+  service_officer: "Service Officer",
   viewer: "Viewer",
 };
 export const roleLabel = (role: string) => ROLE_LABELS[role] || "Unknown role";
