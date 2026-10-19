@@ -1,3 +1,4 @@
+import { linkedQuoteOrder } from "@/lib/erp/quote-order";
 import { sameOrigin } from "@/lib/erp/origin";
 import { toCsv } from "@/lib/export-data";
 import { requireUser, logAudit } from "@/lib/auth";
@@ -147,7 +148,13 @@ export async function GET(request: Request, context: Context) {
       p_state: state,
       p_id: id,
     });
-    return error ? erpError(error) : privateJson(data);
+    if (error) return erpError(error);
+    if (path[0] === "quotes" && id && data?.rows?.[0]?.state === "accepted") {
+      const linked = await linkedQuoteOrder(data.rows[0]);
+      if (linked.error) return erpError(linked.error);
+      data.rows[0].sales_order = linked.data;
+    }
+    return privateJson(data);
   }
   if (
     path[0] === "documents" &&

@@ -83,6 +83,19 @@ test(
     let missingPerformanceRPCs = false;
     const relay = createServer(async (req, res) => {
       if (
+        process.env.TEST_QUOTE_ORDER_FALLBACK === "1" &&
+        req.url === "/rest/v1/rpc/erp_quote_order"
+      ) {
+        res.writeHead(404, { "content-type": "application/json" });
+        res.end(
+          JSON.stringify({
+            code: "PGRST202",
+            message: "Local pre-migration quote order fixture",
+          }),
+        );
+        return;
+      }
+      if (
         missingPerformanceRPCs &&
         req.method === "POST" &&
         [

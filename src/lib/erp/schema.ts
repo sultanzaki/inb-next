@@ -351,6 +351,8 @@ export type ERPLine = {
   coa?: Record<string, unknown> | null;
 };
 export type ERPRow = {
+  root_id?: string;
+  sales_order?: { id: string; number: string; state: string } | null;
   id: string;
   number?: string;
   name?: string;

@@ -281,6 +281,31 @@ export async function exerciseERP(
       quote.id,
     ])
   ).rows[0];
+  await close();
+  await page.goto(
+    origin +
+      "/dashboard/sales?view=quotes&q=" +
+      encodeURIComponent(quote.number),
+  );
+  await page.getByRole("button", { name: quote.number, exact: true }).click();
+  await top()
+    .getByRole("button", { name: "Open sales order", exact: true })
+    .waitFor();
+  assert.equal(
+    await top()
+      .getByRole("button", { name: "Create sales order", exact: true })
+      .count(),
+    0,
+  );
+  const quoteDetail = await (
+    await page.request.get(origin + "/api/erp/quotes?id=" + quote.id)
+  ).json();
+  assert.equal(quoteDetail.rows[0].sales_order.id, order.id);
+  await capture("43-quotation-existing-order");
+  await top()
+    .getByRole("button", { name: "Open sales order", exact: true })
+    .click();
+  await status("confirmed");
   await page
     .getByRole("button", { name: "Reserve stock", exact: true })
     .click();

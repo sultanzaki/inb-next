@@ -699,8 +699,23 @@ function RecordDetail({
               className="erp-conversion-panel"
               aria-label="Sales order conversion"
             >
-              <h3 className="text-sm font-semibold">Create sales order</h3>
-              {write ? (
+              <h3 className="text-sm font-semibold">
+                {row.sales_order ? "Sales order created" : "Create sales order"}
+              </h3>
+              {row.sales_order ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-muted">
+                    This quotation is linked to {row.sales_order.number} (
+                    {row.sales_order.state}).
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={() => done(row.sales_order!.id, "orders")}
+                  >
+                    Open sales order
+                  </Button>
+                </div>
+              ) : write ? (
                 <ERPForm
                   action="convert_quote"
                   payload={{ id, customer_reference: customerRef }}

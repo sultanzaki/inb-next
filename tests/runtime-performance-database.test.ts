@@ -18,6 +18,15 @@ before(async () => {
   );
   await db.query(sql);
   await db.query(sql);
+  const linkSql = await readFile(
+    new URL(
+      "../src/lib/db/migrations/009_quotation_order_link.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  await db.query(linkSql);
+  await db.query(linkSql);
 });
 after(() => db.end());
 async function account(role = "quality_officer") {
@@ -203,5 +212,38 @@ tx(
       );
     }
     assert.equal(await rpc("qc_session_user", randomUUID()), null);
+  },
+);
+
+tx(
+  "quotation order lookup finds the existing family order and enforces Sales read",
+  async () => {
+    await db.query("update erp_modules set state='active' where key='sales'");
+    const { id, token } = await account("sales_officer");
+    const customer = (
+      await db.query(
+        "insert into erp_customers(name) values('Order lookup fixture') returning id",
+      )
+    ).rows[0].id;
+    const root = randomUUID();
+    const quote = (
+      await db.query(
+        "insert into erp_quotes(number,root_id,customer_id,date,valid_until,currency,state,lines,totals,created_by) values($1,$2,$3,current_date,current_date+30,'IDR','accepted','[]','{}',$4) returning id",
+        [randomUUID(), root, customer, id],
+      )
+    ).rows[0].id;
+    assert.equal(await rpc("erp_quote_order", token, quote), null);
+    const order = (
+      await db.query(
+        "insert into erp_orders(number,quote_id,root_id,state,snapshot) values($1,$2,$3,'fulfilled','{}') returning id,number,state",
+        [randomUUID(), quote, root],
+      )
+    ).rows[0];
+    assert.deepEqual(await rpc("erp_quote_order", token, quote), order);
+    const denied = await account("quality_officer");
+    await assert.rejects(
+      () => rpc("erp_quote_order", denied.token, quote),
+      (e: unknown) => (e as { code: string }).code === "42501",
+    );
   },
 );

@@ -51,3 +51,11 @@ Each workspace has descriptive server-owned title/description metadata. The inte
 ## Validation
 
 Database regression includes migration repeatability, exact analytics/summary comparisons, session expiry/deactivation, forced-password handling, module-denied access, literal wildcard search and private RPC grants. Browser regression checks canonical navigation, 308 query preservation, per-page titles, noindex metadata, public icons and the existing QC/ERP workflows, including mobile and dark mode.
+
+## Quotation → existing sales order (009)
+
+Migration `009_quotation_order_link.sql` adds a private, Sales-authorized lookup through the unique order `root_id` index. It returns only ID, number and state and never changes records. Existing order lookup includes fulfilled/closed orders and all revisions in the quotation family. It can be applied after 008 and is repeatable.
+
+The app also works before 009: accepted-quotation details use the existing authorized order RPCs, filtered by the immutable customer name, then verify the exact quotation/family relationship. The compatibility scan is capped at 200 candidates and fails with an explicit verification error if exhausted; it never treats an incomplete scan as “no order”. Apply 009 to eliminate that temporary scan. Other permission/database errors do not activate compatibility mode.
+
+An accepted quotation with an existing order shows **Sales order created / Open sales order**, rather than a conversion form. The existing database idempotency and unique quote/family constraints still protect simultaneous/repeated conversion requests.
