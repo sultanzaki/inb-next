@@ -4,6 +4,8 @@
 
 Apply migrations **010 → 011 → 012 → 013**, after the existing 001–009 migrations, before deploying this revision. Each migration is transactional. Do not apply an older wrapper migration in isolation after a newer one. The application does not execute SQL migrations automatically.
 
+If 012 reports that `public.erp_quote_order(text, uuid)` is missing, apply `009_quotation_order_link.sql` first, rerun 012, then apply 013. Migration 009 only adds the authorized quotation/order lookup; it does not change business records. Do not delete data or replay migrations 010/011 for this error. The new preflight reports the missing dependency before replacing wrappers or revoking permissions.
+
 Both new modules start **disabled**. Existing accounts, stock and documents are retained. An administrator activates **Service** and **Finance** in Administration → Module settings and assigns the relevant roles or explicit module grants. Activate Service before using receipt-based invoicing, linked claims or controlled amendments. Finance can otherwise operate independently.
 
 Prepare approved terms for each open SO, credit policies for credit customers, and actual outstanding invoices/advances before activating Finance in production. Once active, a draft delivery cannot be posted without financial clearance. Read-only Finance retains this gate. Finance with transaction history cannot be disabled; use read-only instead. An administrator can approve their own entry with a reason; other users require a different authorized approver. A dispatch exception lasts at most seven days and does not settle debt.

@@ -1,4 +1,13 @@
 begin;
+-- Fail before replacing wrappers or revoking permissions when an earlier release is missing.
+do $$begin
+ if to_regprocedure('public.erp_quote_order(text,uuid)') is null then
+  raise exception using errcode='P0001',
+   message='Migration 012 requires migration 009_quotation_order_link.sql.',
+   detail='The required function public.erp_quote_order(text, uuid) is missing.',
+   hint='Apply migration 009, rerun migration 012, then apply migration 013. Do not reapply older wrapper migrations in isolation.';
+ end if;
+end $$;
 create or replace view public.erp_fin_document_view as
 select d.id,d.kind,d.party_type,d.party_id,d.number,d.currency,d.amount,public.erp_fin_outstanding(d.id) outstanding,
  d.date,d.due_date,d.state,d.order_id,d.purchase_id,d.delivery_id,d.case_id,d.related_id,d.external_reference,d.match_state,d.disputed,d.version,d.created_at,d.notes,

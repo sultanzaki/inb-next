@@ -1507,3 +1507,58 @@ tx(
     );
   },
 );
+tx(
+  "Migration 012 reports missing 009 before replacing wrappers or revoking permissions",
+  async () => {
+    const sql = await readFile(
+      new URL(
+        "../src/lib/db/migrations/012_workflow_integration.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    const original = (
+      await db.query(
+        "select pg_get_functiondef('public.erp_mutate(text,text,jsonb)'::regprocedure) body",
+      )
+    ).rows[0].body;
+    await db.query("drop function public.erp_quote_order(text,uuid)");
+    await fails(
+      () => db.query(sql),
+      /Migration 012 requires migration 009_quotation_order_link.sql/,
+    );
+    assert.equal(
+      (
+        await db.query(
+          "select pg_get_functiondef('public.erp_mutate(text,text,jsonb)'::regprocedure) body",
+        )
+      ).rows[0].body,
+      original,
+    );
+    assert.equal(
+      (
+        await db.query(
+          "select has_function_privilege('service_role','public.erp_mutate(text,text,jsonb)','execute') allowed",
+        )
+      ).rows[0].allowed,
+      true,
+    );
+    const repair = await readFile(
+      new URL(
+        "../src/lib/db/migrations/009_quotation_order_link.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    // Strip transaction boundaries here so this test can roll back its fixture changes.
+    await db.query(repair.replace(/^begin;\s*/, "").replace(/commit;\s*$/, ""));
+    await db.query(sql.replace(/^begin;\s*/, "").replace(/commit;\s*$/, ""));
+    assert.ok(
+      (
+        await db.query(
+          "select to_regprocedure('public.erp_quote_order(text,uuid)') signature",
+        )
+      ).rows[0].signature,
+    );
+  },
+);
