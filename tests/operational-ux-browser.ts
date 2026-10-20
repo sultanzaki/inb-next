@@ -71,6 +71,34 @@ export async function exerciseOperationalUX(
   await top()
     .getByRole("button", { name: "About amount", exact: false })
     .count();
+  const amountInput = top().getByLabel("Amount", { exact: true });
+  await amountInput.fill("");
+  await amountInput.pressSequentially("1234567");
+  assert.equal(
+    await amountInput.inputValue(),
+    "1.234.567",
+    "group while typing without blur",
+  );
+  await amountInput.pressSequentially(",50");
+  assert.equal(await amountInput.inputValue(), "1.234.567,50");
+  await amountInput.evaluate((el) =>
+    (el as HTMLInputElement).setSelectionRange(2, 2),
+  );
+  await amountInput.press("Backspace");
+  assert.equal(
+    await amountInput.inputValue(),
+    "234.567,50",
+    "backspace across grouping removes the digit",
+  );
+  await amountInput.fill("12.500");
+  await amountInput.press("End");
+  await amountInput.press(".");
+  await amountInput.pressSequentially("25");
+  assert.equal(
+    await amountInput.inputValue(),
+    "12.500,25",
+    "decimal key accepts desktop numpad notation",
+  );
   await top().getByLabel("Amount", { exact: true }).fill("1.5");
   await top().getByLabel("Document date", { exact: true }).click();
   await top().getByLabel("Amount", { exact: true }).focus();
@@ -96,7 +124,7 @@ export async function exerciseOperationalUX(
   await top().getByLabel("Document date", { exact: true }).click();
   assert.equal(
     await top().getByLabel("Amount", { exact: true }).inputValue(),
-    "12.500.000,50",
+    "12.500.000,5",
   );
   await top()
     .getByLabel("Payment request purpose", { exact: true })
@@ -226,6 +254,11 @@ export async function exerciseOperationalUX(
     .getByLabel("Verified funds / bank evidence reference", { exact: true })
     .fill("Bank statement evidence");
   await top().getByRole("button", { name: "Save", exact: true }).click();
+  await page.mouse.move(0, 0);
+  await page
+    .locator('[data-sonner-toast][data-removed="false"]')
+    .last()
+    .waitFor({ state: "hidden", timeout: 10000 });
   await page
     .getByRole("button", { name: "Verify actual funds", exact: true })
     .click();

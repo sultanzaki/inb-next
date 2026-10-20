@@ -57,6 +57,7 @@ export function WorkflowForm({
   const erp = useERP(),
     terms = object(row, "terms");
   const [purpose, setPurpose] = useState("auto");
+  const [amountEdited, setAmountEdited] = useState(false);
   const [requestKey] = useState(() => crypto.randomUUID());
   const [form, setForm] = useState<Record<string, unknown>>(() => ({
     id: row?.id,
@@ -161,8 +162,10 @@ export function WorkflowForm({
     [delivery, setDelivery] = useState<ERPRow | null>(null),
     [certificate, setCertificate] = useState<ERPRow | null>(null),
     [claim, setClaim] = useState<ERPRow | null>(null);
-  const set = (key: string, val: unknown) =>
+  const set = (key: string, val: unknown) => {
+    if (key === "amount") setAmountEdited(false);
     setForm((f) => ({ ...f, [key]: val }));
+  };
   const sourceEntity =
     action === "fin_create_document"
       ? String(form.kind).startsWith("supplier")
@@ -229,7 +232,7 @@ export function WorkflowForm({
     value(allocationDocument, "outstanding", "0"),
   );
   const effectiveAmount =
-    form.amount === ""
+    form.amount === "" && !amountEdited
       ? action === "fin_allocate"
         ? suggestedAllocation
         : action === "fin_create_document" &&
@@ -284,9 +287,10 @@ export function WorkflowForm({
                 )
               : String(form[key] ?? "")
         }
-        onChange={(e) =>
-          set(key, type === "number" ? Number(e.target.value) : e.target.value)
-        }
+        onChange={(e) => {
+          set(key, type === "number" ? Number(e.target.value) : e.target.value);
+          if (key === "amount") setAmountEdited(true);
+        }}
         inputMode={
           [
             "amount",

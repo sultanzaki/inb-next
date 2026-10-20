@@ -11,7 +11,8 @@ function Input({
   ...props
 }: React.ComponentProps<"input"> & { numberFormat?: "localized" | "raw" }) {
   const Component =
-    props.inputMode === "decimal" && numberFormat !== "raw"
+    (props.inputMode === "decimal" || type === "number") &&
+    numberFormat !== "raw"
       ? NumericInput
       : InputPrimitive;
   return (

@@ -1,3 +1,4 @@
+import { exerciseNumericInput } from "./numeric-input-browser";
 import { exerciseTransactionControls } from "./transaction-controls-browser";
 import { exerciseOperationalUX } from "./operational-ux-browser";
 import { exerciseOperationalFinance } from "./operational-finance-browser";
@@ -352,6 +353,12 @@ test(
         );
         assert.equal(scoped.status(), 503);
         assert.match((await scoped.json()).message, /database update/);
+        return;
+      }
+      if (process.env.TEST_NUMERIC_ONLY === "1") {
+        await exerciseOperationalUX(page, db, origin, capture, accessible);
+        await exerciseNumericInput(page, db, origin);
+        assert.deepEqual(runtimeErrors, []);
         return;
       }
       if (process.env.TEST_CONTROLS_ONLY === "1") {
@@ -804,6 +811,7 @@ test(
       );
       await exerciseOperationalUX(page, db, origin, capture, accessible);
       await exerciseTransactionControls(page, db, origin, capture, accessible);
+      await exerciseNumericInput(page, db, origin);
       await exerciseReleaseReadiness(page, db, origin, capture, accessible);
       await page.evaluate(async () => {
         await document.fonts.ready;
