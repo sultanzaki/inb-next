@@ -1,3 +1,5 @@
+> Operational UX phases 1–3 require [migration 014](../src/lib/db/migrations/014_operational_ux.sql) after 013, before deploying the matching code. See [rollout and checks](OPERATIONAL-UX.md).
+
 > Latest operational expansion: see [Operational Finance rollout](OPERATIONAL-FINANCE.md) for migrations 010–013, opt-in modules and staging acceptance flows.
 
 # Penerapan perbaikan keamanan dan integritas QC

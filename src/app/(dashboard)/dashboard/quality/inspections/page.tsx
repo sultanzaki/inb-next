@@ -814,6 +814,7 @@ export default function InspeksiPage() {
                               <Input
                                 className="w-full"
                                 aria-label={`Result ${sp.parameter_uji}`}
+                                numberFormat="raw"
                                 inputMode={
                                   sp.tipe_batas === "TEXT" ? "text" : "decimal"
                                 }

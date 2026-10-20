@@ -8,6 +8,7 @@ export function useERPPage(
   page = 1,
   id?: string,
   enabled = true,
+  scope?: Record<string, unknown>,
 ) {
   const [version, setVersion] = useState(0),
     [response, setResponse] = useState<{
@@ -15,7 +16,17 @@ export function useERPPage(
       data?: ERPPage;
       error?: string;
     } | null>(null);
-  const key = JSON.stringify([entity, q, state, page, id, version, enabled]);
+  const scopeKey = JSON.stringify(scope || {});
+  const key = JSON.stringify([
+    entity,
+    q,
+    state,
+    page,
+    id,
+    version,
+    enabled,
+    scopeKey,
+  ]);
   useEffect(() => {
     if (!enabled) return;
     const abort = new AbortController();
@@ -23,6 +34,7 @@ export function useERPPage(
       () => {
         const params = new URLSearchParams({ q, state, page: String(page) });
         if (id) params.set("id", id);
+        if (entity.startsWith("choices/")) params.set("scope", scopeKey);
         void fetch("/api/erp/" + entity + "?" + params, {
           signal: abort.signal,
           cache: "no-store",
@@ -47,7 +59,13 @@ export function useERPPage(
       clearTimeout(timer);
       abort.abort();
     };
-  }, [key, entity, q, state, page, id, enabled]);
+  }, [key, entity, q, state, page, id, enabled, scopeKey]);
+  useEffect(() => {
+    if (!enabled) return;
+    const refresh = () => setVersion((v) => v + 1);
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [enabled]);
   const current = response?.key === key ? response : null;
   return {
     data: current?.data ?? { rows: [], total: 0, page, page_size: 50 },
@@ -56,6 +74,14 @@ export function useERPPage(
     refresh: () => setVersion((v) => v + 1),
   };
 }
+export class ERPRequestError extends Error {
+  constructor(
+    message: string,
+    public fields: { path: string; message: string }[] = [],
+  ) {
+    super(message);
+  }
+}
 export async function erpAction(action: ERPAction, payload: unknown) {
   const r = await fetch("/api/erp/" + action, {
     method: "POST",
@@ -63,6 +89,10 @@ export async function erpAction(action: ERPAction, payload: unknown) {
     body: JSON.stringify(payload),
   });
   const data = await r.json();
-  if (!r.ok) throw Error(data.message || "Could not save changes.");
+  if (!r.ok)
+    throw new ERPRequestError(
+      data.message || "Could not save changes.",
+      data.fields || [],
+    );
   return data as { id?: string; entity?: string };
 }

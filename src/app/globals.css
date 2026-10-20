@@ -5631,3 +5631,65 @@ html.dark {
     overflow: auto;
   }
 }
+
+/* Operational form feedback and contextual document choices. */
+.erp-field > div > label {
+  font-size: 12px;
+  font-weight: 600;
+}
+.erp-field small.text-destructive {
+  color: var(--color-danger);
+}
+.erp-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  color: var(--color-muted);
+  font-size: 12px;
+  cursor: help;
+}
+.erp-help:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.erp-picker-trigger {
+  height: auto;
+  min-height: 42px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.erp-picker-results > button {
+  align-items: flex-start;
+  white-space: normal;
+  text-align: left;
+}
+.erp-field [aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+.erp-document-flow {
+  margin-block: 12px;
+  min-width: 0;
+}
+.erp-document-flow li {
+  overflow-wrap: anywhere;
+}
+/* DialogFooter's generic negative margins must not create a second scroll area. */
+.erp-dialog > form.erp-form {
+  overflow: clip;
+}
+.erp-dialog .erp-form > [data-slot="dialog-footer"] {
+  margin: 0;
+}
+.erp-dialog .erp-form-body {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.erp-picker-trigger[data-invalid="true"] {
+  border-color: var(--color-danger);
+}

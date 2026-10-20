@@ -1,10 +1,18 @@
 "use client";
+import {
+  humanLabel,
+  fieldHelp,
+  money,
+  requestSuggestion,
+  allocationSuggestion,
+} from "@/lib/erp/ux";
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { ERPField, ERPForm } from "../shared";
 import { ERPPicker } from "../picker";
 import { useERPPage } from "../data";
 import { useERP } from "../context";
+import { shiftDate } from "@/lib/dashboard-analytics";
 import { businessDate } from "@/lib/domain/validation";
 import type { ERPAction, ERPRow } from "@/lib/erp/schema";
 export type WorkflowRow = Omit<ERPRow, "lines"> & Record<string, unknown>;
@@ -48,6 +56,7 @@ export function WorkflowForm({
 }) {
   const erp = useERP(),
     terms = object(row, "terms");
+  const [purpose, setPurpose] = useState("auto");
   const [requestKey] = useState(() => crypto.randomUUID());
   const [form, setForm] = useState<Record<string, unknown>>(() => ({
     id: row?.id,
@@ -56,12 +65,12 @@ export function WorkflowForm({
     reason: "",
     notes: "",
     date: businessDate(),
-    due_date: businessDate(),
+    due_date: action === "fin_create_document" ? "" : businessDate(),
     kind:
       action === "fin_record_payment"
         ? "receipt"
         : action === "fin_create_document"
-          ? "invoice"
+          ? value(row, "_kind", "invoice")
           : action === "fin_collection"
             ? "follow_up"
             : "customer_claim",
@@ -97,11 +106,21 @@ export function WorkflowForm({
         ? row?.id
         : undefined,
     ...(action === "fin_terms" ? { version: terms.version } : {}),
-    amount: value(row, "outstanding", value(row, "available", "")),
+    amount:
+      action === "fin_allocate"
+        ? ""
+        : value(row, "outstanding", value(row, "available", "")),
     external_reference: "",
     lines: [],
-    direction: "receipt",
-    party_type: "customer",
+    direction:
+      value(row, "kind") === "credit_note"
+        ? "refund"
+        : value(row, "kind") === "supplier_credit"
+          ? "supplier_refund"
+          : value(row, "party_type") === "supplier"
+            ? "payment"
+            : "receipt",
+    party_type: value(row, "party_type", "customer"),
     bank_account: "",
     bank_reference: "",
     document_id:
@@ -126,10 +145,16 @@ export function WorkflowForm({
     backdate_days: Number(row?.backdate_days ?? 30),
     dual_approval: Boolean(row?.dual_approval),
   }));
-  const [source, setSource] = useState<ERPRow | null>(null),
+  const [source, setSource] = useState<ERPRow | null>(
+      (row?._source as ERPRow) || null,
+    ),
     [related, setRelated] = useState<ERPRow | null>(null),
-    [party, setParty] = useState<ERPRow | null>(null),
-    [payment, setPayment] = useState<ERPRow | null>(null),
+    [party, setParty] = useState<ERPRow | null>(
+      (row?._party as ERPRow) || null,
+    ),
+    [payment, setPayment] = useState<ERPRow | null>(
+      (row?._payment as ERPRow) || null,
+    ),
     [lot, setLot] = useState<ERPRow | null>(null),
     [location, setLocation] = useState<ERPRow | null>(null),
     [owner, setOwner] = useState<ERPRow | null>(null),
@@ -171,7 +196,70 @@ export function WorkflowForm({
         ].includes(action)),
   );
   const detail = details.data.rows[0] as WorkflowRow | undefined;
-  const lineRows = rows(detail, "lines");
+  const billing = object(
+    detail || (source as WorkflowRow | undefined),
+    "billing",
+  );
+  const sourceTerms = object(
+    detail || (source as WorkflowRow | undefined),
+    "terms",
+  );
+  const billingEvent = value(sourceTerms, "billing_event", "dispatch");
+  const needsDelivery =
+    action === "fin_create_document" &&
+    form.kind === "invoice" &&
+    billingEvent !== "order";
+  const lineRows = needsDelivery
+    ? rows(delivery as WorkflowRow | undefined, "billing_lines")
+    : rows(detail, "lines");
+  const suggestedRequest = requestSuggestion(
+    value(detail || (source as WorkflowRow | undefined), "amount", "0"),
+    value(sourceTerms, "deposit_percent", "0"),
+    value(billing, "requested", "0"),
+    purpose === "auto"
+      ? Number(sourceTerms.deposit_percent) > 0
+        ? "deposit"
+        : "balance"
+      : purpose,
+  );
+  const allocationDocument =
+    row?.id && !row?._payment ? row : (related as WorkflowRow | undefined);
+  const suggestedAllocation = allocationSuggestion(
+    value(payment as WorkflowRow | undefined, "available", "0"),
+    value(allocationDocument, "outstanding", "0"),
+  );
+  const effectiveAmount =
+    form.amount === ""
+      ? action === "fin_allocate"
+        ? suggestedAllocation
+        : action === "fin_create_document" &&
+            form.kind === "payment_request" &&
+            purpose !== "custom"
+          ? billing.requested != null
+            ? suggestedRequest
+            : ""
+          : ""
+      : String(form.amount);
+  const allocationScope: Record<string, unknown> = {
+    state: "verified",
+    positive: true,
+  };
+  if (allocationDocument?.party_id)
+    allocationScope.party_id = allocationDocument.party_id;
+  if (allocationDocument?.party_type)
+    allocationScope.party_type = allocationDocument.party_type;
+  if (allocationDocument?.currency)
+    allocationScope.currency = allocationDocument.currency;
+  if (allocationDocument?.kind)
+    allocationScope.direction = ["supplier_bill", "supplier_request"].includes(
+      String(allocationDocument.kind),
+    )
+      ? "payment"
+      : ["credit_note"].includes(String(allocationDocument.kind))
+        ? "refund"
+        : allocationDocument.kind === "supplier_credit"
+          ? "supplier_refund"
+          : "receipt";
   const field = (
     key: string,
     label: string,
@@ -179,11 +267,23 @@ export function WorkflowForm({
     required = false,
     hint?: string,
   ) => (
-    <ERPField key={key} label={label} hint={hint}>
+    <ERPField key={key} name={key} label={label} hint={hint}>
       <Input
         type={type}
         required={required}
-        value={String(form[key] ?? "")}
+        value={
+          key === "amount"
+            ? effectiveAmount
+            : key === "due_date" && action === "fin_create_document"
+              ? String(
+                  form.due_date ||
+                    shiftDate(
+                      String(form.date),
+                      Number(sourceTerms.due_days || 0),
+                    ),
+                )
+              : String(form[key] ?? "")
+        }
         onChange={(e) =>
           set(key, type === "number" ? Number(e.target.value) : e.target.value)
         }
@@ -194,6 +294,10 @@ export function WorkflowForm({
             "price",
             "credit_limit",
             "deposit_percent",
+            "settlement_amount",
+            "estimated_cost",
+            "actual_cost",
+            "promised_amount",
           ].includes(key)
             ? "decimal"
             : undefined
@@ -202,7 +306,7 @@ export function WorkflowForm({
     </ERPField>
   );
   const select = (key: string, label: string, options: string[]) => (
-    <ERPField key={key} label={label}>
+    <ERPField key={key} name={key} label={label}>
       <select
         aria-label={label}
         value={String(form[key] ?? "")}
@@ -216,7 +320,21 @@ export function WorkflowForm({
             );
           }
           if (key === "kind" || key === "source_type") {
-            setSource(null);
+            const sameSource =
+              action === "fin_create_document" &&
+              key === "kind" &&
+              ((["invoice", "payment_request"].includes(String(form.kind)) &&
+                ["invoice", "payment_request"].includes(e.target.value)) ||
+                (["supplier_bill", "supplier_request"].includes(
+                  String(form.kind),
+                ) &&
+                  ["supplier_bill", "supplier_request"].includes(
+                    e.target.value,
+                  )));
+            if (!sameSource) setSource(null);
+            setDelivery(null);
+            setRelated(null);
+            set("amount", "");
             set("lines", []);
             if (key === "kind" && action === "ops_create_case")
               set("source_type", caseSources[e.target.value][0]);
@@ -225,7 +343,39 @@ export function WorkflowForm({
       >
         {options.map((x) => (
           <option value={x} key={x}>
-            {x.replaceAll("_", " ")}
+            {key === "direction"
+              ? (
+                  {
+                    receipt: "Customer payment received",
+                    payment: "Supplier payment sent",
+                    refund: "Customer refund sent",
+                    supplier_refund: "Supplier refund received",
+                  } as Record<string, string>
+                )[x] || humanLabel(x)
+              : key === "billing_event" ||
+                  key === "mode" ||
+                  [
+                    "payment_request",
+                    "supplier_request",
+                    "invoice",
+                    "supplier_bill",
+                    "credit_note",
+                    "supplier_credit",
+                  ].includes(x)
+                ? humanLabel(x)
+                : key === "source_type"
+                  ? (
+                      {
+                        receipt: "Material receipt",
+                        order: "Sales order",
+                        purchase: "Purchase order",
+                        delivery: "Delivery",
+                        lot: "Product lot",
+                        product: "Product",
+                        document: "Product document",
+                      } as Record<string, string>
+                    )[x] || x.replaceAll("_", " ")
+                  : x.replaceAll("_", " ")}
           </option>
         ))}
       </select>
@@ -244,12 +394,23 @@ export function WorkflowForm({
   const sourcePicker = (
     <ERPPicker
       entity={sourceEntity}
+      name={
+        action === "fin_create_document"
+          ? sourceEntity === "fin_purchases"
+            ? "purchase_id"
+            : "order_id"
+          : action === "ops_delivery_receipt"
+            ? "delivery_id"
+            : "source_id"
+      }
       label={
         action === "fin_create_document" ? "Source order" : "Source record"
       }
       value={source}
       onChange={(r) => {
         setSource(r);
+        setDelivery(null);
+        set("amount", "");
         set("lines", []);
         if (action === "fin_create_document") {
           const days = Number(object(r as WorkflowRow, "terms").due_days || 0);
@@ -260,7 +421,22 @@ export function WorkflowForm({
       }}
     />
   );
+  const submittedLines = (form.lines as Record<string, unknown>[]).filter(
+    (line) => {
+      const quantity = String(line.quantity ?? "").trim();
+      return quantity !== "" && Number(quantity.replace(",", ".")) !== 0;
+    },
+  );
   const mappedLines = lineRows.map((l, i) => {
+    const submittedIndex = submittedLines.findIndex(
+      (line) => line.line_id === l.id,
+    );
+    const path =
+      action === "fin_create_document"
+        ? submittedIndex >= 0
+          ? `lines.${submittedIndex}`
+          : `unselected.${i}`
+        : `lines.${i}`;
     const current = (form.lines as Record<string, unknown>[])[i] || {};
     return (
       <article className="workflow-line" key={value(l, "id", String(i))}>
@@ -275,6 +451,7 @@ export function WorkflowForm({
         {action === "ops_delivery_receipt" ? (
           ["accepted", "rejected"].map((k) => (
             <ERPField
+              name={`lines.${i}.${k}`}
               label={`${k === "accepted" ? "Accepted" : "Rejected"} quantity — line ${i + 1}`}
               key={k}
             >
@@ -300,7 +477,31 @@ export function WorkflowForm({
           ))
         ) : (
           <>
-            <ERPField label={`Invoice quantity — line ${i + 1}`}>
+            <ERPField
+              name={`${path}.quantity`}
+              label={`${amendment ? "Revised" : "Invoice"} quantity — line ${i + 1}`}
+            >
+              {!amendment && (
+                <button
+                  type="button"
+                  className="text-xs text-primary underline text-left"
+                  onClick={() => {
+                    const lines = lineRows.map((x, j) => ({
+                      line_id: x.id,
+                      quantity: "0",
+                      price: x.price,
+                      ...((form.lines as object[])[j] || {}),
+                    }));
+                    lines[i] = {
+                      ...lines[i],
+                      quantity: value(l, "unbilled", "0"),
+                    };
+                    set("lines", lines);
+                  }}
+                >
+                  Use remaining {value(l, "unbilled", "0")}
+                </button>
+              )}
               <Input
                 inputMode="decimal"
                 value={String(
@@ -319,7 +520,10 @@ export function WorkflowForm({
               />
             </ERPField>
             {form.kind === "supplier_bill" && (
-              <ERPField label={`Supplier unit price — line ${i + 1}`}>
+              <ERPField
+                name={`${path}.price`}
+                label={`Supplier unit price — line ${i + 1}`}
+              >
                 <Input
                   inputMode="decimal"
                   value={String(current.price ?? l.price ?? "")}
@@ -341,7 +545,11 @@ export function WorkflowForm({
       </article>
     );
   });
-  const payload: Record<string, unknown> = { ...form, request_key: requestKey };
+  const payload: Record<string, unknown> = {
+    ...form,
+    amount: effectiveAmount,
+    request_key: requestKey,
+  };
   if (action === "ops_create_case") {
     payload.source_id = source?.id;
     payload.assigned_to = owner?.id;
@@ -379,16 +587,17 @@ export function WorkflowForm({
       : undefined;
     if (["invoice", "supplier_bill"].includes(String(form.kind)))
       payload.amount = undefined;
+    payload.due_date =
+      form.due_date ||
+      shiftDate(String(form.date), Number(sourceTerms.due_days || 0));
     payload.case_id = claim?.id;
     payload.delivery_id = delivery?.id;
-    payload.lines = (form.lines as Record<string, unknown>[])
-      .filter((l) => Number(String(l.quantity).replace(",", ".")) > 0)
-      .map((l) => ({
-        ...l,
-        ...(form.kind === "supplier_bill" && !l.price
-          ? { price: lineRows.find((x) => x.id === l.line_id)?.price }
-          : {}),
-      }));
+    payload.lines = submittedLines.map((l) => ({
+      ...l,
+      ...(form.kind === "supplier_bill" && !l.price
+        ? { price: lineRows.find((x) => x.id === l.line_id)?.price }
+        : {}),
+    }));
   }
   if (["ops_replacement", "ops_supplier_return"].includes(action)) {
     payload.lot_id = action === "ops_supplier_return" ? lot?.lot_id : lot?.id;
@@ -399,7 +608,7 @@ export function WorkflowForm({
   if (action === "fin_record_payment") payload.party_id = party?.id;
   if (action === "fin_allocate") {
     payload.payment_id = payment?.id;
-    payload.document_id = row?.id || related?.id;
+    payload.document_id = allocationDocument?.id;
   }
   if (action === "fin_move_allocation") payload.document_id = related?.id;
   if (action === "fin_apply_credit") payload.invoice_id = related?.id;
@@ -409,6 +618,14 @@ export function WorkflowForm({
     <ERPForm
       action={action}
       payload={payload}
+      disabled={
+        action === "fin_create_document" &&
+        (details.loading ||
+          (sourceEntity === "fin_orders" &&
+            source !== null &&
+            value(sourceTerms, "state") !== "approved") ||
+          (needsDelivery && !delivery))
+      }
       onDone={onDone}
       label={
         action === "fin_create_document"
@@ -618,7 +835,7 @@ export function WorkflowForm({
           ])}
           {field("deposit_percent", "Deposit percentage", "text", true)}
           {field("due_days", "Credit days", "number", true)}
-          {select("billing_event", "Invoice trigger", [
+          {select("billing_event", "When to issue the invoice", [
             "order",
             "dispatch",
             "receipt",
@@ -669,11 +886,112 @@ export function WorkflowForm({
             <ERPPicker
               entity="fin_documents"
               label="Original issued invoice/bill"
+              name="related_id"
               value={related}
               onChange={setRelated}
             />
           ) : (
             sourcePicker
+          )}
+          {source && (
+            <section className="erp-notice" aria-label="Source billing summary">
+              <strong>
+                {value(
+                  source as WorkflowRow,
+                  "label",
+                  value(source as WorkflowRow, "number"),
+                )}
+              </strong>
+              <p>
+                Order total:{" "}
+                {money(
+                  value(detail || (source as WorkflowRow), "amount", "0"),
+                  value(detail || (source as WorkflowRow), "currency", "IDR"),
+                )}
+              </p>
+              {sourceEntity === "fin_orders" && (
+                <>
+                  <p>
+                    Terms:{" "}
+                    {humanLabel(value(sourceTerms, "mode", "Not configured"))} ·{" "}
+                    {value(sourceTerms, "state", "Not configured")}
+                  </p>
+                  <p>
+                    Deposit: {value(sourceTerms, "deposit_percent", "0")}% ·
+                    Requested:{" "}
+                    {money(
+                      value(billing, "requested", "0"),
+                      value(source as WorkflowRow, "currency", "IDR"),
+                    )}{" "}
+                    · Verified allocated:{" "}
+                    {money(
+                      value(billing, "paid", "0"),
+                      value(source as WorkflowRow, "currency", "IDR"),
+                    )}
+                  </p>
+                  {value(sourceTerms, "state") !== "approved" && (
+                    <p role="alert">
+                      Approve payment terms in Finance → Sales orders before
+                      saving billing.
+                    </p>
+                  )}
+                  {form.kind === "invoice" && (
+                    <p>
+                      {humanLabel(billingEvent)}.{" "}
+                      {needsDelivery
+                        ? "Choose a posted delivery below. For payment before shipment, choose Payment request / advance."
+                        : "An invoice can be created before shipment."}
+                    </p>
+                  )}
+                  {!details.loading && billing.requested == null && (
+                    <p role="status">
+                      Automatic billing suggestions need a database update.
+                      Review existing payment requests before entering a manual
+                      amount.
+                    </p>
+                  )}
+                  {rows(billing, "requests").map((r) => (
+                    <p key={value(r, "id")}>
+                      <a
+                        className="underline"
+                        href={
+                          "/dashboard/finance?view=documents&record=" +
+                          value(r, "id")
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {value(r, "number")}
+                      </a>{" "}
+                      · {humanLabel(value(r, "state"))} · Remaining{" "}
+                      {money(
+                        value(r, "outstanding", "0"),
+                        value(source as WorkflowRow, "currency", "IDR"),
+                      )}
+                    </p>
+                  ))}
+                </>
+              )}
+            </section>
+          )}
+          {form.kind === "payment_request" && source && (
+            <ERPField
+              label="Payment request purpose"
+              help="Suggestions subtract existing non-void payment requests to avoid requesting the same advance twice. Unpaid requests remain payable; use the existing request for a partial payment."
+            >
+              <select
+                value={purpose}
+                onChange={(e) => {
+                  setPurpose(e.target.value);
+                  set("amount", "");
+                }}
+              >
+                <option value="auto">Follow approved payment terms</option>
+                <option value="deposit">Down payment (DP)</option>
+                <option value="balance">Remaining order balance</option>
+                <option value="custom">Custom amount</option>
+              </select>
+            </ERPField>
           )}
           {field("date", "Document date", "date", true)}
           {field("due_date", "Due date", "date", true)}
@@ -686,13 +1004,36 @@ export function WorkflowForm({
             field("amount", "Amount", "text", true)
           ) : (
             <>
-              {form.kind === "invoice" && (
+              {needsDelivery && source && (
                 <ERPPicker
                   entity="posted_deliveries"
-                  label="Posted delivery (unless billing at order)"
+                  label="Posted delivery"
+                  name="delivery_id"
+                  scope={{ order_id: source?.id }}
                   value={delivery}
-                  onChange={setDelivery}
+                  onChange={(r) => {
+                    setDelivery(r);
+                    set("lines", []);
+                  }}
                 />
+              )}
+              {lineRows.length > 0 && (
+                <button
+                  type="button"
+                  className="text-xs text-primary underline text-left"
+                  onClick={() =>
+                    set(
+                      "lines",
+                      lineRows.map((l) => ({
+                        line_id: l.id,
+                        quantity: value(l, "unbilled", "0"),
+                        price: l.price,
+                      })),
+                    )
+                  }
+                >
+                  Use all remaining quantities
+                </button>
               )}
               {details.loading && source ? (
                 <p role="status">Loading billing lines…</p>
@@ -766,22 +1107,55 @@ export function WorkflowForm({
           <ERPPicker
             entity="fin_payments"
             label="Verified payment"
+            name="payment_id"
+            scope={allocationScope}
             value={payment}
-            onChange={setPayment}
+            onChange={(r) => {
+              setPayment(r);
+              set("amount", "");
+            }}
           />
-          {!row?.id && (
+          {(!row?.id || Boolean(row?._payment)) && (
             <ERPPicker
               entity="fin_documents"
               label="Issued document"
+              scope={{
+                state: "issued",
+                positive: true,
+                ...((payment as WorkflowRow)?.party_id
+                  ? { party_id: (payment as WorkflowRow).party_id }
+                  : {}),
+                ...(payment?.currency ? { currency: payment.currency } : {}),
+              }}
               value={related}
-              onChange={setRelated}
+              onChange={(r) => {
+                setRelated(r);
+                if (!row?._payment) setPayment(null);
+                set("amount", "");
+              }}
             />
           )}{" "}
           {field("amount", "Allocation amount", "text", true)}
-          <p className="erp-notice">
-            Party, currency, payment direction and available balances must
-            match.
-          </p>
+          <p className="erp-notice">{fieldHelp.allocation}</p>
+          {payment && allocationDocument && (
+            <p className="erp-notice">
+              Suggested allocation:{" "}
+              <strong>
+                {money(
+                  suggestedAllocation,
+                  value(payment as WorkflowRow, "currency", "IDR"),
+                )}
+              </strong>
+              . This is limited to the available payment and document balance.{" "}
+              <button
+                type="button"
+                className="underline"
+                onClick={() => set("amount", "")}
+              >
+                Use suggested amount
+              </button>
+            </p>
+          )}
         </>
       )}
       {action === "fin_move_allocation" && (

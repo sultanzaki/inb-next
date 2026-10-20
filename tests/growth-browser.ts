@@ -78,9 +78,9 @@ export async function exerciseGrowth(
   await pick("Supplier", supplier);
   await pick("Material", material);
   await top()
-    .getByLabel(/Quantity \(/)
+    .getByRole("textbox", { name: /^Quantity \(/ })
     .fill("100");
-  await top().getByLabel("Unit price", { exact: true }).fill("12500.25");
+  await top().getByLabel("Unit price", { exact: true }).fill("12.500,25");
   await capture("70-purchase-form");
   await accessible();
   await save("Save draft");
@@ -191,7 +191,9 @@ export async function exerciseGrowth(
       (r: { product_id: string }) => r.product_id === doc.product_id,
     ),
   );
-  await page.goto(origin + "/dashboard/product-documents?product=" + doc.product_id);
+  await page.goto(
+    origin + "/dashboard/product-documents?product=" + doc.product_id,
+  );
   await page.getByRole("button", { name: "New document", exact: true }).click();
   assert.match(
     await top()

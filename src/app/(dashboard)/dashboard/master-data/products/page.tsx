@@ -658,6 +658,7 @@ export default function ProdukPage() {
                                   sp.tipe_batas === "TEXT" ||
                                   sp.tipe_batas === "MAX"
                                 }
+                                numberFormat="raw"
                                 inputMode="decimal"
                                 value={sp.nilai_min}
                                 onChange={(e) =>
@@ -679,6 +680,7 @@ export default function ProdukPage() {
                                   sp.tipe_batas === "TEXT" ||
                                   sp.tipe_batas === "MIN"
                                 }
+                                numberFormat="raw"
                                 inputMode="decimal"
                                 value={sp.nilai_maks}
                                 onChange={(e) =>

@@ -1,3 +1,4 @@
+import { exerciseOperationalUX } from "./operational-ux-browser";
 import { exerciseOperationalFinance } from "./operational-finance-browser";
 import { exerciseReleaseReadiness } from "./release-readiness-browser";
 import { exerciseGrowth } from "./growth-browser";
@@ -33,17 +34,19 @@ function jwt(role: string) {
 }
 
 test(
-  process.env.TEST_FINANCE_ONLY === "1"
-    ? "Operational Finance and Service workflows"
-    : process.env.TEST_RELEASE_READY_ONLY === "1"
-      ? "Release theme RBAC and insights"
-      : process.env.TEST_GROWTH_ONLY === "1"
-        ? "Purchase CRM and product document workflows"
-        : process.env.TEST_MOBILE_NAV_ONLY === "1"
-          ? "Mobile console navigation"
-          : process.env.TEST_ERP_ONLY === "1"
-            ? "ERP production browser workflows"
-            : "production app: authenticated reads, pagination, mutations, search, error handling and logout",
+  process.env.TEST_UX_ONLY === "1"
+    ? "Operational UX phases 1–3"
+    : process.env.TEST_FINANCE_ONLY === "1"
+      ? "Operational Finance and Service workflows"
+      : process.env.TEST_RELEASE_READY_ONLY === "1"
+        ? "Release theme RBAC and insights"
+        : process.env.TEST_GROWTH_ONLY === "1"
+          ? "Purchase CRM and product document workflows"
+          : process.env.TEST_MOBILE_NAV_ONLY === "1"
+            ? "Mobile console navigation"
+            : process.env.TEST_ERP_ONLY === "1"
+              ? "ERP production browser workflows"
+              : "production app: authenticated reads, pagination, mutations, search, error handling and logout",
   { timeout: 600000 },
   async () => {
     const db = new Client({ connectionString: dbUrl });
@@ -85,6 +88,24 @@ test(
     let failRevoke = false;
     let missingPerformanceRPCs = false;
     const relay = createServer(async (req, res) => {
+      if (
+        process.env.TEST_UX_MISSING_RPC === "1" &&
+        [
+          "erp_choices",
+          "erp_document_flow",
+          "erp_batch_preview",
+          "erp_delivery_readiness",
+        ].some((name) => req.url === "/rest/v1/rpc/" + name)
+      ) {
+        res.writeHead(404, { "content-type": "application/json" });
+        res.end(
+          JSON.stringify({
+            code: "PGRST202",
+            message: "Local pre-migration UX fixture",
+          }),
+        );
+        return;
+      }
       if (
         process.env.TEST_QUOTE_ORDER_FALLBACK === "1" &&
         req.url === "/rest/v1/rpc/erp_quote_order"
@@ -314,6 +335,27 @@ test(
       await page.locator(".release-dashboard").waitFor();
       await page.goto(origin + "/dashboard/quality");
       await page.locator(".quality-summary").waitFor();
+      if (process.env.TEST_UX_MISSING_RPC === "1") {
+        const legacy = await page.request.get(
+          origin + "/api/erp/choices/catalog",
+        );
+        assert.equal(legacy.status(), 200);
+        const scoped = await page.request.get(
+          origin +
+            "/api/erp/choices/fin_payments?scope=" +
+            encodeURIComponent(
+              JSON.stringify({ state: "verified", positive: true }),
+            ),
+        );
+        assert.equal(scoped.status(), 503);
+        assert.match((await scoped.json()).message, /database update/);
+        return;
+      }
+      if (process.env.TEST_UX_ONLY === "1") {
+        await exerciseOperationalUX(page, db, origin, capture, accessible);
+        assert.deepEqual(runtimeErrors, []);
+        return;
+      }
       if (process.env.TEST_FINANCE_ONLY === "1") {
         await exerciseOperationalFinance(
           page,
@@ -746,6 +788,7 @@ test(
         capture,
         accessible,
       );
+      await exerciseOperationalUX(page, db, origin, capture, accessible);
       await exerciseReleaseReadiness(page, db, origin, capture, accessible);
       await page.evaluate(async () => {
         await document.fonts.ready;

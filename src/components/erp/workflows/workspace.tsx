@@ -1,4 +1,5 @@
 "use client";
+import { DocumentFlow } from "../document-flow";
 import { useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Plus, ArrowUpRight, FileDown } from "lucide-react";
@@ -90,6 +91,10 @@ function Detail({
     erp = useERP();
   const [action, setAction] = useState<ERPAction | null>(null),
     [actionRow, setActionRow] = useState<WorkflowRow | undefined>();
+  const [nextRecord, setNextRecord] = useState<{
+    id: string;
+    entity: string;
+  } | null>(null);
   const scope = entity.startsWith("fin_") ? "finance" : "service",
     write = erp.can(scope, "write"),
     approve = erp.can(scope, "approve");
@@ -97,10 +102,17 @@ function Detail({
     setActionRow(row);
     setAction(a);
   };
-  const done = () => {
+  const done = (nextId?: string, nextEntity?: string) => {
     setAction(null);
     result.refresh();
     onChange();
+    if (
+      nextId &&
+      nextEntity &&
+      nextId !== id &&
+      ["fin_documents", "fin_payments"].includes(nextEntity)
+    )
+      setNextRecord({ id: nextId, entity: nextEntity });
   };
   const button = (a: ERPAction, label: string, row = r) => (
     <Button
@@ -128,6 +140,19 @@ function Detail({
       >
         {label}
       </ERPActionButton>
+    );
+  if (nextRecord)
+    return (
+      <Detail
+        key={nextRecord.entity + nextRecord.id}
+        entity={nextRecord.entity}
+        id={nextRecord.id}
+        onClose={() => {
+          setNextRecord(null);
+          result.refresh();
+        }}
+        onChange={onChange}
+      />
     );
   return (
     <>
@@ -270,6 +295,12 @@ function Detail({
                 ))}
               </>
             )}
+            {[
+              "fin_orders",
+              "fin_purchases",
+              "fin_documents",
+              "fin_payments",
+            ].includes(entity) && <DocumentFlow entity={entity} id={id} />}
             {entity === "fin_orders" && (
               <>
                 <dl className="workflow-key-values">
@@ -295,6 +326,18 @@ function Detail({
                   <p>{value(object(r, "dispatch"), "reason")}</p>
                 </div>
                 <div className="erp-actions">
+                  {write &&
+                    button("fin_create_document", "Request down payment", {
+                      ...r,
+                      _source: r,
+                      _kind: "payment_request",
+                    })}
+                  {write &&
+                    button("fin_create_document", "Create invoice", {
+                      ...r,
+                      _source: r,
+                      _kind: "invoice",
+                    })}
                   {write && button("fin_terms", "Configure payment terms")}
                   {transition("fin_approve_terms", "Approve payment terms", {
                     id: r.id,
@@ -375,6 +418,19 @@ function Detail({
                       <>
                         {write && button("fin_allocate", "Allocate payment")}
                         {write &&
+                          button(
+                            "fin_record_payment",
+                            "Record actual payment",
+                            {
+                              ...r,
+                              _party: {
+                                id: value(r, "party_id"),
+                                label: value(r, "party"),
+                                name: value(r, "party"),
+                              },
+                            },
+                          )}
+                        {write &&
                           ["invoice", "supplier_bill"].includes(
                             value(r, "kind"),
                           ) &&
@@ -415,6 +471,13 @@ function Detail({
                   <dd>{value(r, "evidence")}</dd>
                 </dl>
                 <div className="erp-actions">
+                  {r.state === "verified" &&
+                    write &&
+                    Number(value(r, "available", "0")) > 0 &&
+                    button("fin_allocate", "Allocate payment", {
+                      ...r,
+                      _payment: r,
+                    })}
                   {r.state === "draft" &&
                     transition("fin_verify_payment", "Verify actual funds", {
                       id: r.id,
@@ -562,7 +625,7 @@ export function OperationalWorkspace({
   const [search, setSearch] = useState(params.get("q") || ""),
     [state, setState] = useState(""),
     [page, setPage] = useState(1),
-    [selected, setSelected] = useState<string | null>(null),
+    [selected, setSelected] = useState<string | null>(params.get("record")),
     [action, setAction] = useState<ERPAction | null>(null);
   const entity =
     tab === "material_stock"

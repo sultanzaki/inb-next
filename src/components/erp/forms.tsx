@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ERPForm, ERPField } from "./shared";
 import { ERPPicker } from "./picker";
 import { businessDate } from "@/lib/domain/validation";
+import { money, units, decimalUnits } from "@/lib/erp/ux";
 import { coaExpiryDate } from "@/lib/domain/coa-dates";
 import { shiftDate } from "@/lib/dashboard-analytics";
 import {
@@ -20,14 +21,17 @@ type Done = (id?: string, entity?: string) => void;
 function ProductInput({
   product,
   onChange,
+  name,
 }: {
   product: ERPRow | null;
+  name?: string;
   onChange: (p: ERPRow) => void;
 }) {
   return (
     <ERPPicker
       entity="catalog"
       label="Product"
+      name={name}
       value={product}
       onChange={onChange}
     />
@@ -37,13 +41,15 @@ function UnitInput({
   product,
   value,
   onChange,
+  name,
 }: {
   product: ERPRow | null;
+  name?: string;
   value: string;
   onChange: (v: string) => void;
 }) {
   return (
-    <ERPField label="Unit">
+    <ERPField name={name} label="Unit">
       <select required value={value} onChange={(e) => onChange(e.target.value)}>
         <option value="">Select…</option>
         {product?.units?.map((u) => (
@@ -90,6 +96,7 @@ export function CustomerForm({ row, onDone }: { row?: ERPRow; onDone: Done }) {
         ).map((key) => (
           <ERPField
             key={key}
+            name={key}
             label={
               {
                 name: "Company name",
@@ -287,6 +294,7 @@ export function MoveForm({
           {inbound ? (
             <ProductInput
               product={line.product}
+              name={`lines.${i}.product_id`}
               onChange={(p) =>
                 change(i, {
                   product: p,
@@ -309,10 +317,14 @@ export function MoveForm({
               }}
             />
           )}
+          {production && line.product && (
+            <ProductionPreview product={line.product.id} date={line.mfg_date} />
+          )}
           <div className="erp-form-grid">
             {inbound ? (
               <UnitInput
                 product={line.product}
+                name={`lines.${i}.unit_id`}
                 value={line.unit_id}
                 onChange={(v) => change(i, { unit_id: v })}
               />
@@ -323,7 +335,7 @@ export function MoveForm({
                 onChange={(v, p) => change(i, { unit_id: v, product: p })}
               />
             )}
-            <ERPField label="Quantity">
+            <ERPField name={`lines.${i}.quantity`} label="Quantity">
               <Input
                 inputMode="decimal"
                 value={line.quantity}
@@ -334,7 +346,10 @@ export function MoveForm({
             {inbound && (
               <>
                 {!production && (
-                  <ERPField label="Lot / batch number">
+                  <ERPField
+                    name={`lines.${i}.lot_number`}
+                    label="Lot / batch number"
+                  >
                     <Input
                       value={line.lot_number}
                       required
@@ -346,6 +361,7 @@ export function MoveForm({
                   </ERPField>
                 )}
                 <ERPField
+                  name={`lines.${i}.mfg_date`}
                   label="Manufacturing date"
                   hint={
                     line.mfg_date
@@ -520,6 +536,7 @@ export function QuoteForm({ row, onDone }: { row?: ERPRow; onDone: Done }) {
           (key) => (
             <ERPField
               key={key}
+              name={key}
               label={
                 {
                   date: "Quotation date",
@@ -565,6 +582,7 @@ export function QuoteForm({ row, onDone }: { row?: ERPRow; onDone: Done }) {
           </div>
           <ProductInput
             product={line.product}
+            name={`lines.${i}.product_id`}
             onChange={(p) =>
               change(i, {
                 product: p,
@@ -575,6 +593,7 @@ export function QuoteForm({ row, onDone }: { row?: ERPRow; onDone: Done }) {
           <div className="erp-form-grid">
             <UnitInput
               product={line.product}
+              name={`lines.${i}.unit_id`}
               value={line.unit_id}
               onChange={(v) => change(i, { unit_id: v })}
             />
@@ -588,6 +607,7 @@ export function QuoteForm({ row, onDone }: { row?: ERPRow; onDone: Done }) {
                   }[key]
                 }
                 key={key}
+                name={`lines.${i}.${key}`}
               >
                 <Input
                   required
@@ -624,6 +644,7 @@ export function QuoteForm({ row, onDone }: { row?: ERPRow; onDone: Done }) {
           (key) => (
             <ERPField
               key={key}
+              name={key}
               label={
                 {
                   tax_rate: "Tax %",
@@ -655,8 +676,14 @@ export function QuoteForm({ row, onDone }: { row?: ERPRow; onDone: Done }) {
           ),
         )}
       </div>
+      <QuoteTotals
+        lines={lines}
+        tax={value.tax_rate}
+        freight={value.freight}
+        currency={value.currency}
+      />
       <p className="erp-notice">
-        Amounts are calculated on the server. Discounts above 10% require
+        Final amounts are checked on the server. Discounts above 10% require
         approval. Issued quotations cannot be edited; create a revision instead.
       </p>
     </ERPForm>
@@ -1045,5 +1072,86 @@ export function AssignCountForm({ id, onDone }: { id: string; onDone: Done }) {
         onChange={setUser}
       />
     </ERPForm>
+  );
+}
+
+function QuoteTotals({
+  lines,
+  tax,
+  freight,
+  currency,
+}: {
+  lines: QuoteEditLine[];
+  tax: string;
+  freight: string;
+  currency: string;
+}) {
+  const scale = BigInt(1000000),
+    hundred = BigInt(100000000);
+  const subtotal = lines.reduce((sum, line) => {
+    const gross =
+      (units(line.quantity) * units(line.price) + scale / BigInt(2)) / scale;
+    const discount = units(line.discount);
+    return (
+      sum +
+      (discount <= hundred
+        ? (gross * (hundred - discount) + hundred / BigInt(2)) / hundred
+        : BigInt(0))
+    );
+  }, BigInt(0));
+  const taxAmount = (subtotal * units(tax) + hundred / BigInt(2)) / hundred;
+  return (
+    <section className="erp-notice" aria-label="Estimated quotation totals">
+      <strong>Estimated totals</strong>
+      <p>
+        Subtotal: {money(decimalUnits(subtotal), currency)} · Tax:{" "}
+        {money(decimalUnits(taxAmount), currency)} · Freight:{" "}
+        {money(freight || "0", currency)}
+      </p>
+      <p className="font-semibold">
+        Total:{" "}
+        {money(decimalUnits(subtotal + taxAmount + units(freight)), currency)}
+      </p>
+      <small>
+        Preview only. Final calculation and approval requirements are checked
+        when saving.
+      </small>
+    </section>
+  );
+}
+
+function ProductionPreview({
+  product,
+  date,
+}: {
+  product: string;
+  date: string;
+}) {
+  const result = useERPPage(
+    "batch-preview",
+    date,
+    "",
+    1,
+    product,
+    Boolean(product && date),
+  );
+  const preview = result.data.rows[0];
+  return (
+    <div className="erp-notice" aria-label="Production batch preview">
+      {result.loading ? (
+        <p role="status">Checking batch identity…</p>
+      ) : result.error ? (
+        <p role="alert">{result.error}</p>
+      ) : (
+        <>
+          <strong>Expected batch: {preview?.number}</strong>
+          <p>Expiry: {preview?.expiry_date}</p>
+          <small>
+            Preview only. The batch number is assigned at posting and may change
+            if another batch is posted first.
+          </small>
+        </>
+      )}
+    </div>
   );
 }

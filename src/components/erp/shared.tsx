@@ -1,5 +1,17 @@
 "use client";
-import { useRef, useState, type ReactNode, type FormEvent } from "react";
+import {
+  useRef,
+  useState,
+  useId,
+  createContext,
+  useContext,
+  Children,
+  isValidElement,
+  cloneElement,
+  type ReactElement,
+  type ReactNode,
+  type FormEvent,
+} from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,24 +24,148 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useConfirm } from "@/components/workspace/confirm-provider";
-import { erpAction } from "./data";
+import {
+  fieldHelp,
+  humanLabel,
+  validationFields,
+  type FieldError,
+} from "@/lib/erp/ux";
+import { actionSchemas } from "@/lib/erp/schema";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import { ERPRequestError, erpAction } from "./data";
 import type { ERPAction, ModuleKey } from "@/lib/erp/schema";
 import { useERP } from "./context";
+const Validation = createContext<{ errors: FieldError[]; payload: unknown }>({
+  errors: [],
+  payload: {},
+});
+const aliases: Record<string, string> = {
+  "company name": "name",
+  "contact person": "contact",
+  "tax identifier": "tax_id",
+  "source order": "order_id",
+  "source record": "source_id",
+  counterparty: "party_id",
+  "verified payment": "payment_id",
+  "issued document": "document_id",
+  "payment amount": "amount",
+  "allocation amount": "amount",
+  "amount to move": "amount",
+  "credit amount": "amount",
+  "bank / cash account reference": "bank_account",
+  "bank transaction reference": "bank_reference",
+  "verified funds / bank evidence reference": "evidence",
+  "payment date": "date",
+  "document date": "date",
+  "document type": "kind",
+  "payment mode": "mode",
+  "deposit percentage": "deposit_percent",
+  "when to issue the invoice": "billing_event",
+  "invoice trigger": "billing_event",
+  "posted delivery (unless billing at order)": "delivery_id",
+  customer: "customer_id",
+  product: "product_id",
+  supplier: "supplier_id",
+  unit: "unit_id",
+  location: "location_id",
+};
+export function useERPFieldError(name: string | undefined, label: string) {
+  const context = useContext(Validation);
+  const path =
+    name ||
+    aliases[label.toLowerCase()] ||
+    label.toLowerCase().replaceAll(" ", "_");
+  return context.errors.find((e) => e.path === path);
+}
+export function HelpTip({
+  text,
+  label = "Field help",
+}: {
+  text: string;
+  label?: string;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <button type="button" className="erp-help" aria-label={label} />
+        }
+      >
+        ?
+      </PopoverTrigger>
+      <PopoverContent className="max-w-80 rounded-lg border bg-surface p-3 text-sm text-foreground shadow-lg leading-relaxed">
+        {text}
+      </PopoverContent>
+    </Popover>
+  );
+}
 export function ERPField({
   label,
   children,
   hint,
+  name,
+  help,
+  controlId,
 }: {
   label: string;
   children: ReactNode;
   hint?: string;
+  name?: string;
+  help?: string;
+  controlId?: string;
 }) {
+  const generatedId = useId(),
+    context = useContext(Validation);
+  const id = controlId || generatedId;
+  const guessed = label.toLowerCase().replaceAll(" ", "_");
+  const path = name || aliases[label.toLowerCase()] || guessed;
+  const error = context.errors.find((e) => e.path === path);
+  const explanation =
+    help || fieldHelp[path] || fieldHelp[path.split(".").at(-1) || ""];
+  const items = Children.toArray(children);
+  const controlIndex = items.findIndex(
+    (child) =>
+      isValidElement(child) &&
+      (typeof child.type !== "string" ||
+        ["input", "textarea", "select"].includes(child.type)),
+  );
+  const content = items.map((child, index) => {
+    if (index === controlIndex && isValidElement(child)) {
+      const el = child as ReactElement<Record<string, unknown>>;
+      return cloneElement(el, {
+        id: el.props.id || id,
+        name: el.props.name || path,
+        "aria-invalid": error ? true : el.props["aria-invalid"],
+        "aria-describedby":
+          [
+            el.props["aria-describedby"],
+            hint ? id + "-hint" : "",
+            error ? id + "-error" : "",
+          ]
+            .filter(Boolean)
+            .join(" ") || undefined,
+      });
+    }
+    return child;
+  });
   return (
-    <label className="erp-field">
-      <span>{label}</span>
-      {children}
-      {hint && <small>{hint}</small>}
-    </label>
+    <div className="erp-field" data-field-path={path}>
+      <div className="flex items-center gap-2">
+        <label htmlFor={id}>{label}</label>
+        {explanation && <HelpTip text={explanation} label={"About " + label} />}
+      </div>
+      {content}
+      {hint && <small id={id + "-hint"}>{hint}</small>}
+      {error && (
+        <small id={id + "-error"} className="text-destructive" role="alert">
+          {error.message}
+        </small>
+      )}
+    </div>
   );
 }
 export function ERPModal({
@@ -100,50 +236,158 @@ export function ERPForm({
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const [fields, setFields] = useState<FieldError[]>([]);
+  const formRef = useRef<HTMLFormElement>(null);
+  function focusField(path?: string) {
+    requestAnimationFrame(() => {
+      const wrappers =
+        formRef.current?.querySelectorAll<HTMLElement>("[data-field-path]");
+      const wrapper =
+        Array.from(wrappers || []).find(
+          (el) => el.dataset.fieldPath === path,
+        ) ||
+        Array.from(wrappers || []).find(
+          (el) => path && el.dataset.fieldPath?.startsWith(path + "."),
+        );
+      const target =
+        wrapper?.querySelector<HTMLElement>("input,select,textarea") ||
+        wrapper?.querySelector<HTMLElement>(".erp-picker-trigger") ||
+        wrapper?.querySelector<HTMLElement>("button") ||
+        formRef.current?.querySelector<HTMLElement>("[role=alert]");
+      target?.focus();
+      target?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  }
   const pending = useRef(false);
   const [initial] = useState(() => JSON.stringify(payload));
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (pending.current) return;
+    const parsed = actionSchemas[action].safeParse(payload);
+    const nativeErrors: FieldError[] = [];
+    for (const el of Array.from(
+      formRef.current?.querySelectorAll<HTMLInputElement>(
+        "input,select,textarea",
+      ) || [],
+    )) {
+      if (!el.validity.valid)
+        nativeErrors.push({
+          path: el.name,
+          message: el.validity.valueMissing
+            ? "Complete this field."
+            : el.validity.patternMismatch && el.title
+              ? el.title
+              : el.validationMessage,
+        });
+    }
+    const issues = Array.from(
+      new Map(
+        [
+          ...(!parsed.success ? validationFields(parsed.error.issues) : []),
+          ...nativeErrors,
+        ].map((issue) => [issue.path, issue]),
+      ).values(),
+    );
+    if (issues.length) {
+      setFields(issues);
+      setError("Review the fields below before saving.");
+      focusField(issues[0].path);
+      return;
+    }
+    setFields([]);
     pending.current = true;
     setBusy(true);
     setError("");
     try {
       const data = await erpAction(action, payload);
-      toast.success("Saved.", {
-        id: "erp-result",
-        position: "bottom-left",
-        duration: 2000,
-      });
+      toast.success(
+        (
+          {
+            fin_verify_payment: "Payment verified.",
+            fin_allocate: "Payment allocated.",
+            fin_issue_document: "Document issued.",
+            fin_create_document: "Billing draft saved.",
+            post_move: "Stock movement posted.",
+            receive_purchase: "Receipt posted.",
+            save_draft: "Draft saved.",
+          } as Record<string, string>
+        )[action] || "Changes saved.",
+        {
+          id: "erp-result",
+          position: "bottom-left",
+          duration: 2000,
+        },
+      );
       onDone(data.id, data.entity);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save changes.");
+      if (e instanceof ERPRequestError) setFields(e.fields);
+      focusField(e instanceof ERPRequestError ? e.fields[0]?.path : undefined);
     } finally {
       pending.current = false;
       setBusy(false);
     }
   }
   return (
-    <form
-      className="erp-form"
-      aria-busy={busy}
-      data-dirty={initial !== JSON.stringify(payload)}
-      onSubmit={submit}
-    >
-      <div className="erp-form-body">
-        {error && (
-          <p role="alert" className="erp-error">
-            {error}
-          </p>
-        )}
-        {children}
-      </div>
-      <DialogFooter>
-        <Button type="submit" loading={busy} disabled={disabled}>
-          {label}
-        </Button>
-      </DialogFooter>
-    </form>
+    <Validation value={{ errors: fields, payload }}>
+      <form
+        ref={formRef}
+        noValidate
+        className="erp-form"
+        aria-busy={busy}
+        data-dirty={initial !== JSON.stringify(payload)}
+        onSubmit={submit}
+        onChange={(event) => {
+          const target = event.target;
+          if (
+            target instanceof HTMLInputElement ||
+            target instanceof HTMLTextAreaElement ||
+            target instanceof HTMLSelectElement
+          ) {
+            if (fields.some((f) => f.path === target.name)) {
+              const remaining = fields.filter((f) => f.path !== target.name);
+              setFields(remaining);
+              if (!remaining.length) setError("");
+            }
+          }
+        }}
+      >
+        <div className="erp-form-body">
+          {error && (
+            <div role="alert" tabIndex={-1} className="erp-error">
+              <p>{error}</p>
+              {fields.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {fields.map((f, i) => (
+                    <li key={i}>
+                      <button
+                        type="button"
+                        className="text-left underline"
+                        onClick={() => focusField(f.path)}
+                      >
+                        {humanLabel(
+                          f.path.replace(
+                            /\.(\d+)\./g,
+                            (_, n) => ` · line ${Number(n) + 1} · `,
+                          ),
+                        )}
+                        : {f.message}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {children}
+        </div>
+        <DialogFooter>
+          <Button type="submit" loading={busy} disabled={disabled || busy}>
+            {label}
+          </Button>
+        </DialogFooter>
+      </form>
+    </Validation>
   );
 }
 export function ERPActionButton({

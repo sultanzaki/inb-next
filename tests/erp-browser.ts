@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
 import type { Page } from "playwright";
 import type { Client } from "pg";
@@ -281,6 +282,39 @@ export async function exerciseERP(
       quote.id,
     ])
   ).rows[0];
+  // A previous browser scenario may leave Finance enabled. Honor its real
+  // dispatch gate instead of relying on an implicit disabled-module fixture.
+  if (
+    (await db.query("select state from erp_modules where key='finance'"))
+      .rows[0]?.state === "active"
+  ) {
+    const customer = (
+      await db.query("select customer_id from erp_quotes where id=$1", [
+        quote.id,
+      ])
+    ).rows[0].customer_id;
+    await post("fin_terms", {
+      request_key: randomUUID(),
+      order_id: order.id,
+      mode: "credit",
+      deposit_percent: "0",
+      due_days: 30,
+      billing_event: "dispatch",
+    });
+    await post("fin_approve_terms", {
+      id: order.id,
+      version: 1,
+      reason: "Browser fixture approved credit terms",
+    });
+    await post("fin_credit_policy", {
+      customer_id: customer,
+      currency: "IDR",
+      credit_limit: "1000000",
+      on_hold: false,
+      hold_overdue: true,
+      reason: "Browser fixture credit approved",
+    });
+  }
   await close();
   await page.goto(
     origin +

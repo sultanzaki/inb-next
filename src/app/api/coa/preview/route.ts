@@ -1,3 +1,4 @@
+import { validationMessage, validationFields } from "@/lib/erp/ux";
 import { moduleGate } from "@/lib/erp/server";
 import { requireUser } from "@/lib/auth";
 import { canAction } from "@/lib/types";
@@ -23,7 +24,13 @@ export async function POST(request: Request) {
   }
   const parsed = issueSchema.safeParse(body);
   if (!parsed.success)
-    return privateJson({ message: parsed.error.issues[0].message }, 422);
+    return privateJson(
+      {
+        message: validationMessage(parsed.error.issues),
+        fields: validationFields(parsed.error.issues),
+      },
+      422,
+    );
   const form = parsed.data;
   try {
     const source = await loadCoaSource(form);

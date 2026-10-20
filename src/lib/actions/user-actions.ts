@@ -1,4 +1,5 @@
 "use server";
+import { validationMessage, validationFields } from "@/lib/erp/ux";
 import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
 import {
@@ -54,11 +55,21 @@ export async function saveUserAction(raw: unknown): Promise<ActionResult> {
   const isUpdate = typeof raw === "object" && raw !== null && "id" in raw;
   if (isUpdate) {
     const p = updateUserSchema.safeParse(raw);
-    if (!p.success) return { ok: false, error: p.error.issues[0].message };
+    if (!p.success)
+      return {
+        ok: false,
+        error: validationMessage(p.error.issues),
+        fields: validationFields(p.error.issues),
+      };
     return manage("update_user", p.data);
   }
   const p = createUserSchema.safeParse(raw);
-  if (!p.success) return { ok: false, error: p.error.issues[0].message };
+  if (!p.success)
+    return {
+      ok: false,
+      error: validationMessage(p.error.issues),
+      fields: validationFields(p.error.issues),
+    };
   const { password, ...rest } = p.data;
   return manage("create_user", {
     ...rest,
@@ -72,7 +83,12 @@ export async function resetUserPasswordAction(
   if (!session || !canAction(session.user, "manage_users"))
     return { ok: false, error: "Access denied." };
   const p = resetPasswordSchema.safeParse(raw);
-  if (!p.success) return { ok: false, error: p.error.issues[0].message };
+  if (!p.success)
+    return {
+      ok: false,
+      error: validationMessage(p.error.issues),
+      fields: validationFields(p.error.issues),
+    };
   return manage("reset_password", {
     id: p.data.id,
     password_hash: await hashPassword(p.data.password),
@@ -84,7 +100,12 @@ export async function changePasswordAction(
   const user = await getSessionUser();
   if (!user) return { ok: false, error: "Session expired. Sign in again." };
   const p = changePasswordSchema.safeParse(raw);
-  if (!p.success) return { ok: false, error: p.error.issues[0].message };
+  if (!p.success)
+    return {
+      ok: false,
+      error: validationMessage(p.error.issues),
+      fields: validationFields(p.error.issues),
+    };
   const limit = await createAdminClient().rpc("qc_reserve_login", {
     p_key: createHash("sha256")
       .update("password-change:" + user.id)

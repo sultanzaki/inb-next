@@ -81,7 +81,7 @@ export async function exerciseOperationalFinance(
     .getByRole("button", { name: "Configure payment terms", exact: true })
     .click();
   await top()
-    .getByLabel("Invoice trigger", { exact: true })
+    .getByLabel("When to issue the invoice", { exact: true })
     .selectOption("order");
   await top().getByRole("button", { name: "Save", exact: true }).click();
   await page.waitForFunction(

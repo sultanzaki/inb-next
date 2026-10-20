@@ -1,4 +1,6 @@
 "use client";
+import { money, units, decimalUnits } from "@/lib/erp/ux";
+import { DocumentFlow } from "./document-flow";
 import { ModuleInsights } from "./module-insights";
 import { useState } from "react";
 import Link from "next/link";
@@ -294,7 +296,15 @@ function Selector({
   field,
   value,
   onChange,
+  id,
+  name,
+  "aria-invalid": invalid,
+  "aria-describedby": describedBy,
 }: {
+  id?: string;
+  name?: string;
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
   field: Field;
   value: ERPRow | null;
   onChange: (r: ERPRow) => void;
@@ -302,6 +312,10 @@ function Selector({
   return (
     <ERPPicker
       hideLabel
+      id={id}
+      name={name}
+      aria-invalid={invalid}
+      aria-describedby={describedBy}
       entity={field.entity!}
       label={field.label}
       value={value}
@@ -333,7 +347,8 @@ function GrowthView({ area }: { area: Area }) {
   const [q, setQ] = useState(params.get("q") || ""),
     [state, setState] = useState(params.get("state") || ""),
     [page, setPage] = useState(1),
-    [selected, setSelected] = useState<RecordRow | null>(null),
+    [selection, setSelection] = useState<RecordRow | null>(null),
+    [linkedId, setLinkedId] = useState(params.get("record")),
     [form, setForm] = useState<{
       entity: string;
       row?: RecordRow;
@@ -352,6 +367,20 @@ function GrowthView({ area }: { area: Area }) {
       ? "product:" + params.get("product")
       : undefined;
   const result = useERPPage(tab.key, q, state, page, productFilter, canRead);
+  const linked = useERPPage(
+    tab.key,
+    "",
+    "",
+    1,
+    linkedId || undefined,
+    Boolean(linkedId && canRead),
+  );
+  const selected =
+    selection || (linked.data.rows[0] as RecordRow | undefined) || null;
+  function setSelected(row: RecordRow | null) {
+    setLinkedId(null);
+    setSelection(row);
+  }
   function done() {
     setForm(null);
     setSelected(null);
@@ -589,7 +618,12 @@ function GrowthView({ area }: { area: Area }) {
             onClose={() => setSelected(null)}
           >
             <div className="growth-detail">
-              <RecordDetail row={selected} entity={tab.key} />
+              <>
+                {tab.key === "purchases" && (
+                  <DocumentFlow entity="purchases" id={selected.id} />
+                )}
+                <RecordDetail row={selected} entity={tab.key} />
+              </>
               <div className="growth-detail-actions">
                 {tab.key === "material_ledger" &&
                   selected.kind !== "reversal" &&
@@ -1293,14 +1327,6 @@ function GrowthForm({
     });
     delete input.stock;
   }
-  const missing =
-    fields.some(
-      (f) => !f.optional && f.type === "picker" && !picks[f.key]?.id,
-    ) ||
-    (entity === "purchases" &&
-      !mode &&
-      purchaseLines.some((l) => !l.material)) ||
-    (isReceipt && !receiptLines.some((l) => l.quantity.trim() !== ""));
   const update = (key: string, v: string) =>
     setValue((s) => ({
       ...s,
@@ -1330,7 +1356,6 @@ function GrowthForm({
                         ? "Schedule activity"
                         : "Save draft"
       }
-      disabled={missing}
     >
       {isConvert && (
         <p className="erp-notice">
@@ -1349,6 +1374,7 @@ function GrowthForm({
         {fields.map((f) => (
           <ERPField
             key={f.key}
+            name={f.key}
             label={f.label}
             hint={f.optional ? "Optional" : undefined}
           >
@@ -1410,6 +1436,7 @@ function GrowthForm({
               <ERPPicker
                 entity="materials"
                 label="Material"
+                name={`lines.${i}.material_id`}
                 value={l.material}
                 onChange={(m) =>
                   setPurchaseLines((v) =>
@@ -1419,6 +1446,7 @@ function GrowthForm({
               />
               <div className="erp-form-grid">
                 <ERPField
+                  name={`lines.${i}.quantity`}
                   label={`Quantity (${l.material?.unit || "base unit"})`}
                 >
                   <Input
@@ -1434,7 +1462,7 @@ function GrowthForm({
                     }
                   />
                 </ERPField>
-                <ERPField label="Unit price">
+                <ERPField name={`lines.${i}.price`} label="Unit price">
                   <Input
                     required
                     inputMode="decimal"
@@ -1470,6 +1498,23 @@ function GrowthForm({
             <Plus />
             Add material
           </Button>
+          <p className="erp-notice">
+            <strong>
+              Estimated total:{" "}
+              {money(
+                decimalUnits(
+                  purchaseLines.reduce(
+                    (sum, l) =>
+                      sum +
+                      (units(l.quantity) * units(l.price) + BigInt(500000)) /
+                        BigInt(1000000),
+                    BigInt(0),
+                  ),
+                ),
+                value.currency,
+              )}
+            </strong>
+          </p>
           <p className="erp-notice">
             This draft does not change stock. Confirmation requires approval
             access. Prices are recorded in the selected currency; invoices and
@@ -1510,14 +1555,30 @@ function GrowthForm({
                   Outstanding: {decimal(source?.outstanding)} {source?.unit}
                 </p>
                 <div className="erp-form-grid">
-                  <ERPField label="Receive quantity">
+                  <ERPField
+                    name={`lines.${receiptLines.filter((x) => x.quantity.trim() !== "").findIndex((x) => x.line_id === l.line_id)}.quantity`}
+                    label="Receive quantity"
+                  >
+                    <button
+                      type="button"
+                      className="text-xs text-primary underline text-left"
+                      onClick={() =>
+                        change("quantity", String(source?.outstanding || "0"))
+                      }
+                    >
+                      Use remaining {decimal(source?.outstanding)}{" "}
+                      {source?.unit}
+                    </button>
                     <Input
                       inputMode="decimal"
                       value={l.quantity}
                       onChange={(e) => change("quantity", e.target.value)}
                     />
                   </ERPField>
-                  <ERPField label="Supplier lot number">
+                  <ERPField
+                    name={`lines.${receiptLines.filter((x) => x.quantity.trim() !== "").findIndex((x) => x.line_id === l.line_id)}.lot_number`}
+                    label="Supplier lot number"
+                  >
                     <Input
                       required={!!l.quantity}
                       maxLength={150}

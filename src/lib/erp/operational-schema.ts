@@ -188,34 +188,72 @@ export const operationalSchemas = {
     reason,
     version: z.number().int().positive().optional(),
   }),
-  fin_create_document: z.object({
-    ...request,
-    kind: z.enum([
-      "payment_request",
-      "invoice",
-      "credit_note",
-      "supplier_request",
-      "supplier_bill",
-      "supplier_credit",
-    ]),
-    order_id: optionalId,
-    delivery_id: optionalId,
-    purchase_id: optionalId,
-    related_id: optionalId,
-    case_id: optionalId,
-    date,
-    due_date: date,
-    amount: amount.optional(),
-    external_reference: text.optional(),
-    notes: text.optional(),
-    reason: text.optional(),
-    lines: z
-      .array(
-        z.object({ line_id: id, quantity: amount, price: amount.optional() }),
-      )
-      .max(100)
-      .optional(),
-  }),
+  fin_create_document: z
+    .object({
+      ...request,
+      kind: z.enum([
+        "payment_request",
+        "invoice",
+        "credit_note",
+        "supplier_request",
+        "supplier_bill",
+        "supplier_credit",
+      ]),
+      order_id: optionalId,
+      delivery_id: optionalId,
+      purchase_id: optionalId,
+      related_id: optionalId,
+      case_id: optionalId,
+      date,
+      due_date: date,
+      amount: amount.optional(),
+      external_reference: text.optional(),
+      notes: text.optional(),
+      reason: text.optional(),
+      lines: z
+        .array(
+          z.object({ line_id: id, quantity: amount, price: amount.optional() }),
+        )
+        .max(100)
+        .optional(),
+    })
+    .superRefine((data, ctx) => {
+      const source = ["invoice", "payment_request"].includes(data.kind)
+        ? "order_id"
+        : ["supplier_bill", "supplier_request"].includes(data.kind)
+          ? "purchase_id"
+          : "related_id";
+      if (!data[source])
+        ctx.addIssue({
+          code: "custom",
+          path: [source],
+          message:
+            source === "related_id"
+              ? "Select the original issued invoice or bill."
+              : "Select the source order.",
+        });
+      if (["invoice", "supplier_bill"].includes(data.kind)) {
+        if (!data.lines?.length)
+          ctx.addIssue({
+            code: "custom",
+            path: ["lines"],
+            message:
+              "Enter at least one quantity to bill, or use the remaining quantities.",
+          });
+      } else if (!data.amount || Number(data.amount.replace(",", ".")) <= 0)
+        ctx.addIssue({
+          code: "custom",
+          path: ["amount"],
+          message:
+            "Enter an amount greater than zero. Review existing requests before creating another.",
+        });
+      if (data.due_date < data.date)
+        ctx.addIssue({
+          code: "custom",
+          path: ["due_date"],
+          message: "Due date cannot be before the document date.",
+        });
+    }),
   fin_issue_document: z.object(transition),
   fin_void_document: z.object(transition),
   fin_record_payment: z.object({

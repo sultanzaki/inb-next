@@ -1,10 +1,16 @@
+import { validationFields, humanLabel, type FieldError } from "@/lib/erp/ux";
 import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser } from "@/lib/auth";
 import { canAction } from "@/lib/types";
 import type { z } from "zod";
 
-export type ActionResult = { ok: boolean; error?: string; id?: string };
+export type ActionResult = {
+  ok: boolean;
+  error?: string;
+  fields?: FieldError[];
+  id?: string;
+};
 export async function mutate(
   action: string,
   raw: unknown,
@@ -19,7 +25,10 @@ export async function mutate(
   if (!parsed.success)
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid data.",
+      error: validationFields(parsed.error.issues)
+        .map((i) => humanLabel(i.path) + ": " + i.message)
+        .join(" "),
+      fields: validationFields(parsed.error.issues),
     };
   const token = (await cookies()).get("session_token")?.value;
   try {

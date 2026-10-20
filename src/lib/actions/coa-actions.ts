@@ -1,4 +1,5 @@
 "use server";
+import { validationMessage, validationFields } from "@/lib/erp/ux";
 import { requireUser } from "@/lib/auth";
 import { canAction, type COA } from "@/lib/types";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -43,7 +44,11 @@ export async function issueCoaAction(payload: IssueCoaPayload) {
     return { ok: false, error: "Access denied." };
   const parsed = issueSchema.safeParse(payload);
   if (!parsed.success)
-    return { ok: false, error: parsed.error.issues[0].message };
+    return {
+      ok: false,
+      error: validationMessage(parsed.error.issues),
+      fields: validationFields(parsed.error.issues),
+    };
   try {
     const source = await loadCoaSource(parsed.data);
     if (
@@ -83,7 +88,11 @@ export async function updateCoaAction(payload: UpdateCoaPayload) {
     return { ok: false, error: "Access denied." };
   const parsed = updateCoaSchema.safeParse(payload);
   if (!parsed.success)
-    return { ok: false, error: parsed.error.issues[0].message };
+    return {
+      ok: false,
+      error: validationMessage(parsed.error.issues),
+      fields: validationFields(parsed.error.issues),
+    };
   const { data, error } = await createAdminClient()
     .from("coa")
     .select("*")

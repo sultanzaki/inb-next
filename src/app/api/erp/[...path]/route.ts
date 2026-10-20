@@ -1,9 +1,10 @@
+import { validationFields } from "@/lib/erp/ux";
 import { linkedQuoteOrder } from "@/lib/erp/quote-order";
 import { sameOrigin } from "@/lib/erp/origin";
 import { toCsv } from "@/lib/export-data";
 import { requireUser, logAudit } from "@/lib/auth";
 import { privateJson } from "@/lib/api-response";
-import { erpRpc, erpError } from "@/lib/erp/server";
+import { erpRpc, erpError, erpUxError } from "@/lib/erp/server";
 import { actionSchemas, type ERPAction } from "@/lib/erp/schema";
 import type { CoaDocument } from "@/lib/pdf/coa-document";
 export const maxDuration = 60;
@@ -13,6 +14,85 @@ export async function GET(request: Request, context: Context) {
   if (!session) return privateJson({ message: "Session expired." }, 401);
   const { path } = await context.params,
     p = new URL(request.url).searchParams;
+  if (path[0] === "delivery-readiness" && path.length === 1) {
+    const id = p.get("id");
+    if (!id || !/^[0-9a-f-]{36}$/i.test(id))
+      return privateJson({ message: "Select a delivery." }, 400);
+    const { data, error } = await erpRpc("erp_delivery_readiness", {
+      p_id: id,
+    });
+    return error ? erpUxError(error) : privateJson(data);
+  }
+  if (path[0] === "batch-preview" && path.length === 1) {
+    const id = p.get("id"),
+      date = p.get("q");
+    if (
+      !id ||
+      !/^[0-9a-f-]{36}$/i.test(id) ||
+      !date ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(date)
+    )
+      return privateJson(
+        { message: "Select a product and manufacturing date." },
+        400,
+      );
+    const { data, error } = await erpRpc("erp_batch_preview", {
+      p_product: id,
+      p_date: date,
+    });
+    return error ? erpUxError(error) : privateJson(data);
+  }
+  if (path[0] === "flow" && path.length === 2) {
+    const id = p.get("id");
+    if (!id || !/^[0-9a-f-]{36}$/i.test(id))
+      return privateJson({ message: "Select a source document." }, 400);
+    const { data, error } = await erpRpc("erp_document_flow", {
+      p_entity: path[1],
+      p_id: id,
+    });
+    return error ? erpUxError(error) : privateJson(data);
+  }
+  if (path[0] === "choices" && path.length === 2) {
+    const page = Number(p.get("page") || 1),
+      search = p.get("q") || "";
+    let scope: Record<string, unknown>;
+    try {
+      scope = JSON.parse(p.get("scope") || "{}");
+    } catch {
+      return privateJson({ message: "Invalid filters." }, 400);
+    }
+    if (
+      !Number.isSafeInteger(page) ||
+      page < 1 ||
+      page > 1000000 ||
+      search.length > 100 ||
+      !scope ||
+      Array.isArray(scope) ||
+      typeof scope !== "object" ||
+      JSON.stringify(scope).length > 1500
+    )
+      return privateJson({ message: "Invalid filters." }, 400);
+    const { data, error } = await erpRpc("erp_choices", {
+      p_entity: path[1],
+      p_search: search,
+      p_page: page,
+      p_scope: scope,
+    });
+    if (
+      error &&
+      ["PGRST202", "42883"].includes(error.code) &&
+      Object.keys(scope).every((key) => key === "state")
+    ) {
+      const legacy = await erpRpc("erp_read", {
+        p_entity: path[1],
+        p_search: search,
+        p_state: String(scope.state || ""),
+        p_page: page,
+      });
+      return legacy.error ? erpError(legacy.error) : privateJson(legacy.data);
+    }
+    return error ? erpUxError(error) : privateJson(data);
+  }
   if (path[0] === "export" && path.length === 2) {
     const q = p.get("q") || "",
       state = p.get("state") || "",
@@ -314,11 +394,8 @@ export async function POST(request: Request, context: Context) {
   if (!parsed.success)
     return privateJson(
       {
-        message: parsed.error.issues[0].message,
-        fields: parsed.error.issues.map((i) => ({
-          path: i.path.join("."),
-          message: i.message,
-        })),
+        message: "Review the highlighted fields before saving.",
+        fields: validationFields(parsed.error.issues),
       },
       422,
     );

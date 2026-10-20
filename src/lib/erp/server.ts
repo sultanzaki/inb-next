@@ -1,4 +1,5 @@
 import "server-only";
+import { erpProblem } from "./problems";
 import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { privateJson } from "@/lib/api-response";
@@ -16,8 +17,10 @@ export async function moduleGate(module: ModuleKey, verb = "read") {
 }
 export function erpError(error: { code?: string; message?: string }) {
   const code = error.code;
+  const problem = erpProblem(error);
   const message =
-    code === "42501"
+    problem.message ??
+    (code === "42501"
       ? "Module unavailable or access denied."
       : code === "P0001"
         ? error.message
@@ -32,9 +35,9 @@ export function erpError(error: { code?: string; message?: string }) {
                   code === "22P02" ||
                   code === "22007"
                 ? "Check required fields, quantities, and dates."
-                : "Workspace unavailable. Check the ERP migration and retry.";
+                : "Workspace unavailable. Check the ERP migration and retry.");
   return privateJson(
-    { message },
+    { message, ...(problem.fields.length ? { fields: problem.fields } : {}) },
     code === "42501"
       ? 403
       : code === "P0002"
@@ -45,4 +48,16 @@ export function erpError(error: { code?: string; message?: string }) {
             ? 422
             : 503,
   );
+}
+
+export function erpUxError(error: { code?: string; message?: string }) {
+  return error.code === "PGRST202" || error.code === "42883"
+    ? privateJson(
+        {
+          message:
+            "This workflow needs a database update. Ask an administrator to complete deployment, then retry.",
+        },
+        503,
+      )
+    : erpError(error);
 }

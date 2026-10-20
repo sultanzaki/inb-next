@@ -10,6 +10,7 @@ import {
   type ReactNode,
   type ReactElement,
 } from "react";
+import { validationFields, humanLabel } from "@/lib/erp/ux";
 import type { z } from "zod";
 import { CircleAlert } from "lucide-react";
 
@@ -33,17 +34,25 @@ export function DomainForm({
     const result = schema.safeParse(value);
     if (!result.success) {
       const next: Errors = {};
-      for (const issue of result.error.issues)
-        next[issue.path.join(".") || "_form"] ??=
-          issue.code === "invalid_format" && issue.format === "uuid"
-            ? "Choose a valid value."
-            : issue.code === "invalid_format" && issue.format === "date"
-              ? "Enter a valid date."
-              : issue.message;
+      for (const issue of validationFields(result.error.issues))
+        next[issue.path || "_form"] ??= issue.message;
       setErrors(next);
       requestAnimationFrame(() =>
         ref.current?.querySelector<HTMLElement>("[aria-invalid=true]")?.focus(),
       );
+      return;
+    }
+    const invalid = ref.current?.querySelector<HTMLInputElement>(
+      "input:invalid,select:invalid,textarea:invalid",
+    );
+    if (invalid) {
+      setErrors({
+        [invalid.name || "_form"]:
+          invalid.validity.patternMismatch && invalid.title
+            ? invalid.title
+            : invalid.validationMessage,
+      });
+      invalid.focus();
       return;
     }
     setErrors({});
@@ -78,12 +87,24 @@ export function DomainForm({
           <div role="alert" className="form-summary-error mx-6 mt-4">
             <CircleAlert className="size-4 shrink-0" />
             <span>
-              {errors._form ||
-                Object.values(errors)
-                  .filter(
-                    (message, index, all) => all.indexOf(message) === index,
-                  )
-                  .join(" ")}
+              {Object.entries(errors).map(([path, message]) => (
+                <button
+                  key={path}
+                  type="button"
+                  className="block text-left underline"
+                  onClick={() => {
+                    const target = Array.from(
+                      ref.current?.querySelectorAll<HTMLElement>("[name]") ||
+                        [],
+                    ).find((el) => el.getAttribute("name") === path);
+                    target?.focus();
+                    target?.scrollIntoView({ block: "nearest" });
+                  }}
+                >
+                  {path === "_form" ? "" : humanLabel(path) + ": "}
+                  {message}
+                </button>
+              ))}
             </span>
           </div>
         )}

@@ -1,4 +1,7 @@
 "use client";
+import { DocumentFlow, DispatchReadiness } from "./document-flow";
+import { WorkflowForm } from "./workflows/forms";
+import { ERPModal as ContextModal } from "./shared";
 import { ModuleInsights } from "./module-insights";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
@@ -192,7 +195,14 @@ export function ERPWorkspace({ area }: { area: Area }) {
     [create, setCreate] = useState(
       area === "sales" && params.has("opportunity") && params.has("customer"),
     ),
-    [detail, setDetail] = useState<{ entity: string; id: string } | null>(null),
+    [detail, setDetail] = useState<{ entity: string; id: string } | null>(() =>
+      params.get("record")
+        ? {
+            entity: params.get("view") || tabs[0].key,
+            id: params.get("record")!,
+          }
+        : null,
+    ),
     [refresh, setRefresh] = useState(0);
   useEffect(() => {
     const view = params.get("view");
@@ -654,6 +664,7 @@ function RecordDetail({
       line?: CountLine | OrderLine;
     } | null>(null),
     [customerRef, setCustomerRef] = useState("");
+  const [billingKind, setBillingKind] = useState<string | null>(null);
   const done = (nextId?: string, nextEntity?: string) => {
     setEdit(false);
     setSubForm(null);
@@ -696,6 +707,61 @@ function RecordDetail({
         <p>Record not found.</p>
       ) : (
         <>
+          {(order || quote || movement) && (
+            <DocumentFlow entity={entity} id={id} />
+          )}
+          {movement &&
+            row.kind === "delivery" &&
+            row.state === "draft" &&
+            row.order_id && (
+              <DispatchReadiness orderId={row.order_id} movementId={id} />
+            )}
+          {order && erp.can("finance", "write") && (
+            <div className="erp-actions">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setBillingKind("payment_request")}
+              >
+                Request down payment
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setBillingKind("invoice")}
+              >
+                Create invoice
+              </Button>
+            </div>
+          )}
+          {billingKind && (
+            <ContextModal
+              title={
+                billingKind === "invoice"
+                  ? "Create invoice"
+                  : "Request down payment"
+              }
+              description="Source order is already selected. Review payment terms and amounts."
+              onClose={() => setBillingKind(null)}
+            >
+              <WorkflowForm
+                action="fin_create_document"
+                row={{
+                  id: row.id,
+                  _source: {
+                    id: row.id,
+                    number: row.number,
+                    label: row.number,
+                  },
+                  _kind: billingKind,
+                }}
+                onDone={() => {
+                  setBillingKind(null);
+                  result.refresh();
+                }}
+              />
+            </ContextModal>
+          )}
           {entity === "lots" && <LotTrace row={row} onDone={done} />}
           {entity === "returns" && <ReturnDetail row={row} onDone={done} />}
           {quote && row.state === "accepted" && (
