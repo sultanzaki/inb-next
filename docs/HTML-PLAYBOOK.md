@@ -1,20 +1,22 @@
-# INBIONUSA Operations Playbook
+# INBIONUSA Operations Slides
 
-The deliverable is one self-contained file: [inbionusa-operations.html](../public/docs/inbionusa-operations.html). Download it and open it in a browser. Logo, DM Sans fonts, CSS and JavaScript are embedded; it has no CDN, analytics or database dependency.
+The deliverable is one self-contained HTML slideshow: [inbionusa-operations.html](../public/docs/inbionusa-operations.html). Download it and open it in a browser. Logo, DM Sans fonts, CSS and JavaScript are embedded; it has no CDN, analytics or database dependency.
 
-It contains 29 Indonesian topics, retaining the application's English menu/button names: workspace map, master data, production, Quality/COA, warehouse, sales, payment terms, invoice triggers, billing, payment allocation, DP example, customer credit, aging, purchasing, Service, claims, settlements, corrections, product documents, CRM, access, module modes, errors, learning scenarios and glossary.
+The deck contains 35 slides in Indonesian, retaining the application's English menu/button names. Topics cover workspaces, master data, production, Quality/COA, warehouse, sales, payment terms, invoice triggers, billing, payment allocation, customer credit, aging, purchasing, Service, claims, settlements, corrections, product documents, CRM, access, module modes, errors, learning scenarios and glossary.
 
 ## Controls
 
-- Document mode shows every section; the table of contents searches the full topic text.
-- Presentation mode shows one topic. Use previous/next, Left/Right, Page Up/Page Down, Home/End, or the topic menu. Native input/button keyboard behavior is preserved.
-- Full screen is available where the browser supports it.
-- Print / PDF prints every topic in A4 landscape, even when only one slide is visible on screen.
+- One 16:9 slide is visible at a time, fitted to the viewport without page scrolling.
+- Click **Mulai fullscreen** to enter fullscreen. Browsers require a user gesture; fullscreen cannot start automatically.
+- Navigate with previous/next, Left/Right, Page Up/Page Down, Home/End, or **Daftar slide**.
+- Press **F** to toggle fullscreen. Space advances outside form controls.
+- Presentation controls fade when idle and reappear on interaction.
 - The payment-terms simulator is illustrative and changes no operational records.
-- JavaScript-disabled browsers can still read and print the document.
 
-The file is also served at `/docs/inbionusa-operations.html` by the application after deployment; the site's existing login middleware applies. No operational UI, permissions, database schema or migration is changed by this document.
+JavaScript is required for slide navigation. Landscape orientation is recommended on phones to make the presentation easier to read.
 
-Edition: 20 October 2026. This is a static guide, not a live dashboard or proof that a particular database has been migrated. Business descriptions were checked against the current operational Finance, release operations, learning examples and role documentation. Future feature changes should update this file explicitly.
+The file is also served at `/docs/inbionusa-operations.html` by the application after deployment; the site's existing login middleware applies. No operational UI, permissions, database schema or migration is changed by this presentation.
 
-Validation: Chromium document/presentation navigation, mobile topic menu/search, payment simulation, no external asset requests, JavaScript-disabled fallback, and print rendering. All 29 topics were checked for page overflow at 320, 375, 768 and 1440 px. Automated WCAG A/AA checks reported no violations in document mode; print output was 29 pages. Review captures and the diagnostic PDF are local verification artifacts, not additional deliverables.
+Edition: 20 October 2026. This is a static guide, not a live dashboard or proof that a particular database has been migrated. Future feature changes should update this file explicitly.
+
+Validation: Chromium fullscreen entry/exit, keyboard navigation, slide index, payment simulation, and no external asset requests or JavaScript errors. All 35 slides were checked for scrolling and content clipping at 375, 768, 1440 and 1920 px. Automated WCAG A/AA checks on the interactive simulator slide reported no violations.
