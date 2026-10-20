@@ -14,6 +14,27 @@ export async function GET(request: Request, context: Context) {
   if (!session) return privateJson({ message: "Session expired." }, 401);
   const { path } = await context.params,
     p = new URL(request.url).searchParams;
+  if (path[0] === "controls" && path.length === 2) {
+    const id = p.get("id"),
+      page = Number(p.get("page") || 1);
+    if (
+      !id ||
+      !/^[0-9a-f-]{36}$/i.test(id) ||
+      !Number.isSafeInteger(page) ||
+      page < 1 ||
+      page > 1000000
+    )
+      return privateJson(
+        { message: "Select a document and valid history page." },
+        400,
+      );
+    const { data, error } = await erpRpc("erp_controls", {
+      p_entity: path[1],
+      p_id: id,
+      p_page: page,
+    });
+    return error ? erpUxError(error) : privateJson(data);
+  }
   if (path[0] === "delivery-readiness" && path.length === 1) {
     const id = p.get("id");
     if (!id || !/^[0-9a-f-]{36}$/i.test(id))

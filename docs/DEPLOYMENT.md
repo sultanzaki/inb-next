@@ -1,3 +1,7 @@
+> Rollout 20 October 2026: migration 015 applied to the configured Supabase project. Server-only RPC permissions and RLS for all three new tables verified; REST rejects an empty application session with 403. Local lint, typecheck, 27 unit tests, 115 database tests, 3 HTTP tests, production build, targeted mobile controls and full browser regression passed.
+
+> Phase 4 transaction controls require [migration 015](../src/lib/db/migrations/015_transaction_controls.sql) after 014, before deploying the matching code. See [controls and correction rules](TRANSACTION-CONTROLS.md).
+
 > Operational UX phases 1–3 require [migration 014](../src/lib/db/migrations/014_operational_ux.sql) after 013, before deploying the matching code. See [rollout and checks](OPERATIONAL-UX.md).
 
 > Latest operational expansion: see [Operational Finance rollout](OPERATIONAL-FINANCE.md) for migrations 010–013, opt-in modules and staging acceptance flows.

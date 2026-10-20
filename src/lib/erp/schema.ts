@@ -302,7 +302,16 @@ export const actionSchemas = {
     quantity: qty,
   }),
   unreserve: z.object({ id, reason: short }),
-  close_order: z.object({ id, reason: short }),
+  close_order: z.object({
+    id,
+    reason: short,
+    review_token: z.string().regex(/^[a-f0-9]{32}$/),
+  }),
+  close_purchase: z.object({
+    ...transition,
+    reason: short,
+    review_token: z.string().regex(/^[a-f0-9]{32}$/),
+  }),
   create_delivery: z.object({
     order_id: id,
     reason: text,

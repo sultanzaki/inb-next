@@ -1,5 +1,6 @@
 "use client";
 import { money, units, decimalUnits } from "@/lib/erp/ux";
+import { TransactionControls } from "./transaction-controls";
 import { DocumentFlow } from "./document-flow";
 import { ModuleInsights } from "./module-insights";
 import { useState } from "react";
@@ -142,7 +143,14 @@ const descriptions = {
   materials: "Track incoming materials, available lots and consumption.",
 };
 const states: Record<string, string[]> = {
-  purchases: ["draft", "confirmed", "partial", "received", "cancelled"],
+  purchases: [
+    "draft",
+    "confirmed",
+    "partial",
+    "received",
+    "closed",
+    "cancelled",
+  ],
   suppliers: ["active", "inactive"],
   materials: ["active", "low_stock", "inactive"],
   opportunities: ["lead", "qualified", "proposal", "won", "lost"],
@@ -620,7 +628,15 @@ function GrowthView({ area }: { area: Area }) {
             <div className="growth-detail">
               <>
                 {tab.key === "purchases" && (
-                  <DocumentFlow entity="purchases" id={selected.id} />
+                  <>
+                    <TransactionControls
+                      entity="purchases"
+                      id={selected.id}
+                      currency={text(selected.currency) || "IDR"}
+                      onDone={done}
+                    />
+                    <DocumentFlow entity="purchases" id={selected.id} />
+                  </>
                 )}
                 <RecordDetail row={selected} entity={tab.key} />
               </>
@@ -697,9 +713,7 @@ function GrowthView({ area }: { area: Area }) {
                             Receive materials
                           </Button>
                         )}
-                      {["draft", "confirmed", "partial"].includes(
-                        selected.state || "",
-                      ) &&
+                      {["draft", "confirmed"].includes(selected.state || "") &&
                         ((selected.state === "draft" && write) ||
                           (selected.state !== "draft" && approve)) && (
                           <ERPActionButton

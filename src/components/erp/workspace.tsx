@@ -1,4 +1,5 @@
 "use client";
+import { TransactionControls } from "./transaction-controls";
 import { DocumentFlow, DispatchReadiness } from "./document-flow";
 import { WorkflowForm } from "./workflows/forms";
 import { ERPModal as ContextModal } from "./shared";
@@ -708,7 +709,18 @@ function RecordDetail({
       ) : (
         <>
           {(order || quote || movement) && (
-            <DocumentFlow entity={entity} id={id} />
+            <>
+              <TransactionControls
+                entity={entity}
+                id={id}
+                currency={row.currency || "IDR"}
+                onDone={() => {
+                  result.refresh();
+                  onDone(id, entity);
+                }}
+              />
+              <DocumentFlow entity={entity} id={id} />
+            </>
           )}
           {movement &&
             row.kind === "delivery" &&
@@ -721,6 +733,7 @@ function RecordDetail({
               <Button
                 size="sm"
                 variant="outline"
+                disabled={row.state === "closed"}
                 onClick={() => setBillingKind("payment_request")}
               >
                 Request down payment
@@ -1156,17 +1169,6 @@ function RecordDetail({
                   >
                     Create delivery
                   </Button>
-                )}
-                {row.state === "confirmed" && erp.can("sales", "write") && (
-                  <ERPActionButton
-                    action="close_order"
-                    payload={{ id }}
-                    reason
-                    destructive
-                    onDone={done}
-                  >
-                    Close outstanding order
-                  </ERPActionButton>
                 )}
               </div>
               <div className="erp-detail-lines">

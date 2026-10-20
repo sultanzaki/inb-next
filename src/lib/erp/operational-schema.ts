@@ -254,6 +254,13 @@ export const operationalSchemas = {
           message: "Due date cannot be before the document date.",
         });
     }),
+  fin_review_variance: z.object({
+    ...transition,
+    reason: z.string().trim().min(10).max(2000),
+    review_token: z.string().regex(/^[a-f0-9]{32}$/),
+    acknowledged: z.literal(true),
+  }),
+  fin_cancel_request: z.object(transition),
   fin_issue_document: z.object(transition),
   fin_void_document: z.object(transition),
   fin_record_payment: z.object({

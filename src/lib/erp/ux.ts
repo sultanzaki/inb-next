@@ -125,7 +125,10 @@ export function validationFields(
     else if (i.code === "invalid_type")
       message = "Enter or select a valid value.";
     else if (i.code === "invalid_value")
-      message = "Select one of the available options.";
+      message =
+        i.path.at(-1) === "acknowledged"
+          ? "Confirm that you reviewed the variance."
+          : "Select one of the available options.";
     else if (i.code === "invalid_union")
       message = "Enter a valid value, or leave this optional field empty.";
     else if (i.code === "invalid_format" && i.format === "uuid")

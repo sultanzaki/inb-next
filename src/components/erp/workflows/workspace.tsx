@@ -1,4 +1,5 @@
 "use client";
+import { TransactionControls } from "../transaction-controls";
 import { DocumentFlow } from "../document-flow";
 import { useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
@@ -301,6 +302,26 @@ function Detail({
               "fin_documents",
               "fin_payments",
             ].includes(entity) && <DocumentFlow entity={entity} id={id} />}
+            {[
+              "fin_orders",
+              "fin_purchases",
+              "fin_documents",
+              "fin_payments",
+            ].includes(entity) && (
+              <TransactionControls
+                entity={entity}
+                id={id}
+                currency={value(r, "currency", "IDR")}
+                version={
+                  entity === "fin_documents" &&
+                  r.kind === "supplier_bill" &&
+                  r.document_state === "draft"
+                    ? Number(r.version)
+                    : undefined
+                }
+                onDone={done}
+              />
+            )}
             {entity === "fin_orders" && (
               <>
                 <dl className="workflow-key-values">
@@ -327,6 +348,7 @@ function Detail({
                 </div>
                 <div className="erp-actions">
                   {write &&
+                    r.state !== "closed" &&
                     button("fin_create_document", "Request down payment", {
                       ...r,
                       _source: r,
@@ -404,10 +426,11 @@ function Detail({
                   </a>
                   {r.document_state === "draft" ? (
                     <>
-                      {transition("fin_issue_document", "Approve and issue", {
-                        id: r.id,
-                        version: r.version,
-                      })}
+                      {r.kind !== "supplier_bill" &&
+                        transition("fin_issue_document", "Approve and issue", {
+                          id: r.id,
+                          version: r.version,
+                        })}
                       {transition("fin_void_document", "Void draft", {
                         id: r.id,
                         version: r.version,
@@ -416,6 +439,14 @@ function Detail({
                   ) : (
                     r.document_state === "issued" && (
                       <>
+                        {["payment_request", "supplier_request"].includes(
+                          value(r, "kind"),
+                        ) &&
+                          transition(
+                            "fin_cancel_request",
+                            "Cancel advance request",
+                            { id: r.id, version: r.version },
+                          )}
                         {write && button("fin_allocate", "Allocate payment")}
                         {write &&
                           button(
