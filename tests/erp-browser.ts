@@ -1,3 +1,4 @@
+import { submitControl } from "./confirmation-browser";
 import { randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
 import type { Page } from "playwright";
@@ -48,7 +49,7 @@ export async function exerciseERP(
   async function action(name: string, reason?: string) {
     await page.getByRole("button", { name, exact: true }).click();
     if (reason) await top().getByLabel("Reason", { exact: true }).fill(reason);
-    await top().getByRole("button", { name: "Confirm", exact: true }).click();
+    await submitControl(top(), "Confirm");
   }
   async function status(state: string) {
     await page.getByText("Status: " + state, { exact: true }).waitFor();
@@ -490,9 +491,7 @@ export async function exerciseERP(
     await capture("45-erp-quote-modal-" + width);
     await accessible();
     await page.keyboard.press("Escape");
-    await page
-      .getByRole("button", { name: "Discard changes", exact: true })
-      .click();
+    await submitControl(page, "Discard changes");
     await page.waitForFunction(() => !document.querySelector("[role=dialog]"));
   }
   await page.setViewportSize({ width: 1440, height: 1000 });

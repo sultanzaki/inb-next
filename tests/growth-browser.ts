@@ -1,3 +1,4 @@
+import { submitControl } from "./confirmation-browser";
 import assert from "node:assert/strict";
 import type { Page } from "playwright";
 import type { Client } from "pg";
@@ -22,12 +23,12 @@ export async function exerciseGrowth(
       .click();
   }
   async function save(name: string) {
-    await top().getByRole("button", { name, exact: true }).click();
+    await submitControl(top(), name);
     await page.waitForFunction(() => !document.querySelector("[role=dialog]"));
   }
   async function action(name: string) {
     await page.getByRole("button", { name, exact: true }).click();
-    await top().getByRole("button", { name: "Confirm", exact: true }).click();
+    await submitControl(top(), "Confirm");
     await page.waitForFunction(() => !document.querySelector("[role=dialog]"));
   }
   async function post(name: string, data: unknown) {

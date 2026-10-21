@@ -21,3 +21,9 @@ Issued advance requests may be cancelled by Finance approvers after all active a
 ## Validation
 
 Database tests cover stale reviews, permissions, partial closure, reservation release, retained stock and original quantities, billing after closure, advance cancellation without deleting funds, explicit variance review, prevention of excess receipts/billing, immutable history, private RPC helpers and repeatable migration. Browser coverage exercises closure review and history on mobile with overflow and accessibility checks.
+
+## History presentation and deliberate confirmation
+
+Changes are grouped by source record with aligned Field / Before / After columns. Newly created records show initial values directly. Dates use a readable day/month/year format, workflow states use labels, and item counts use correct singular/plural text. Long values wrap on mobile and the presentation uses the current light/dark theme.
+
+ERP confirmations, approvals and posting forms, destructive confirmation dialogs, and final COA issuance use a slide control. A pointer action must begin on the handle, reach the end, then release. Partial drags and cancellation reset the control. Clicking the track or pressing Enter in a form does not authorize submission. Keyboard users focus the slider, press End (or Arrow Right to reach 100%), then Enter. Controls reset if source form values change and disable during submission; existing permission, validation and audit checks still apply. Ordinary draft saves retain their regular button.

@@ -1,3 +1,4 @@
+import { submitControl } from "./confirmation-browser";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
@@ -155,7 +156,7 @@ export async function exerciseOperationalUX(
     .getByRole("button", { name: "Approve and issue", exact: true })
     .click();
   await top().getByLabel("Reason", { exact: true }).fill("a");
-  await top().getByRole("button", { name: "Confirm", exact: true }).click();
+  await submitControl(top(), "Confirm");
   await top()
     .getByText("Enter at least 3 characters.", { exact: true })
     .last()
@@ -173,7 +174,7 @@ export async function exerciseOperationalUX(
   await top()
     .getByLabel("Reason", { exact: true })
     .fill("Reviewed down payment");
-  await top().getByRole("button", { name: "Confirm", exact: true }).click();
+  await submitControl(top(), "Confirm");
   await page.waitForFunction(
     () => document.querySelectorAll("[role=dialog]").length === 1,
   );
@@ -265,7 +266,7 @@ export async function exerciseOperationalUX(
   await top()
     .getByLabel("Reason", { exact: true })
     .fill("Verified against bank statement");
-  await top().getByRole("button", { name: "Confirm", exact: true }).click();
+  await submitControl(top(), "Confirm");
   await page
     .getByRole("button", { name: "Allocate payment", exact: true })
     .click();

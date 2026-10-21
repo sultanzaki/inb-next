@@ -13,6 +13,7 @@ import {
   type FormEvent,
 } from "react";
 import { toast } from "sonner";
+import { SlideConfirm } from "@/components/ui/slide-confirm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -226,6 +227,7 @@ export function ERPForm({
   children,
   label = "Save",
   disabled = false,
+  destructive = false,
 }: {
   action: ERPAction;
   payload: unknown;
@@ -233,6 +235,7 @@ export function ERPForm({
   children: ReactNode;
   label?: string;
   disabled?: boolean;
+  destructive?: boolean;
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -259,10 +262,15 @@ export function ERPForm({
     });
   }
   const pending = useRef(false);
+  const slidePermit = useRef(false);
+  const requiresSlide =
+    /^(Confirm|Approve|Post|Issue|Release|Publish|Verify)\b/i.test(label);
   const [initial] = useState(() => JSON.stringify(payload));
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (pending.current) return;
+    if (requiresSlide && !slidePermit.current) return;
+    slidePermit.current = false;
     const parsed = actionSchemas[action].safeParse(payload);
     const nativeErrors: FieldError[] = [];
     for (const el of Array.from(
@@ -382,9 +390,23 @@ export function ERPForm({
           {children}
         </div>
         <DialogFooter>
-          <Button type="submit" loading={busy} disabled={disabled || busy}>
-            {label}
-          </Button>
+          {requiresSlide ? (
+            <SlideConfirm
+              label={label}
+              busy={busy}
+              disabled={disabled}
+              destructive={destructive}
+              resetKey={JSON.stringify(payload)}
+              onConfirm={() => {
+                slidePermit.current = true;
+                formRef.current?.requestSubmit();
+              }}
+            />
+          ) : (
+            <Button type="submit" loading={busy} disabled={disabled || busy}>
+              {label}
+            </Button>
+          )}
         </DialogFooter>
       </form>
     </Validation>
@@ -433,6 +455,7 @@ export function ERPActionButton({
               onDone(id, entity);
             }}
             label="Confirm"
+            destructive={destructive}
           >
             {reason ? (
               <ERPField label="Reason">

@@ -1,3 +1,4 @@
+import { submitControl } from "./confirmation-browser";
 import assert from "node:assert/strict";
 import type { Page } from "playwright";
 import type { Client } from "pg";
@@ -32,7 +33,7 @@ export async function exerciseRelease(
     await page.getByRole("button", { name: label, exact: true }).click();
     const d = page.getByRole("dialog").last();
     await d.getByLabel("Reason", { exact: true }).fill(reason);
-    await d.getByRole("button", { name: "Confirm", exact: true }).click();
+    await submitControl(d, "Confirm");
   }
   const p = (
     await db.query("select id from master_produk where kode_produk=$1", [

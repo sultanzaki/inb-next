@@ -1,3 +1,4 @@
+import { submitControl } from "./confirmation-browser";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import type { Page } from "playwright";
@@ -20,7 +21,7 @@ export async function exerciseOperationalFinance(
     return r.json();
   }
   async function pick(label: string, q: string) {
-    await top().getByRole("button", { name: label, exact: true }).click();
+    await submitControl(top(), label);
     await page
       .getByRole("textbox", { name: "Search " + label, exact: true })
       .fill(q);
@@ -91,7 +92,7 @@ export async function exerciseOperationalFinance(
     .getByRole("button", { name: "Approve payment terms", exact: true })
     .click();
   await top().getByLabel("Reason").fill("Agreement and credit reviewed");
-  await top().getByRole("button", { name: "Confirm", exact: true }).click();
+  await submitControl(top(), "Confirm");
   await page.waitForFunction(
     () => document.querySelectorAll("[role=dialog]").length === 1,
   );
@@ -119,7 +120,7 @@ export async function exerciseOperationalFinance(
     .getByRole("button", { name: "Approve and issue", exact: true })
     .click();
   await top().getByLabel("Reason").fill("Advance request approved");
-  await top().getByRole("button", { name: "Confirm", exact: true }).click();
+  await submitControl(top(), "Confirm");
   await page.waitForFunction(
     () => document.querySelectorAll("[role=dialog]").length === 1,
   );

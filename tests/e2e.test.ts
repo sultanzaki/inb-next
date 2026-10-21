@@ -1,3 +1,4 @@
+import { submitControl } from "./confirmation-browser";
 import { exerciseNumericInput } from "./numeric-input-browser";
 import { exerciseTransactionControls } from "./transaction-controls-browser";
 import { exerciseOperationalUX } from "./operational-ux-browser";
@@ -621,9 +622,7 @@ test(
         "DRAFT-ONLY",
       );
       await page.keyboard.press("Escape");
-      await page
-        .getByRole("button", { name: "Discard changes", exact: true })
-        .click();
+      await submitControl(page, "Discard changes");
       await page.waitForFunction(
         () => !document.querySelector("[role=dialog]"),
       );
@@ -744,10 +743,7 @@ test(
       await page
         .getByRole("button", { name: "Preview COA", exact: true })
         .click();
-      await page
-        .getByRole("button", { name: "Issue COA", exact: true })
-        .last()
-        .click();
+      await submitControl(page.getByRole("dialog").last(), "Issue COA");
       await page.waitForFunction(
         () => !document.querySelector("[role=dialog]"),
       );
@@ -942,9 +938,7 @@ test(
         await capture(`10-produk-form-${width}`);
         await accessible();
         await page.keyboard.press("Escape");
-        await page
-          .getByRole("button", { name: "Discard changes", exact: true })
-          .click();
+        await submitControl(page, "Discard changes");
         await page.waitForFunction(
           () => !document.querySelector("[role=dialog]"),
         );

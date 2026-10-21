@@ -16,6 +16,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { SlideConfirm } from "@/components/ui/slide-confirm";
 
 type Options = {
   title: string;
@@ -62,14 +63,13 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             <Button variant="outline" autoFocus onClick={() => finish(false)}>
               Back
             </Button>
-            <Button
-              variant={
-                options?.destructive === false ? "default" : "destructive"
-              }
-              onClick={() => finish(true)}
-            >
-              {options?.confirmLabel ?? "Delete"}
-            </Button>
+            {options && (
+              <SlideConfirm
+                label={options.confirmLabel ?? "Delete"}
+                destructive={options.destructive !== false}
+                onConfirm={() => finish(true)}
+              />
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

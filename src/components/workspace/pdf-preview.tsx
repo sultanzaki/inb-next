@@ -8,6 +8,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { SlideConfirm } from "@/components/ui/slide-confirm";
 import { ExternalLink } from "lucide-react";
 export function PdfPreview({
   url,
@@ -56,9 +57,13 @@ export function PdfPreview({
           <Button variant="outline" disabled={busy} onClick={onClose}>
             Back to editing
           </Button>
-          <Button loading={busy} onClick={() => void onIssue()}>
-            Issue COA
-          </Button>
+          <SlideConfirm
+            label="Issue COA"
+            busy={busy}
+            disabled={!url}
+            resetKey={url || ""}
+            onConfirm={() => void onIssue()}
+          />
         </DialogFooter>
       </DialogContent>
     </Dialog>

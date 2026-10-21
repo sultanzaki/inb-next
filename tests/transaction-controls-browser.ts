@@ -61,9 +61,82 @@ export async function exerciseTransactionControls(
     await dialog.evaluate((e) => e.scrollWidth <= e.clientWidth + 1),
     true,
   );
+  const slider = dialog.getByRole("slider", {
+    name: "Approve closure",
+    exact: true,
+  });
+  await slider.click();
+  await slider.press("Enter");
+  await dialog.getByLabel("Closure reason").press("Enter");
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from erp_order_closures where source_id=$1",
+        [po],
+      )
+    ).rows[0].n,
+    0,
+    "click and Enter alone cannot approve",
+  );
+  const thumb = (await slider.boundingBox())!;
+  const track = (await dialog.locator(".slide-confirm").boundingBox())!;
+  await page.mouse.move(thumb.x + 24, thumb.y + 24);
+  await page.mouse.down();
+  await page.mouse.move(thumb.x + 24 + (track.width - 56) * 0.5, thumb.y + 24, {
+    steps: 8,
+  });
+  await page.mouse.up();
+  assert.equal(await slider.getAttribute("aria-valuenow"), "0");
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from erp_order_closures where source_id=$1",
+        [po],
+      )
+    ).rows[0].n,
+    0,
+    "incomplete drag resets without approval",
+  );
+  await slider.focus();
+  await slider.press("End");
   await dialog
-    .getByRole("button", { name: "Approve closure", exact: true })
-    .click();
+    .getByLabel("Closure reason")
+    .fill("Supplier cancelled the remaining order after review");
+  assert.equal(
+    await slider.getAttribute("aria-valuenow"),
+    "0",
+    "editing the form invalidates an armed confirmation",
+  );
+  // The same control remains accessible without a pointer; arming alone does not submit.
+  await slider.focus();
+  await slider.press("End");
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from erp_order_closures where source_id=$1",
+        [po],
+      )
+    ).rows[0].n,
+    0,
+  );
+  await slider.press("Home");
+  await slider.evaluate(async (el) => {
+    el.getBoundingClientRect();
+    await Promise.all(
+      el.getAnimations().map((animation) => animation.finished),
+    );
+  });
+  await page.mouse.move(thumb.x + 24, thumb.y + 24);
+  await page.mouse.down();
+  await page.mouse.move(thumb.x + 24 + track.width - 56, thumb.y + 24, {
+    steps: 16,
+  });
+  assert.equal(
+    await slider.getAttribute("aria-valuenow"),
+    "100",
+    "full drag reaches end before release",
+  );
+  await page.mouse.up();
   await dialog.waitFor({ state: "hidden" });
   await page.goto(origin + "/dashboard/purchase?view=purchases&record=" + po);
   await page
@@ -87,5 +160,22 @@ export async function exerciseTransactionControls(
   await page
     .getByRole("heading", { name: "Document history", exact: true })
     .waitFor();
+  for (const detail of await page
+    .locator('[aria-label="Document history"] details')
+    .all())
+    await detail.locator("summary").click();
+  assert.ok(await page.locator(".history-change-heading").count());
+  assert.equal(
+    await page
+      .locator(".control-history")
+      .evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
+    true,
+  );
+  assert.equal(
+    await page.locator(".control-diff").filter({ hasText: "→" }).count(),
+    0,
+  );
+  await capture("phase4-history-mobile");
+  await accessible();
   await page.setViewportSize({ width: 1440, height: 1000 });
 }

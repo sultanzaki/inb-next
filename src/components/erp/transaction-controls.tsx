@@ -115,14 +115,24 @@ function QuantityReview({ lines }: { lines: Line[] }) {
     </div>
   );
 }
-function shown(value: unknown): string {
+function shown(value: unknown, key: string): string {
   if (value == null) return "—";
-  if (Array.isArray(value)) return `${value.length} items`;
+  if (Array.isArray(value))
+    return `${value.length} ${value.length === 1 ? "item" : "items"}`;
   if (typeof value === "object") return "Updated details";
   const text = String(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text))
+    return new Intl.DateTimeFormat("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(new Date(text + "T00:00:00Z"));
   return /^-?\d+(\.\d+)?$/.test(text)
     ? displayNumber(text)
-    : text.replaceAll("_", " ");
+    : ["state", "mode", "billing_event"].includes(key)
+      ? humanLabel(text)
+      : text;
 }
 export function TransactionControls({
   entity,
@@ -361,18 +371,58 @@ export function TransactionControls({
                         JSON.stringify(change.before[key]) !==
                           JSON.stringify(change.after[key]),
                     );
+                    if (!keys.length) return null;
+                    const created = keys.every(
+                      (key) => change.before[key] == null,
+                    );
                     return (
-                      <dl key={i} className="control-diff">
-                        {keys.map((key) => (
-                          <div key={key}>
-                            <dt>{humanLabel(key)}</dt>
-                            <dd>
-                              {shown(change.before[key])} →{" "}
-                              {shown(change.after[key])}
-                            </dd>
-                          </div>
-                        ))}
-                      </dl>
+                      <section
+                        key={i}
+                        className={
+                          "history-change-group" +
+                          (created ? " is-created" : "")
+                        }
+                        aria-label={
+                          humanLabel(change.table.replace(/^erp_/, "")) +
+                          " changes"
+                        }
+                      >
+                        <h4>{humanLabel(change.table.replace(/^erp_/, ""))}</h4>
+                        <div
+                          className="history-change-heading"
+                          aria-hidden="true"
+                        >
+                          <span>Field</span>
+                          {!created && <span>Before</span>}
+                          <span>{created ? "Initial value" : "After"}</span>
+                        </div>
+                        <dl className="control-diff">
+                          {keys.map((key) => (
+                            <div key={key}>
+                              <dt>{humanLabel(key)}</dt>
+                              <dd>
+                                {!created && (
+                                  <span className="history-value history-value-before">
+                                    <span className="sr-only">Before: </span>
+                                    {shown(change.before[key], key)}
+                                  </span>
+                                )}
+                                <span
+                                  className={
+                                    "history-value history-value-after" +
+                                    (key === "state" ? " is-state" : "")
+                                  }
+                                >
+                                  <span className="sr-only">
+                                    {created ? "Initial value: " : "After: "}
+                                  </span>
+                                  {shown(change.after[key], key)}
+                                </span>
+                              </dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </section>
                     );
                   })}
                 </details>
