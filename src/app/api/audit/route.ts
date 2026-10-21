@@ -1,3 +1,5 @@
+import { parseTableQuery } from "@/lib/tables/schema";
+import { applyTableQuery } from "@/lib/tables/postgrest";
 import { requireUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canAction } from "@/lib/types";
@@ -35,9 +37,21 @@ export async function GET(request: Request) {
       ? privateJson({ message: "Activity not found." }, 404)
       : privateJson({ data });
   }
-  let q = createAdminClient()
-    .from("audit_log")
-    .select("id,waktu,user_name,aksi,referensi", { count: "exact" })
+  let grid;
+  try {
+    grid = parseTableQuery(
+      new URL(request.url).searchParams.get("grid"),
+      "audit_log",
+    );
+  } catch {
+    return privateJson({ message: "Invalid table filters." }, 400);
+  }
+  let q = applyTableQuery(
+    createAdminClient()
+      .from("audit_log")
+      .select("id,waktu,user_name,aksi,referensi", { count: "exact" }),
+    grid,
+  )
     .order("waktu", { ascending: false })
     .order("id")
     .range(v.offset, v.offset + 49);

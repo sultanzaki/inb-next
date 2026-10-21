@@ -1,4 +1,7 @@
 "use client";
+import { useTableState } from "@/components/tables/use-table-state";
+import { AdvancedRecordsTable } from "@/components/tables/advanced-records-table";
+import { applyTableQuery } from "@/lib/tables/postgrest";
 import { useERP } from "@/components/erp/context";
 import { coaExpiryDate } from "@/lib/domain/coa-dates";
 import { RowActions } from "@/components/workspace/row-actions";
@@ -185,6 +188,7 @@ export default function COAPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [paging, setPaging] = useState(false);
 
+  const table = useTableState("coa");
   const runQuery = useCallback(
     async (start: number, pageRequest: boolean) => {
       if (pageRequest && navigating.current) return;
@@ -192,11 +196,14 @@ export default function COAPage() {
       const seq = ++requestSeq.current;
       if (pageRequest) setPaging(true);
       else setLoading(true);
-      let q = sb
-        .from("coa")
-        .select("*, master_produk!inner(kode_produk, nama_produk)", {
-          count: "exact",
-        })
+      let q = applyTableQuery(
+        sb
+          .from("coa")
+          .select("*, master_produk!inner(kode_produk, nama_produk)", {
+            count: "exact",
+          }),
+        table.query,
+      )
         .order("created_at", { ascending: order === "oldest" })
         .order("id")
         .range(start, start + pageSize - 1);
@@ -236,7 +243,7 @@ export default function COAPage() {
       setPaging(false);
       setLoading(false);
     },
-    [search, pageSize, filter, order, advanced],
+    [search, pageSize, filter, order, advanced, table.query],
   );
 
   const fetchData = useCallback(() => {
@@ -813,6 +820,7 @@ export default function COAPage() {
 
       {/* Table card: hairline border, radius 8, header micro-labels on surface-alt */}
       <DataTools
+        tableControlled
         module="coa"
         search={search}
         filter={filter}
@@ -822,175 +830,211 @@ export default function COAPage() {
         loading={loading}
       />
       <div className="data-card">
-        <Table data-actions>
-          <TableHeader>
-            <TableRow className="hover:bg-surface-alt">
-              <TableHead className="pl-4">COA number</TableHead>
-              <TableHead>Products</TableHead>
-              <TableHead>Lot number</TableHead>
-              <TableHead className="text-right">Release date</TableHead>
-              <TableHead className="text-right">Expiry date</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="pr-4">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading && <TableSkeleton rows={5} cols={7} />}
-            {!loading && loadError && (
-              <TableRow>
-                <TableCell colSpan={7} className="!p-0">
-                  <EmptyState
-                    error
-                    title="Could not load data"
-                    description="Check your connection and reload."
-                  >
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => fetchData()}
+        <AdvancedRecordsTable
+          state={table}
+          context={{ ...advanced, order }}
+          onContext={(v) => {
+            setAdvanced({
+              from: v.from || "",
+              to: v.to || "",
+              product: v.product || "",
+              person: v.person || "",
+              category: v.category || "",
+            });
+            if (["default", "newest", "oldest"].includes(v.order))
+              setOrder(v.order);
+          }}
+          onRestore={(q, s) => {
+            setSearchInput(q);
+            setSearch(q);
+            setFilter(s || "all");
+          }}
+          rows={coaList.map((r) => ({ ...r }))}
+          search={search}
+          status={filter}
+          exportURL={
+            "/api/export?" +
+            new URLSearchParams({
+              module: "coa",
+              search: search,
+              filter: filter,
+              order: order,
+              ...advanced,
+            })
+          }
+        >
+          <Table data-actions>
+            <TableHeader>
+              <TableRow className="hover:bg-surface-alt">
+                <TableHead className="pl-4">COA number</TableHead>
+                <TableHead>Products</TableHead>
+                <TableHead>Lot number</TableHead>
+                <TableHead className="text-right">Release date</TableHead>
+                <TableHead className="text-right">Expiry date</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="pr-4">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading && <TableSkeleton rows={5} cols={7} />}
+              {!loading && loadError && (
+                <TableRow>
+                  <TableCell colSpan={7} className="!p-0">
+                    <EmptyState
+                      error
+                      title="Could not load data"
+                      description="Check your connection and reload."
                     >
-                      Retry
-                    </Button>
-                  </EmptyState>
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading && !loadError && coaList.length === 0 && (
-              <TableRow className="hover:bg-surface">
-                <TableCell colSpan={7} className="!p-0">
-                  <div className="empty-state">
-                    <div className="empty-icon">
-                      <FileText className="size-4" />
-                    </div>
-                    <p className="text-base font-semibold tracking-tight">
-                      {search ||
-                      filter !== "all" ||
-                      Object.values(advanced).some(Boolean)
-                        ? "No matching results"
-                        : "No certificates yet"}
-                    </p>
-                    <p className="text-xs text-muted">
-                      {search ||
-                      filter !== "all" ||
-                      Object.values(advanced).some(Boolean)
-                        ? "Try another keyword or clear your filters."
-                        : "Add your first record to get started."}
-                    </p>
-                    {!search && filter === "all" && canIssue && (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => {
-                          resetForm();
-                          setDialogOpen(true);
-                        }}
+                        onClick={() => fetchData()}
                       >
-                        <Plus className="size-3.5" /> Issue COA
+                        Retry
                       </Button>
-                    )}
-                    {(search ||
-                      filter !== "all" ||
-                      Object.values(advanced).some(Boolean)) && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          onSearchChange("");
-                          setFilter("all");
-                          setAdvanced({ ...emptyFilters });
-                        }}
-                      >
-                        Clear filters
-                      </Button>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading &&
-              coaList.map((coa) => (
-                <TableRow key={coa.id}>
-                  <TableCell className="pl-4 font-data">{coa.no_coa}</TableCell>
-                  <TableCell>
-                    <div className="font-medium">
-                      {coa.hasil_uji_snapshot?.produk || "-"}
-                    </div>
-                    <div className="font-data text-xs text-muted">
-                      {coa.hasil_uji_snapshot?.kode_produk || "-"}
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-data text-muted">
-                    {coa.no_lot}
-                  </TableCell>
-                  <TableCell className="font-data text-muted text-right">
-                    {coa.tanggal_rilis}
-                  </TableCell>
-                  <TableCell className="font-data text-muted text-right">
-                    {coa.tanggal_expired}
-                  </TableCell>
-                  <TableCell>
-                    {coa.withdrawn ? (
-                      <Badge variant="destructive">Withdrawn</Badge>
-                    ) : (
-                      coaStatusBadge(coa.tanggal_expired)
-                    )}
-                  </TableCell>
-                  <TableCell className="pr-4">
-                    <RowActions>
-                      <CopyValue value={coa.no_coa} label="Copy COA number" />
-                      <button
-                        type="button"
-                        className="row-action"
-                        onClick={() => openDetail(coa)}
-                        title="Detail"
-                      >
-                        <Eye className="size-3.5" />
-                      </button>
-                      {canEdit && !coa.withdrawn && (
-                        <button
-                          type="button"
-                          className="row-action"
-                          onClick={() => openEdit(coa)}
-                          title="Edit"
-                        >
-                          <Pencil className="size-3.5" />
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="row-action"
-                        title="Download PDF"
-                        disabled={coa.withdrawn}
-                        onClick={() => void downloadPdf(coa)}
-                      >
-                        <Download className="size-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        className="row-action"
-                        onClick={() => handlePrint(coa)}
-                        title="Print"
-                        disabled={coa.withdrawn}
-                      >
-                        <Printer className="size-3.5" />
-                      </button>
-                      {canDelete && !coa.withdrawn && (
-                        <button
-                          type="button"
-                          className="row-action"
-                          data-tone="danger"
-                          onClick={() => handleDelete(coa.id)}
-                          title="Delete"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      )}
-                    </RowActions>
+                    </EmptyState>
                   </TableCell>
                 </TableRow>
-              ))}
-          </TableBody>
-        </Table>
+              )}
+              {!loading && !loadError && coaList.length === 0 && (
+                <TableRow className="hover:bg-surface">
+                  <TableCell colSpan={7} className="!p-0">
+                    <div className="empty-state">
+                      <div className="empty-icon">
+                        <FileText className="size-4" />
+                      </div>
+                      <p className="text-base font-semibold tracking-tight">
+                        {search ||
+                        filter !== "all" ||
+                        Object.values(advanced).some(Boolean)
+                          ? "No matching results"
+                          : "No certificates yet"}
+                      </p>
+                      <p className="text-xs text-muted">
+                        {search ||
+                        filter !== "all" ||
+                        Object.values(advanced).some(Boolean)
+                          ? "Try another keyword or clear your filters."
+                          : "Add your first record to get started."}
+                      </p>
+                      {!search && filter === "all" && canIssue && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            resetForm();
+                            setDialogOpen(true);
+                          }}
+                        >
+                          <Plus className="size-3.5" /> Issue COA
+                        </Button>
+                      )}
+                      {(search ||
+                        filter !== "all" ||
+                        Object.values(advanced).some(Boolean)) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            onSearchChange("");
+                            setFilter("all");
+                            setAdvanced({ ...emptyFilters });
+                          }}
+                        >
+                          Clear filters
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+              {!loading &&
+                coaList.map((coa) => (
+                  <TableRow key={coa.id}>
+                    <TableCell className="pl-4 font-data">
+                      {coa.no_coa}
+                    </TableCell>
+                    <TableCell>
+                      <div className="font-medium">
+                        {coa.hasil_uji_snapshot?.produk || "-"}
+                      </div>
+                      <div className="font-data text-xs text-muted">
+                        {coa.hasil_uji_snapshot?.kode_produk || "-"}
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-data text-muted">
+                      {coa.no_lot}
+                    </TableCell>
+                    <TableCell className="font-data text-muted text-right">
+                      {coa.tanggal_rilis}
+                    </TableCell>
+                    <TableCell className="font-data text-muted text-right">
+                      {coa.tanggal_expired}
+                    </TableCell>
+                    <TableCell>
+                      {coa.withdrawn ? (
+                        <Badge variant="destructive">Withdrawn</Badge>
+                      ) : (
+                        coaStatusBadge(coa.tanggal_expired)
+                      )}
+                    </TableCell>
+                    <TableCell className="pr-4">
+                      <RowActions>
+                        <CopyValue value={coa.no_coa} label="Copy COA number" />
+                        <button
+                          type="button"
+                          className="row-action"
+                          onClick={() => openDetail(coa)}
+                          title="Detail"
+                        >
+                          <Eye className="size-3.5" />
+                        </button>
+                        {canEdit && !coa.withdrawn && (
+                          <button
+                            type="button"
+                            className="row-action"
+                            onClick={() => openEdit(coa)}
+                            title="Edit"
+                          >
+                            <Pencil className="size-3.5" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="row-action"
+                          title="Download PDF"
+                          disabled={coa.withdrawn}
+                          onClick={() => void downloadPdf(coa)}
+                        >
+                          <Download className="size-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          className="row-action"
+                          onClick={() => handlePrint(coa)}
+                          title="Print"
+                          disabled={coa.withdrawn}
+                        >
+                          <Printer className="size-3.5" />
+                        </button>
+                        {canDelete && !coa.withdrawn && (
+                          <button
+                            type="button"
+                            className="row-action"
+                            data-tone="danger"
+                            onClick={() => handleDelete(coa.id)}
+                            title="Delete"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        )}
+                      </RowActions>
+                    </TableCell>
+                  </TableRow>
+                ))}
+            </TableBody>
+          </Table>
+        </AdvancedRecordsTable>
       </div>
 
       {!loading && !loadError && coaList.length > 0 && (

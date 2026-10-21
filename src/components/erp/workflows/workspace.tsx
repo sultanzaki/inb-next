@@ -1,9 +1,11 @@
 "use client";
+import { useTableState } from "@/components/tables/use-table-state";
+import { AdvancedRecordsTable } from "@/components/tables/advanced-records-table";
 import { TransactionControls } from "../transaction-controls";
 import { DocumentFlow } from "../document-flow";
 import { useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { Plus, ArrowUpRight, FileDown } from "lucide-react";
+import { Plus, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -662,6 +664,7 @@ export function OperationalWorkspace({
     tab === "material_stock"
       ? tab
       : (area === "finance" ? "fin_" : "ops_") + tab;
+  const table = useTableState(entity, () => setPage(1));
   const result = useERPPage(
     entity,
     search,
@@ -669,6 +672,8 @@ export function OperationalWorkspace({
     page,
     undefined,
     erp.can(area),
+    undefined,
+    table.query,
   );
   const write = erp.can(area, "write"),
     approve = erp.can(area, "approve");
@@ -793,20 +798,6 @@ export function OperationalWorkspace({
           <Button size="sm" variant="outline" onClick={result.refresh}>
             Refresh
           </Button>
-          {["fin_documents", "fin_payments", "ops_cases"].includes(entity) && (
-            <a
-              className="erp-document-link"
-              href={
-                "/api/erp/export/" +
-                entity +
-                "?" +
-                new URLSearchParams({ q: search, state })
-              }
-            >
-              <FileDown className="size-4" />
-              CSV
-            </a>
-          )}
         </div>
         {entity === "fin_aging" && (
           <p className="erp-notice">
@@ -826,113 +817,133 @@ export function OperationalWorkspace({
           <>
             <p className="text-xs text-muted">{result.data.total} records</p>
             <div className="data-card">
-              <Table data-actions="true">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Record</TableHead>
-                    <TableHead>Details</TableHead>
-                    <TableHead>Status / amount</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(result.data.rows as WorkflowRow[]).map((r, i) => (
-                    <TableRow key={r.id || i}>
-                      <TableCell>
-                        {tab === "aging" ? (
-                          <strong>{value(r, "bucket")}</strong>
-                        ) : (
-                          <button
-                            className="erp-record-link"
-                            onClick={() => setSelected(r.id)}
-                          >
-                            {value(
-                              r,
-                              "number",
-                              value(r, "label", value(r, "name", label)),
-                            )}
-                          </button>
-                        )}
-                        <p className="erp-row-description">
-                          {value(
-                            r,
-                            "title",
-                            value(
-                              r,
-                              "party",
-                              value(r, "name", value(r, "party_type")),
-                            ),
-                          )}
-                        </p>
-                        {r.number && <CopyValue value={r.number} />}
-                      </TableCell>
-                      <TableCell>
-                        <span>
-                          {value(
-                            r,
-                            "kind",
-                            value(r, "currency", value(r, "assignee", "—")),
-                          ).replaceAll("_", " ")}
-                        </span>
-                        <p className="erp-row-description">
-                          {value(
-                            r,
-                            "due_date",
-                            value(r, "date", value(r, "source_type")),
-                          )}
-                        </p>
-                      </TableCell>
-                      <TableCell>
-                        {Boolean(r.state) && (
-                          <Badge variant="secondary">
-                            {value(r, "state").replaceAll("_", " ")}
-                          </Badge>
-                        )}
-                        {Boolean(r.amount) && (
-                          <p>
-                            {value(r, "currency")}{" "}
-                            {decimal(value(r, "amount", "0"))}
-                          </p>
-                        )}
-                        {Boolean(r.outstanding) && (
-                          <small>
-                            Outstanding {decimal(value(r, "outstanding", "0"))}
-                          </small>
-                        )}
-                        {Boolean(r.dispatch) && (
-                          <p className="text-xs">
-                            {object(r, "dispatch").cleared
-                              ? "Cleared"
-                              : "Financial hold"}
-                          </p>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {tab !== "aging" && (
-                          <RowActions>
-                            <Button
-                              size="sm"
-                              variant="ghost"
+              <AdvancedRecordsTable
+                summary={result.data.summary}
+                state={table}
+                rows={result.data.rows}
+                search={search}
+                status={state}
+                onRestore={(q, s) => {
+                  setSearch(q);
+                  setState(s);
+                  setPage(1);
+                }}
+                exportURL={
+                  "/api/erp/export/" +
+                  entity +
+                  "?" +
+                  new URLSearchParams({ q: search, state: state })
+                }
+              >
+                <Table data-actions="true">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Record</TableHead>
+                      <TableHead>Details</TableHead>
+                      <TableHead>Status / amount</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(result.data.rows as WorkflowRow[]).map((r, i) => (
+                      <TableRow key={r.id || i}>
+                        <TableCell>
+                          {tab === "aging" ? (
+                            <strong>{value(r, "bucket")}</strong>
+                          ) : (
+                            <button
+                              className="erp-record-link"
                               onClick={() => setSelected(r.id)}
                             >
-                              Open details
-                            </Button>
-                          </RowActions>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {result.data.rows.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={4}>
-                        <p className="erp-empty">
-                          No records match these filters.
-                        </p>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                              {value(
+                                r,
+                                "number",
+                                value(r, "label", value(r, "name", label)),
+                              )}
+                            </button>
+                          )}
+                          <p className="erp-row-description">
+                            {value(
+                              r,
+                              "title",
+                              value(
+                                r,
+                                "party",
+                                value(r, "name", value(r, "party_type")),
+                              ),
+                            )}
+                          </p>
+                          {r.number && <CopyValue value={r.number} />}
+                        </TableCell>
+                        <TableCell>
+                          <span>
+                            {value(
+                              r,
+                              "kind",
+                              value(r, "currency", value(r, "assignee", "—")),
+                            ).replaceAll("_", " ")}
+                          </span>
+                          <p className="erp-row-description">
+                            {value(
+                              r,
+                              "due_date",
+                              value(r, "date", value(r, "source_type")),
+                            )}
+                          </p>
+                        </TableCell>
+                        <TableCell>
+                          {Boolean(r.state) && (
+                            <Badge variant="secondary">
+                              {value(r, "state").replaceAll("_", " ")}
+                            </Badge>
+                          )}
+                          {Boolean(r.amount) && (
+                            <p>
+                              {value(r, "currency")}{" "}
+                              {decimal(value(r, "amount", "0"))}
+                            </p>
+                          )}
+                          {Boolean(r.outstanding) && (
+                            <small>
+                              Outstanding{" "}
+                              {decimal(value(r, "outstanding", "0"))}
+                            </small>
+                          )}
+                          {Boolean(r.dispatch) && (
+                            <p className="text-xs">
+                              {object(r, "dispatch").cleared
+                                ? "Cleared"
+                                : "Financial hold"}
+                            </p>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {tab !== "aging" && (
+                            <RowActions>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setSelected(r.id)}
+                              >
+                                Open details
+                              </Button>
+                            </RowActions>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {result.data.rows.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4}>
+                          <p className="erp-empty">
+                            No records match these filters.
+                          </p>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </AdvancedRecordsTable>
             </div>
             {tab !== "aging" && (
               <DataPagination

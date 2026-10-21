@@ -1,4 +1,6 @@
 "use client";
+import { useTableState } from "@/components/tables/use-table-state";
+import { AdvancedRecordsTable } from "@/components/tables/advanced-records-table";
 import { RowActions } from "@/components/workspace/row-actions";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Eye } from "lucide-react";
@@ -55,6 +57,7 @@ export default function AuditPage() {
     const t = setTimeout(() => setQuery(search), 300);
     return () => clearTimeout(t);
   }, [search]);
+  const table = useTableState("audit_log");
   const load = useCallback(
     async (offset = 0) => {
       const id = ++seq.current;
@@ -65,6 +68,7 @@ export default function AuditPage() {
           "/api/audit?" +
             new URLSearchParams({
               q: query,
+              grid: JSON.stringify(table.query),
               from: advanced.from,
               to: advanced.to,
               actor: advanced.person,
@@ -94,7 +98,7 @@ export default function AuditPage() {
         }
       }
     },
-    [query, advanced],
+    [query, advanced, table.query],
   );
   useEffect(() => {
     const sequence = seq;
@@ -144,6 +148,7 @@ export default function AuditPage() {
         onRefresh={() => void load()}
       />
       <DataTools
+        tableControlled
         module="audit"
         search={query}
         filter="all"
@@ -153,88 +158,119 @@ export default function AuditPage() {
         loading={loading}
       />
       <div className="data-card">
-        <Table data-actions>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Time (WIB)</TableHead>
-              <TableHead>Users</TableHead>
-              <TableHead>Actions</TableHead>
-              <TableHead>Reference</TableHead>
-              <TableHead>Detail</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableSkeleton rows={5} cols={5} />
-            ) : error ? (
+        <AdvancedRecordsTable
+          state={table}
+          context={advanced}
+          onContext={(v) =>
+            setAdvanced({
+              from: v.from || "",
+              to: v.to || "",
+              product: v.product || "",
+              person: v.person || "",
+              category: v.category || "",
+            })
+          }
+          onRestore={(q) => {
+            setSearch(q);
+            setQuery(q);
+          }}
+          rows={data.map((r) => ({ ...r }))}
+          search={query}
+          status={"all"}
+          exportURL={
+            "/api/export?" +
+            new URLSearchParams({
+              module: "audit",
+              search: query,
+              filter: "all",
+              order: "default",
+              ...advanced,
+            })
+          }
+        >
+          <Table data-actions>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={5}>
-                  <EmptyState
-                    error
-                    title="Could not load the audit log"
-                    description={error}
-                  >
-                    <Button variant="outline" onClick={() => void load()}>
-                      Retry
-                    </Button>
-                  </EmptyState>
-                </TableCell>
+                <TableHead>Time (WIB)</TableHead>
+                <TableHead>Users</TableHead>
+                <TableHead>Actions</TableHead>
+                <TableHead>Reference</TableHead>
+                <TableHead>Detail</TableHead>
               </TableRow>
-            ) : data.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5}>
-                  <EmptyState
-                    title="No matching activity"
-                    description="Change the search or date range."
-                  />
-                </TableCell>
-              </TableRow>
-            ) : (
-              data.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell className="text-xs">
-                    {new Intl.DateTimeFormat("en-GB", {
-                      timeZone: "Asia/Jakarta",
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    }).format(new Date(row.waktu))}
-                  </TableCell>
-                  <TableCell>{row.user_name}</TableCell>
-                  <TableCell>
-                    <span className="audit-action">{row.aksi}</span>
-                  </TableCell>
-                  <TableCell className="max-w-56">
-                    <span
-                      className="inline-block max-w-48 truncate align-middle text-xs"
-                      title={row.referensi}
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableSkeleton rows={5} cols={5} />
+              ) : error ? (
+                <TableRow>
+                  <TableCell colSpan={5}>
+                    <EmptyState
+                      error
+                      title="Could not load the audit log"
+                      description={error}
                     >
-                      {row.referensi || "—"}
-                    </span>
-                    {row.referensi && (
-                      <CopyValue
-                        value={row.referensi}
-                        label="Copy audit reference"
-                      />
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <RowActions>
-                      {" "}
-                      <button
-                        type="button"
-                        className="row-action"
-                        title="Activity details"
-                        onClick={() => void show(row)}
-                      >
-                        <Eye className="size-3.5" />
-                      </button>
-                    </RowActions>
+                      <Button variant="outline" onClick={() => void load()}>
+                        Retry
+                      </Button>
+                    </EmptyState>
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : data.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5}>
+                    <EmptyState
+                      title="No matching activity"
+                      description="Change the search or date range."
+                    />
+                  </TableCell>
+                </TableRow>
+              ) : (
+                data.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="text-xs">
+                      {new Intl.DateTimeFormat("en-GB", {
+                        timeZone: "Asia/Jakarta",
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      }).format(new Date(row.waktu))}
+                    </TableCell>
+                    <TableCell>{row.user_name}</TableCell>
+                    <TableCell>
+                      <span className="audit-action">{row.aksi}</span>
+                    </TableCell>
+                    <TableCell className="max-w-56">
+                      <span
+                        className="inline-block max-w-48 truncate align-middle text-xs"
+                        title={row.referensi}
+                      >
+                        {row.referensi || "—"}
+                      </span>
+                      {row.referensi && (
+                        <CopyValue
+                          value={row.referensi}
+                          label="Copy audit reference"
+                        />
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <RowActions>
+                        {" "}
+                        <button
+                          type="button"
+                          className="row-action"
+                          title="Activity details"
+                          onClick={() => void show(row)}
+                        >
+                          <Eye className="size-3.5" />
+                        </button>
+                      </RowActions>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </AdvancedRecordsTable>
       </div>
       {!loading && !error && (
         <DataPagination

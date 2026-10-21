@@ -1,10 +1,11 @@
 "use client";
+import { useTableState } from "@/components/tables/use-table-state";
+import { AdvancedRecordsTable } from "@/components/tables/advanced-records-table";
 import { TransactionControls } from "./transaction-controls";
 import { DocumentFlow, DispatchReadiness } from "./document-flow";
 import { WorkflowForm } from "./workflows/forms";
 import { ERPModal as ContextModal } from "./shared";
 import { ModuleInsights } from "./module-insights";
-import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import {
@@ -188,7 +189,6 @@ export function ERPWorkspace({ area }: { area: Area }) {
   const params = useSearchParams(),
     router = useRouter(),
     pathname = usePathname();
-  const [exporting, setExporting] = useState(false);
   const [tab, setTab] = useState(tabs[0].key),
     [search, setSearch] = useState(""),
     [state, setState] = useState(""),
@@ -225,8 +225,20 @@ export function ERPWorkspace({ area }: { area: Area }) {
     if (p > 1) next.set("page", String(p));
     router.replace(pathname + "?" + next, { scroll: false });
   }
+  const table = useTableState(tab === "modules" ? "units" : tab, () =>
+    setPage(1),
+  );
   const config = tabs.find((t) => t.key === tab)!,
-    result = useERPPage(tab === "modules" ? "units" : tab, search, state, page);
+    result = useERPPage(
+      tab === "modules" ? "units" : tab,
+      search,
+      state,
+      page,
+      undefined,
+      true,
+      undefined,
+      table.query,
+    );
   useSearchSeed((q) => {
     const view = new URLSearchParams(window.location.search).get("view");
     if (view && tabs.some((t) => t.key === view)) setTab(view);
@@ -395,41 +407,6 @@ export function ERPWorkspace({ area }: { area: Area }) {
               <Button variant="outline" size="sm" onClick={result.refresh}>
                 Refresh
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={exporting}
-                onClick={async () => {
-                  setExporting(true);
-                  try {
-                    const r = await fetch(
-                      "/api/erp/export/" +
-                        tab +
-                        "?" +
-                        new URLSearchParams({ q: search, state }),
-                    );
-                    if (!r.ok) {
-                      const e = await r.json();
-                      throw Error(e.message);
-                    }
-                    const url = URL.createObjectURL(await r.blob()),
-                      a = document.createElement("a");
-                    a.href = url;
-                    a.download = tab + ".csv";
-                    a.click();
-                    setTimeout(() => URL.revokeObjectURL(url), 10000);
-                  } catch (e) {
-                    toast.error(
-                      e instanceof Error ? e.message : "Export failed.",
-                    );
-                  } finally {
-                    setExporting(false);
-                  }
-                }}
-              >
-                <FileDown className="size-3.5" />
-                {exporting ? "Exporting…" : "CSV"}
-              </Button>
             </div>
             {result.error ? (
               <div role="alert" className="erp-empty">
@@ -439,150 +416,169 @@ export function ERPWorkspace({ area }: { area: Area }) {
                 </Button>
               </div>
             ) : (
-              <div
-                className={
-                  "data-card" + (tab === "stock" ? " mobile-stock-cards" : "")
-                }
-              >
-                <Table data-actions="true">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Record</TableHead>
-                      <TableHead>
-                        {tab === "stock"
-                          ? "On hand"
-                          : tab === "ledger"
-                            ? "Change"
-                            : tab === "catalog"
-                              ? "Units"
-                              : "Details"}
-                      </TableHead>
-                      <TableHead>
-                        {tab === "stock" ? "Available" : "Status"}
-                      </TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {result.loading ? (
+              <div className={"data-card"}>
+                <AdvancedRecordsTable
+                  summary={result.data.summary}
+                  state={table}
+                  rows={result.data.rows}
+                  search={search}
+                  status={state}
+                  onRestore={(q, s) => {
+                    setSearch(q);
+                    setState(s);
+                    setPage(1);
+                  }}
+                  exportURL={
+                    "/api/erp/export/" +
+                    (tab === "modules" ? "units" : tab) +
+                    "?" +
+                    new URLSearchParams({ q: search, state: state })
+                  }
+                >
+                  <Table data-actions="true">
+                    <TableHeader>
                       <TableRow>
-                        <TableCell colSpan={4}>
-                          <p className="erp-empty" role="status">
-                            Loading records…
-                          </p>
-                        </TableCell>
+                        <TableHead>Record</TableHead>
+                        <TableHead>
+                          {tab === "stock"
+                            ? "On hand"
+                            : tab === "ledger"
+                              ? "Change"
+                              : tab === "catalog"
+                                ? "Units"
+                                : "Details"}
+                        </TableHead>
+                        <TableHead>
+                          {tab === "stock" ? "Available" : "Status"}
+                        </TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
-                    ) : result.data.rows.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={4}>
-                          <div className="erp-empty">
-                            <h2>
-                              {search || state
-                                ? "No matching records"
-                                : "No records yet"}
-                            </h2>
-                            <p>
-                              {search || state
-                                ? "Try another search or clear your filters."
-                                : "Create a record to start this workflow."}
+                    </TableHeader>
+                    <TableBody>
+                      {result.loading ? (
+                        <TableRow>
+                          <TableCell colSpan={4}>
+                            <p className="erp-empty" role="status">
+                              Loading records…
                             </p>
-                            {(search || state) && (
-                              <Button
-                                variant="outline"
-                                onClick={() => {
-                                  setSearch("");
-                                  setState("");
-                                  setPage(1);
-                                  listURL("", "", 1);
-                                }}
-                              >
-                                Clear filters
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      result.data.rows.map((row) => (
-                        <TableRow key={row.id}>
-                          <TableCell>
-                            <button
-                              type="button"
-                              className="entity-name text-left"
-                              onClick={() =>
-                                setDetail({ entity: tab, id: row.id })
-                              }
-                            >
-                              {identity(row)}
-                            </button>
-                            <p className="erp-row-description">
-                              {summary(tab, row)}
-                            </p>
-                            <CopyValue
-                              value={row.number || row.code || row.id}
-                            />
                           </TableCell>
-                          <TableCell
-                            data-label={tab === "stock" ? "On hand" : undefined}
-                          >
-                            {tab === "stock"
-                              ? `${decimal(row.on_hand)} ${row.unit}`
-                              : tab === "ledger"
-                                ? `${decimal(row.delta)} ${row.unit || ""}`
-                                : tab === "catalog"
-                                  ? row.units?.find((u) => u.is_base)?.code ||
-                                    "Not configured"
-                                  : row.date ||
-                                    row.location ||
-                                    row.contact ||
-                                    row.code ||
-                                    "—"}
+                        </TableRow>
+                      ) : result.data.rows.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={4}>
+                            <div className="erp-empty">
+                              <h2>
+                                {search || state
+                                  ? "No matching records"
+                                  : "No records yet"}
+                              </h2>
+                              <p>
+                                {search || state
+                                  ? "Try another search or clear your filters."
+                                  : "Create a record to start this workflow."}
+                              </p>
+                              {(search || state) && (
+                                <Button
+                                  variant="outline"
+                                  onClick={() => {
+                                    setSearch("");
+                                    setState("");
+                                    setPage(1);
+                                    listURL("", "", 1);
+                                  }}
+                                >
+                                  Clear filters
+                                </Button>
+                              )}
+                            </div>
                           </TableCell>
-                          <TableCell
-                            data-label={
-                              tab === "stock" ? "Available" : undefined
-                            }
-                          >
-                            {tab === "stock" ? (
-                              <>
-                                <strong>
-                                  {decimal(row.available)} {row.unit}
-                                </strong>
-                                <p className="erp-row-description">
-                                  {decimal(row.reserved)} reserved
-                                </p>
-                              </>
-                            ) : row.state ? (
-                              <Status value={row.display_state || row.state} />
-                            ) : row.can_read !== undefined ? (
-                              row.can_write ? (
-                                "Can write"
-                              ) : (
-                                "Read only"
-                              )
-                            ) : (
-                              "—"
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <RowActions>
+                        </TableRow>
+                      ) : (
+                        result.data.rows.map((row) => (
+                          <TableRow key={row.id}>
+                            <TableCell>
                               <button
                                 type="button"
-                                className="row-action"
-                                aria-label="View record"
+                                className="entity-name text-left"
                                 onClick={() =>
                                   setDetail({ entity: tab, id: row.id })
                                 }
                               >
-                                <Eye className="size-4" />
+                                {identity(row)}
                               </button>
-                            </RowActions>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
+                              <p className="erp-row-description">
+                                {summary(tab, row)}
+                              </p>
+                              <CopyValue
+                                value={row.number || row.code || row.id}
+                              />
+                            </TableCell>
+                            <TableCell
+                              data-label={
+                                tab === "stock" ? "On hand" : undefined
+                              }
+                            >
+                              {tab === "stock"
+                                ? `${decimal(row.on_hand)} ${row.unit}`
+                                : tab === "ledger"
+                                  ? `${decimal(row.delta)} ${row.unit || ""}`
+                                  : tab === "catalog"
+                                    ? row.units?.find((u) => u.is_base)?.code ||
+                                      "Not configured"
+                                    : row.date ||
+                                      row.location ||
+                                      row.contact ||
+                                      row.code ||
+                                      "—"}
+                            </TableCell>
+                            <TableCell
+                              data-label={
+                                tab === "stock" ? "Available" : undefined
+                              }
+                            >
+                              {tab === "stock" ? (
+                                <>
+                                  <strong>
+                                    {decimal(row.available)} {row.unit}
+                                  </strong>
+                                  <p className="erp-row-description">
+                                    {decimal(row.reserved)} reserved
+                                  </p>
+                                </>
+                              ) : row.state ? (
+                                <Status
+                                  value={row.display_state || row.state}
+                                />
+                              ) : row.can_read !== undefined ? (
+                                row.can_write ? (
+                                  "Can write"
+                                ) : (
+                                  "Read only"
+                                )
+                              ) : (
+                                "—"
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <RowActions>
+                                <button
+                                  type="button"
+                                  className="row-action"
+                                  aria-label="View record"
+                                  onClick={() =>
+                                    setDetail({ entity: tab, id: row.id })
+                                  }
+                                >
+                                  <Eye className="size-4" />
+                                </button>
+                              </RowActions>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </AdvancedRecordsTable>
               </div>
             )}
             <DataPagination

@@ -13,6 +13,13 @@ export async function submitControl(scope: Locator | Page, label: string) {
   });
   await slider.or(button).first().waitFor({ state: "visible" });
   if (await slider.count()) {
+    // Let the latest controlled form payload commit before arming its keyed slider.
+    await slider.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
     await slider.focus();
     await slider.press("End");
     await slider.press("Enter");

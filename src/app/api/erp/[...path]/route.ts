@@ -1,3 +1,10 @@
+import {
+  parseTableQuery,
+  entityColumns,
+  fieldValue,
+} from "@/lib/tables/schema";
+import { queryTypes } from "@/lib/tables/postgrest";
+import writeXlsxFile from "write-excel-file/node";
 import { validationFields } from "@/lib/erp/ux";
 import { linkedQuoteOrder } from "@/lib/erp/quote-order";
 import { sameOrigin } from "@/lib/erp/origin";
@@ -14,6 +21,21 @@ export async function GET(request: Request, context: Context) {
   if (!session) return privateJson({ message: "Session expired." }, 401);
   const { path } = await context.params,
     p = new URL(request.url).searchParams;
+  let tableQuery;
+  if (p.has("grid")) {
+    try {
+      const entity = path[0] === "export" ? path[1] : path[0];
+      tableQuery = queryTypes(entity, parseTableQuery(p.get("grid"), entity));
+    } catch {
+      return privateJson(
+        {
+          message:
+            "Invalid table filters or sorting. Review the selected fields and values.",
+        },
+        400,
+      );
+    }
+  }
   if (path[0] === "controls" && path.length === 2) {
     const id = p.get("id"),
       page = Number(p.get("page") || 1);
@@ -124,6 +146,11 @@ export async function GET(request: Request, context: Context) {
       ![
         "fin_documents",
         "fin_payments",
+        "fin_orders",
+        "fin_purchases",
+        "fin_credit_policies",
+        "fin_aging",
+        "ops_receipts",
         "ops_cases",
         "stock",
         "lots",
@@ -154,13 +181,17 @@ export async function GET(request: Request, context: Context) {
       return privateJson({ message: "Collection not found." }, 404);
     const rows: Record<string, unknown>[] = [];
     for (let page = 1; page <= 201; page++) {
-      const { data, error } = await erpRpc("erp_read", {
-        p_entity: path[1],
-        p_id: id,
-        p_search: q,
-        p_state: state,
-        p_page: page,
-      });
+      const { data, error } = await erpRpc(
+        tableQuery ? "erp_table_read" : "erp_read",
+        {
+          ...(tableQuery ? { p_query: { ...tableQuery, summary: [] } } : {}),
+          p_entity: path[1],
+          p_id: id,
+          p_search: q,
+          p_state: state,
+          p_page: page,
+        },
+      );
       if (error) return erpError(error);
       if (data.total > 10000)
         return privateJson(
@@ -215,17 +246,43 @@ export async function GET(request: Request, context: Context) {
       "EXPORT_ERP_" + path[1],
       JSON.stringify({ q, state, count: rows.length }),
     );
-    const csv = toCsv(
-      columns,
-      rows.map((r) =>
-        columns.map((c) =>
-          c === "total"
-            ? ((r.totals as Record<string, string> | undefined)?.total ??
-              r.total)
-            : r[c],
-        ),
-      ),
+    const requested = p.get("columns")?.split(",");
+    const configured = entityColumns[path[1]];
+    if (
+      requested &&
+      (!configured ||
+        requested.length > 40 ||
+        requested.some((key) => !configured.some((c) => c.key === key)))
+    )
+      return privateJson({ message: "Invalid export columns." }, 400);
+    const selected = requested || columns;
+    const headers = selected.map(
+      (key) => configured?.find((c) => c.key === key)?.label || key,
     );
+    const values = rows.map((row) =>
+      selected.map((key) => fieldValue(row, key)),
+    );
+    if (p.get("format") === "xlsx") {
+      const file = await writeXlsxFile(
+        [
+          headers.map((value) => ({ value, fontWeight: "bold" as const })),
+          ...values.map((row) =>
+            row.map((value) => ({ value: value == null ? "" : String(value) })),
+          ),
+        ],
+        { sheet: "Records" },
+      ).toBuffer();
+      return new Response(new Uint8Array(file), {
+        headers: {
+          "Content-Type":
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="${path[1]}.xlsx"`,
+          "Cache-Control": "private, no-store",
+          Vary: "Cookie",
+        },
+      });
+    }
+    const csv = toCsv(headers, values);
     return new Response(csv, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
@@ -249,13 +306,17 @@ export async function GET(request: Request, context: Context) {
       (id && id.length > 100)
     )
       return privateJson({ message: "Invalid filters." }, 400);
-    const { data, error } = await erpRpc("erp_read", {
-      p_entity: path[0],
-      p_page: page,
-      p_search: search,
-      p_state: state,
-      p_id: id,
-    });
+    const { data, error } = await erpRpc(
+      tableQuery ? "erp_table_read" : "erp_read",
+      {
+        ...(tableQuery ? { p_query: tableQuery } : {}),
+        p_entity: path[0],
+        p_page: page,
+        p_search: search,
+        p_state: state,
+        p_id: id,
+      },
+    );
     if (error) return erpError(error);
     if (path[0] === "quotes" && id && data?.rows?.[0]?.state === "accepted") {
       const linked = await linkedQuoteOrder(data.rows[0]);

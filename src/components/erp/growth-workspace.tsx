@@ -1,4 +1,6 @@
 "use client";
+import { useTableState } from "@/components/tables/use-table-state";
+import { AdvancedRecordsTable } from "@/components/tables/advanced-records-table";
 import { money, units, decimalUnits } from "@/lib/erp/ux";
 import { TransactionControls } from "./transaction-controls";
 import { DocumentFlow } from "./document-flow";
@@ -6,7 +8,7 @@ import { ModuleInsights } from "./module-insights";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, ArrowUpRight, FileDown, Pencil } from "lucide-react";
+import { Plus, ArrowUpRight, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -374,7 +376,17 @@ function GrowthView({ area }: { area: Area }) {
     area === "documents" && params.get("product")
       ? "product:" + params.get("product")
       : undefined;
-  const result = useERPPage(tab.key, q, state, page, productFilter, canRead);
+  const table = useTableState(tab.key, () => setPage(1));
+  const result = useERPPage(
+    tab.key,
+    q,
+    state,
+    page,
+    productFilter,
+    canRead,
+    undefined,
+    table.query,
+  );
   const linked = useERPPage(
     tab.key,
     "",
@@ -525,13 +537,6 @@ function GrowthView({ area }: { area: Area }) {
         />
         <div className="growth-list-heading">
           <h2>{tab.label}</h2>
-          <a
-            className="erp-document-link"
-            href={`/api/erp/export/${tab.key}?${new URLSearchParams({ q, state, ...(productFilter ? { id: productFilter } : {}) })}`}
-          >
-            <FileDown className="size-4" />
-            Export CSV
-          </a>
         </div>
         {result.error ? (
           <div role="alert" className="erp-empty">
@@ -555,55 +560,78 @@ function GrowthView({ area }: { area: Area }) {
           </div>
         ) : (
           <div className="table-frame mobile-stock-cards growth-records">
-            <Table data-actions>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Record</TableHead>
-                  <TableHead>Details</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-12">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(result.data.rows as RecordRow[]).map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>
-                      <button
-                        className="growth-record-link"
-                        onClick={() => setSelected(row)}
-                      >
-                        {row.number || row.code || row.title || row.name}
-                      </button>
-                      <p className="growth-record-subtitle">
-                        {row.title || row.name || row.company || row.supplier}
-                      </p>
-                      {row.number && <CopyValue value={row.number} />}
-                    </TableCell>
-                    <TableCell data-label="Details">
-                      <RowDetails row={row} entity={tab.key} />
-                    </TableCell>
-                    <TableCell data-label="Status">
-                      <Badge variant="outline">
-                        {label(row.display_state || row.state)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <RowActions
-                        label={`Actions for ${row.number || row.name || row.title}`}
-                      >
+            <AdvancedRecordsTable
+              summary={result.data.summary}
+              state={table}
+              rows={result.data.rows}
+              search={q}
+              status={state}
+              onRestore={(q, s) => {
+                setQ(q);
+                setState(s);
+                setPage(1);
+              }}
+              exportURL={
+                "/api/erp/export/" +
+                tab.key +
+                "?" +
+                new URLSearchParams({
+                  q: q,
+                  state: state,
+                  ...(productFilter ? { id: productFilter } : {}),
+                })
+              }
+            >
+              <Table data-actions>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Record</TableHead>
+                    <TableHead>Details</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="w-12">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(result.data.rows as RecordRow[]).map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>
                         <button
-                          type="button"
-                          className="row-action"
+                          className="growth-record-link"
                           onClick={() => setSelected(row)}
                         >
-                          View details
+                          {row.number || row.code || row.title || row.name}
                         </button>
-                      </RowActions>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                        <p className="growth-record-subtitle">
+                          {row.title || row.name || row.company || row.supplier}
+                        </p>
+                        {row.number && <CopyValue value={row.number} />}
+                      </TableCell>
+                      <TableCell data-label="Details">
+                        <RowDetails row={row} entity={tab.key} />
+                      </TableCell>
+                      <TableCell data-label="Status">
+                        <Badge variant="outline">
+                          {label(row.display_state || row.state)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <RowActions
+                          label={`Actions for ${row.number || row.name || row.title}`}
+                        >
+                          <button
+                            type="button"
+                            className="row-action"
+                            onClick={() => setSelected(row)}
+                          >
+                            View details
+                          </button>
+                        </RowActions>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </AdvancedRecordsTable>
           </div>
         )}
         <DataPagination

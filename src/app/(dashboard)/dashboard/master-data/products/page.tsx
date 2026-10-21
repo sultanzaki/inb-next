@@ -1,4 +1,7 @@
 "use client";
+import { useTableState } from "@/components/tables/use-table-state";
+import { AdvancedRecordsTable } from "@/components/tables/advanced-records-table";
+import { applyTableQuery } from "@/lib/tables/postgrest";
 import Link from "next/link";
 import { useERP } from "@/components/erp/context";
 import { SpecificationParameters } from "@/components/workspace/specification-parameters";
@@ -173,6 +176,7 @@ export default function ProdukPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [paging, setPaging] = useState(false);
 
+  const table = useTableState("master_produk");
   const runQuery = useCallback(
     async (start: number, pageRequest: boolean) => {
       if (pageRequest && navigating.current) return;
@@ -180,9 +184,10 @@ export default function ProdukPage() {
       const seq = ++requestSeq.current;
       if (pageRequest) setPaging(true);
       else setLoading(true);
-      let q = sb
-        .from("master_produk")
-        .select("*", { count: "exact" })
+      let q = applyTableQuery(
+        sb.from("master_produk").select("*", { count: "exact" }),
+        table.query,
+      )
         .order(order === "default" ? "nama_produk" : "created_at", {
           ascending: order !== "newest",
         })
@@ -225,7 +230,7 @@ export default function ProdukPage() {
       setPaging(false);
       setLoading(false);
     },
-    [search, pageSize, filter, order, advanced],
+    [search, pageSize, filter, order, advanced, table.query],
   );
 
   const fetchData = useCallback(() => {
@@ -810,6 +815,7 @@ export default function ProdukPage() {
 
       {/* Table card: hairline border, radius 8, header micro-labels on surface-alt */}
       <DataTools
+        tableControlled
         module="produk"
         search={search}
         filter={filter}
@@ -819,150 +825,186 @@ export default function ProdukPage() {
         loading={loading}
       />
       <div className="data-card">
-        <Table data-actions>
-          <TableHeader>
-            <TableRow className="hover:bg-surface-alt">
-              <TableHead className="pl-4">Products</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Unit</TableHead>
-              <TableHead>Halal</TableHead>
-              <TableHead>Packaging</TableHead>
-              <TableHead className="pr-4">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading && <TableSkeleton rows={5} cols={6} />}
-            {!loading && loadError && (
-              <TableRow>
-                <TableCell colSpan={6} className="!p-0">
-                  <EmptyState
-                    error
-                    title="Could not load data"
-                    description="Check your connection and reload."
-                  >
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => fetchData()}
-                    >
-                      Retry
-                    </Button>
-                  </EmptyState>
-                </TableCell>
+        <AdvancedRecordsTable
+          state={table}
+          context={{ ...advanced, order }}
+          onContext={(v) => {
+            setAdvanced({
+              from: v.from || "",
+              to: v.to || "",
+              product: v.product || "",
+              person: v.person || "",
+              category: v.category || "",
+            });
+            if (["default", "newest", "oldest"].includes(v.order))
+              setOrder(v.order);
+          }}
+          onRestore={(q, s) => {
+            setSearchInput(q);
+            setSearch(q);
+            setFilter(s || "all");
+          }}
+          rows={produkList.map((r) => ({ ...r }))}
+          search={search}
+          status={filter}
+          exportURL={
+            "/api/export?" +
+            new URLSearchParams({
+              module: "produk",
+              search: search,
+              filter: filter,
+              order: order,
+              ...advanced,
+            })
+          }
+        >
+          <Table data-actions>
+            <TableHeader>
+              <TableRow className="hover:bg-surface-alt">
+                <TableHead className="pl-4">Products</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Unit</TableHead>
+                <TableHead>Halal</TableHead>
+                <TableHead>Packaging</TableHead>
+                <TableHead className="pr-4">Actions</TableHead>
               </TableRow>
-            )}
-            {!loading && !loadError && produkList.length === 0 && (
-              <TableRow className="hover:bg-surface">
-                <TableCell colSpan={6} className="!p-0">
-                  <div className="empty-state">
-                    <div className="empty-icon">
-                      <PackageSearch className="size-4" />
-                    </div>
-                    <p className="text-base font-semibold tracking-tight">
-                      {search ||
-                      filter !== "all" ||
-                      Object.values(advanced).some(Boolean)
-                        ? "No matching results"
-                        : "No products yet"}
-                    </p>
-                    <p className="text-xs text-muted">
-                      {search ||
-                      filter !== "all" ||
-                      Object.values(advanced).some(Boolean)
-                        ? "Try another keyword or clear your filters."
-                        : "Add your first record to get started."}
-                    </p>
-                    {!search &&
-                      filter === "all" &&
-                      !Object.values(advanced).some(Boolean) &&
-                      canCreate && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setDialogOpen(true)}
-                        >
-                          <Plus className="size-3.5" /> New product
-                        </Button>
-                      )}
-                    {(search ||
-                      filter !== "all" ||
-                      Object.values(advanced).some(Boolean)) && (
+            </TableHeader>
+            <TableBody>
+              {loading && <TableSkeleton rows={5} cols={6} />}
+              {!loading && loadError && (
+                <TableRow>
+                  <TableCell colSpan={6} className="!p-0">
+                    <EmptyState
+                      error
+                      title="Could not load data"
+                      description="Check your connection and reload."
+                    >
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => {
-                          onSearchChange("");
-                          setFilter("all");
-                          setAdvanced({ ...emptyFilters });
-                        }}
+                        onClick={() => fetchData()}
                       >
-                        Clear filters
+                        Retry
                       </Button>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading &&
-              produkList.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="pl-4">
-                    <button
-                      type="button"
-                      className="entity-name text-left hover:text-primary"
-                      onClick={() => void openDetail(p)}
-                    >
-                      {p.nama_produk}
-                    </button>
-                    <div className="font-data text-xs text-muted">
-                      {p.kode_produk}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-muted">{p.kategori}</TableCell>
-                  <TableCell>{p.satuan}</TableCell>
-                  <TableCell>{statusHalalBadge(p.status_halal)}</TableCell>
-                  <TableCell className="text-muted">{p.tipe_kemasan}</TableCell>
-                  <TableCell className="pr-4">
-                    <RowActions>
-                      <CopyValue
-                        value={p.kode_produk}
-                        label="Copy product code"
-                      />
-                      <button
-                        type="button"
-                        className="row-action"
-                        onClick={() => void openDetail(p)}
-                        title="Product details"
-                      >
-                        <Eye className="size-3.5" />
-                      </button>
-                      {canUpdate && (
-                        <button
-                          type="button"
-                          className="row-action"
-                          onClick={() => openEdit(p)}
-                          title="Edit"
-                        >
-                          <Pencil className="size-3.5" />
-                        </button>
-                      )}
-                      {canDelete && (
-                        <button
-                          type="button"
-                          className="row-action"
-                          data-tone="danger"
-                          onClick={() => handleDelete(p.id)}
-                          title="Delete"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      )}
-                    </RowActions>
+                    </EmptyState>
                   </TableCell>
                 </TableRow>
-              ))}
-          </TableBody>
-        </Table>
+              )}
+              {!loading && !loadError && produkList.length === 0 && (
+                <TableRow className="hover:bg-surface">
+                  <TableCell colSpan={6} className="!p-0">
+                    <div className="empty-state">
+                      <div className="empty-icon">
+                        <PackageSearch className="size-4" />
+                      </div>
+                      <p className="text-base font-semibold tracking-tight">
+                        {search ||
+                        filter !== "all" ||
+                        Object.values(advanced).some(Boolean)
+                          ? "No matching results"
+                          : "No products yet"}
+                      </p>
+                      <p className="text-xs text-muted">
+                        {search ||
+                        filter !== "all" ||
+                        Object.values(advanced).some(Boolean)
+                          ? "Try another keyword or clear your filters."
+                          : "Add your first record to get started."}
+                      </p>
+                      {!search &&
+                        filter === "all" &&
+                        !Object.values(advanced).some(Boolean) &&
+                        canCreate && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setDialogOpen(true)}
+                          >
+                            <Plus className="size-3.5" /> New product
+                          </Button>
+                        )}
+                      {(search ||
+                        filter !== "all" ||
+                        Object.values(advanced).some(Boolean)) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            onSearchChange("");
+                            setFilter("all");
+                            setAdvanced({ ...emptyFilters });
+                          }}
+                        >
+                          Clear filters
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+              {!loading &&
+                produkList.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell className="pl-4">
+                      <button
+                        type="button"
+                        className="entity-name text-left hover:text-primary"
+                        onClick={() => void openDetail(p)}
+                      >
+                        {p.nama_produk}
+                      </button>
+                      <div className="font-data text-xs text-muted">
+                        {p.kode_produk}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted">{p.kategori}</TableCell>
+                    <TableCell>{p.satuan}</TableCell>
+                    <TableCell>{statusHalalBadge(p.status_halal)}</TableCell>
+                    <TableCell className="text-muted">
+                      {p.tipe_kemasan}
+                    </TableCell>
+                    <TableCell className="pr-4">
+                      <RowActions>
+                        <CopyValue
+                          value={p.kode_produk}
+                          label="Copy product code"
+                        />
+                        <button
+                          type="button"
+                          className="row-action"
+                          onClick={() => void openDetail(p)}
+                          title="Product details"
+                        >
+                          <Eye className="size-3.5" />
+                        </button>
+                        {canUpdate && (
+                          <button
+                            type="button"
+                            className="row-action"
+                            onClick={() => openEdit(p)}
+                            title="Edit"
+                          >
+                            <Pencil className="size-3.5" />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            type="button"
+                            className="row-action"
+                            data-tone="danger"
+                            onClick={() => handleDelete(p.id)}
+                            title="Delete"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        )}
+                      </RowActions>
+                    </TableCell>
+                  </TableRow>
+                ))}
+            </TableBody>
+          </Table>
+        </AdvancedRecordsTable>
       </div>
 
       <Dialog

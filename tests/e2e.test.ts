@@ -1,3 +1,4 @@
+import { exerciseAdvancedTables } from "./advanced-tables-browser";
 import { exerciseCoaProductionDates } from "./coa-production-dates-browser";
 import { submitControl } from "./confirmation-browser";
 import { exerciseNumericInput } from "./numeric-input-browser";
@@ -355,6 +356,11 @@ test(
         );
         assert.equal(scoped.status(), 503);
         assert.match((await scoped.json()).message, /database update/);
+        return;
+      }
+      if (process.env.TEST_TABLES_ONLY === "1") {
+        await exerciseAdvancedTables(page, origin, capture, accessible);
+        assert.deepEqual(runtimeErrors, []);
         return;
       }
       if (process.env.TEST_COA_DATES_ONLY === "1") {
@@ -814,6 +820,7 @@ test(
       await exerciseOperationalUX(page, db, origin, capture, accessible);
       await exerciseTransactionControls(page, db, origin, capture, accessible);
       await exerciseNumericInput(page, db, origin);
+      await exerciseAdvancedTables(page, origin, capture, accessible);
       await exerciseCoaProductionDates(page, db, origin, capture, accessible);
       await exerciseReleaseReadiness(page, db, origin, capture, accessible);
       await page.evaluate(async () => {

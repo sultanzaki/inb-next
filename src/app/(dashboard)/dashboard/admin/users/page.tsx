@@ -1,4 +1,6 @@
 "use client";
+import { useTableState } from "@/components/tables/use-table-state";
+import { AdvancedRecordsTable } from "@/components/tables/advanced-records-table";
 import { BUSINESS_ROLES, roleLabel } from "@/lib/rbac";
 import { AccessPreview } from "@/components/erp/access-preview";
 import { RowActions } from "@/components/workspace/row-actions";
@@ -71,6 +73,7 @@ export default function UsersPage() {
     const t = setTimeout(() => setQuery(search), 300);
     return () => clearTimeout(t);
   }, [search]);
+  const table = useTableState("users");
   const load = useCallback(
     async (offset = 0) => {
       const id = ++seq.current;
@@ -79,7 +82,11 @@ export default function UsersPage() {
       try {
         const r = await fetch(
           "/api/admin/users?" +
-            new URLSearchParams({ q: query, offset: String(offset) }),
+            new URLSearchParams({
+              q: query,
+              offset: String(offset),
+              grid: JSON.stringify(table.query),
+            }),
         );
         const result = await r.json();
         if (id !== seq.current) return;
@@ -102,7 +109,7 @@ export default function UsersPage() {
         }
       }
     },
-    [query],
+    [query, table.query],
   );
   useEffect(() => {
     const sequence = seq;
@@ -157,98 +164,109 @@ export default function UsersPage() {
         onRefresh={() => void load()}
       />
       <div className="data-card">
-        <Table data-actions>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Users</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Password</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableSkeleton rows={5} cols={5} />
-            ) : error ? (
+        <AdvancedRecordsTable
+          state={table}
+          onRestore={(q) => {
+            setSearch(q);
+            setQuery(q);
+          }}
+          exportURL={"/api/admin/users?" + new URLSearchParams({ q: query })}
+          rows={data.map((r) => ({ ...r }))}
+          search={query}
+        >
+          <Table data-actions>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={5}>
-                  <EmptyState
-                    error
-                    title="Could not load users"
-                    description={error}
-                  >
-                    <Button onClick={() => void load()} variant="outline">
-                      <RefreshCw className="size-4" />
-                      Retry
-                    </Button>
-                  </EmptyState>
-                </TableCell>
+                <TableHead>Users</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Password</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
-            ) : data.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5}>
-                  <EmptyState
-                    title="No matching users"
-                    description="Try another search."
-                  />
-                </TableCell>
-              </TableRow>
-            ) : (
-              data.map((u) => (
-                <TableRow key={u.id}>
-                  <TableCell>
-                    <p className="font-medium">
-                      {u.nama_lengkap}
-                      {u.id === user?.id && (
-                        <span className="ml-2 text-xs text-muted">You</span>
-                      )}
-                    </p>
-                    <p className="mt-1 text-xs text-muted">
-                      @{u.username}
-                      <CopyValue value={u.username} label="Copy username" />
-                    </p>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableSkeleton rows={5} cols={5} />
+              ) : error ? (
+                <TableRow>
+                  <TableCell colSpan={5}>
+                    <EmptyState
+                      error
+                      title="Could not load users"
+                      description={error}
+                    >
+                      <Button onClick={() => void load()} variant="outline">
+                        <RefreshCw className="size-4" />
+                        Retry
+                      </Button>
+                    </EmptyState>
                   </TableCell>
-                  <TableCell>{roleLabel(u.role)}</TableCell>
-                  <TableCell>
-                    <Badge variant={u.is_active ? "default" : "secondary"}>
-                      {u.is_active ? "Active" : "Inactive"}
-                    </Badge>
+                </TableRow>
+              ) : data.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5}>
+                    <EmptyState
+                      title="No matching users"
+                      description="Try another search."
+                    />
                   </TableCell>
-                  <TableCell className="text-xs text-muted">
-                    {u.must_change_password ? "Change required" : "Set"}
-                  </TableCell>
-                  <TableCell>
-                    <RowActions>
-                      <button
-                        type="button"
-                        className="row-action"
-                        title="Edit user"
-                        onClick={() => edit(u)}
-                      >
-                        <Pencil className="size-3.5" />
-                      </button>
-                      {u.id !== user?.id && (
+                </TableRow>
+              ) : (
+                data.map((u) => (
+                  <TableRow key={u.id}>
+                    <TableCell>
+                      <p className="font-medium">
+                        {u.nama_lengkap}
+                        {u.id === user?.id && (
+                          <span className="ml-2 text-xs text-muted">You</span>
+                        )}
+                      </p>
+                      <p className="mt-1 text-xs text-muted">
+                        @{u.username}
+                        <CopyValue value={u.username} label="Copy username" />
+                      </p>
+                    </TableCell>
+                    <TableCell>{roleLabel(u.role)}</TableCell>
+                    <TableCell>
+                      <Badge variant={u.is_active ? "default" : "secondary"}>
+                        {u.is_active ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted">
+                      {u.must_change_password ? "Change required" : "Set"}
+                    </TableCell>
+                    <TableCell>
+                      <RowActions>
                         <button
                           type="button"
                           className="row-action"
-                          title="Reset password"
-                          onClick={() => {
-                            setTemporary("");
-                            setFormError("");
-                            setResetTarget(u);
-                          }}
+                          title="Edit user"
+                          onClick={() => edit(u)}
                         >
-                          <KeyRound className="size-3.5" />
+                          <Pencil className="size-3.5" />
                         </button>
-                      )}
-                    </RowActions>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+                        {u.id !== user?.id && (
+                          <button
+                            type="button"
+                            className="row-action"
+                            title="Reset password"
+                            onClick={() => {
+                              setTemporary("");
+                              setFormError("");
+                              setResetTarget(u);
+                            }}
+                          >
+                            <KeyRound className="size-3.5" />
+                          </button>
+                        )}
+                      </RowActions>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </AdvancedRecordsTable>
       </div>
       {!loading && !error && (
         <DataPagination

@@ -88,6 +88,7 @@ export function useSearchSeed(callback: (q: string) => void) {
   }, []);
 }
 export function DataTools({
+  tableControlled = false,
   module,
   search,
   filter,
@@ -96,6 +97,7 @@ export function DataTools({
   onFilters,
   loading,
 }: {
+  tableControlled?: boolean;
   module: ModuleName;
   search: string;
   filter: string;
@@ -195,27 +197,29 @@ export function DataTools({
           Advanced filters
           {count > 0 && <span className="filter-count">{count}</span>}
         </Button>
-        <div className="flex items-center gap-2">
-          <span className="hidden text-[11px] text-muted sm:inline">
-            Export filtered results
-          </span>
-          {(["csv", "xlsx"] as const).map((format) => (
-            <Button
-              key={format}
-              variant="outline"
-              size="sm"
-              disabled={loading || Boolean(exporting)}
-              onClick={() => void download(format)}
-            >
-              {exporting === format ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <Download className="size-3.5" />
-              )}
-              {format === "xlsx" ? "Excel" : "CSV"}
-            </Button>
-          ))}
-        </div>
+        {!tableControlled && (
+          <div className="flex items-center gap-2">
+            <span className="hidden text-[11px] text-muted sm:inline">
+              Export filtered results
+            </span>
+            {(["csv", "xlsx"] as const).map((format) => (
+              <Button
+                key={format}
+                variant="outline"
+                size="sm"
+                disabled={loading || Boolean(exporting)}
+                onClick={() => void download(format)}
+              >
+                {exporting === format ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Download className="size-3.5" />
+                )}
+                {format === "xlsx" ? "Excel" : "CSV"}
+              </Button>
+            ))}
+          </div>
+        )}
       </div>
       {!mobile && desktopOpen && (
         <div className="advanced-filter-panel">

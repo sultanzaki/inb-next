@@ -1,3 +1,9 @@
+import {
+  parseTableQuery,
+  entityColumns,
+  fieldValue,
+} from "@/lib/tables/schema";
+import { applyTableQuery } from "@/lib/tables/postgrest";
 import { moduleGate } from "@/lib/erp/server";
 import { requireUser, logAudit } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -28,6 +34,15 @@ export async function GET(request: Request) {
   }
   if (v.module === "audit" && !canAction(session.user, "read_audit"))
     return privateJson({ message: "Access denied." }, 403);
+  let grid;
+  try {
+    grid = parseTableQuery(
+      new URL(request.url).searchParams.get("grid"),
+      modules[v.module].table,
+    );
+  } catch {
+    return privateJson({ message: "Invalid table filters." }, 400);
+  }
   const cfg = modules[v.module],
     today = businessDate(),
     sb = createAdminClient();
@@ -43,9 +58,7 @@ export async function GET(request: Request) {
   const all: Record<string, unknown>[] = [];
   try {
     for (let offset = 0; offset <= 10000; offset += 500) {
-      let q = sb
-        .from(cfg.table)
-        .select(cfg.select)
+      let q = applyTableQuery(sb.from(cfg.table).select(cfg.select), grid)
         .order(orderField(v.module, v.order), {
           ascending:
             v.module === "produk" ? v.order !== "newest" : v.order === "oldest",
@@ -141,7 +154,7 @@ export async function GET(request: Request) {
         "Link",
       ],
     };
-    const rows = all.map((r) => {
+    let rows = all.map((r) => {
       const product = r.master_produk as Record<string, unknown> | undefined,
         snapshot = r.hasil_uji_snapshot as Record<string, unknown> | undefined;
       switch (v.module) {
@@ -192,6 +205,24 @@ export async function GET(request: Request) {
           ];
       }
     });
+    const requested = new URL(request.url).searchParams
+      .get("columns")
+      ?.split(",");
+    if (requested) {
+      const columns = entityColumns[cfg.table];
+      if (
+        !columns ||
+        requested.length > 40 ||
+        requested.some((key) => !columns.some((c) => c.key === key))
+      )
+        return privateJson({ message: "Invalid export columns." }, 400);
+      headers[v.module] = requested.map(
+        (key) => columns.find((c) => c.key === key)!.label,
+      );
+      rows = all.map((row) =>
+        requested.map((key) => fieldValue(row, key)),
+      ) as typeof rows;
+    }
     let bytes: Buffer | string;
     if (v.format === "csv") bytes = toCsv(headers[v.module], rows);
     else {

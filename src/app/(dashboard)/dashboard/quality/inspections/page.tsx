@@ -1,4 +1,7 @@
 "use client";
+import { useTableState } from "@/components/tables/use-table-state";
+import { AdvancedRecordsTable } from "@/components/tables/advanced-records-table";
+import { applyTableQuery } from "@/lib/tables/postgrest";
 import { ERPPicker } from "@/components/erp/picker";
 import type { ERPRow } from "@/lib/erp/schema";
 import { useERP } from "@/components/erp/context";
@@ -196,6 +199,7 @@ export default function InspeksiPage() {
   // because parameter names collide across products and stale values would
   // be saved under the wrong product's parameters.
 
+  const table = useTableState("hasil_uji");
   const runQuery = useCallback(
     async (start: number, pageRequest: boolean) => {
       if (pageRequest && navigating.current) return;
@@ -203,11 +207,14 @@ export default function InspeksiPage() {
       const seq = ++requestSeq.current;
       if (pageRequest) setPaging(true);
       else setLoading(true);
-      let q = sb
-        .from("hasil_uji")
-        .select("*, master_produk!inner(kode_produk, nama_produk)", {
-          count: "exact",
-        })
+      let q = applyTableQuery(
+        sb
+          .from("hasil_uji")
+          .select("*, master_produk!inner(kode_produk, nama_produk)", {
+            count: "exact",
+          }),
+        table.query,
+      )
         .order("created_at", { ascending: order === "oldest" })
         .order("id")
         .range(start, start + pageSize - 1);
@@ -251,7 +258,7 @@ export default function InspeksiPage() {
       setPaging(false);
       setLoading(false);
     },
-    [search, pageSize, filter, order, advanced],
+    [search, pageSize, filter, order, advanced, table.query],
   );
 
   const fetchData = useCallback(() => {
@@ -972,6 +979,7 @@ export default function InspeksiPage() {
 
       {/* Table card: hairline border, radius 8, header micro-labels on surface-alt */}
       <DataTools
+        tableControlled
         module="inspeksi"
         search={search}
         filter={filter}
@@ -981,161 +989,195 @@ export default function InspeksiPage() {
         loading={loading}
       />
       <div className="data-card">
-        <Table data-actions>
-          <TableHeader>
-            <TableRow className="hover:bg-surface-alt">
-              <TableHead className="pl-4">Lot number</TableHead>
-              <TableHead>Products</TableHead>
-              <TableHead className="text-right">Sampling date</TableHead>
-              <TableHead className="text-right">Test date</TableHead>
-              <TableHead>Inspector</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="pr-4">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading && <TableSkeleton rows={5} cols={7} />}
-            {!loading && loadError && (
-              <TableRow>
-                <TableCell colSpan={7} className="!p-0">
-                  <EmptyState
-                    error
-                    title="Could not load data"
-                    description="Check your connection and reload."
-                  >
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => fetchData()}
-                    >
-                      Retry
-                    </Button>
-                  </EmptyState>
-                </TableCell>
+        <AdvancedRecordsTable
+          state={table}
+          context={{ ...advanced, order }}
+          onContext={(v) => {
+            setAdvanced({
+              from: v.from || "",
+              to: v.to || "",
+              product: v.product || "",
+              person: v.person || "",
+              category: v.category || "",
+            });
+            if (["default", "newest", "oldest"].includes(v.order))
+              setOrder(v.order);
+          }}
+          onRestore={(q, s) => {
+            setSearchInput(q);
+            setSearch(q);
+            setFilter(s || "all");
+          }}
+          rows={data.map((r) => ({ ...r }))}
+          search={search}
+          status={filter}
+          exportURL={
+            "/api/export?" +
+            new URLSearchParams({
+              module: "inspeksi",
+              search: search,
+              filter: filter,
+              order: order,
+              ...advanced,
+            })
+          }
+        >
+          <Table data-actions>
+            <TableHeader>
+              <TableRow className="hover:bg-surface-alt">
+                <TableHead className="pl-4">Lot number</TableHead>
+                <TableHead>Products</TableHead>
+                <TableHead className="text-right">Sampling date</TableHead>
+                <TableHead className="text-right">Test date</TableHead>
+                <TableHead>Inspector</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="pr-4">Actions</TableHead>
               </TableRow>
-            )}
-            {!loading && !loadError && data.length === 0 && (
-              <TableRow className="hover:bg-surface">
-                <TableCell colSpan={7} className="!p-0">
-                  <div className="empty-state">
-                    <div className="empty-icon">
-                      <FlaskConical className="size-4" />
-                    </div>
-                    <p className="text-base font-semibold tracking-tight">
-                      {search ||
-                      filter !== "all" ||
-                      Object.values(advanced).some(Boolean)
-                        ? "No matching results"
-                        : "NO TEST DATA"}
-                    </p>
-                    <p className="text-xs text-muted">
-                      {search ||
-                      filter !== "all" ||
-                      Object.values(advanced).some(Boolean)
-                        ? "Try another keyword or clear your filters."
-                        : "Add your first record to get started."}
-                    </p>
-                    {!search &&
-                      filter === "all" &&
-                      !Object.values(advanced).some(Boolean) &&
-                      canCreate && (
+            </TableHeader>
+            <TableBody>
+              {loading && <TableSkeleton rows={5} cols={7} />}
+              {!loading && loadError && (
+                <TableRow>
+                  <TableCell colSpan={7} className="!p-0">
+                    <EmptyState
+                      error
+                      title="Could not load data"
+                      description="Check your connection and reload."
+                    >
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fetchData()}
+                      >
+                        Retry
+                      </Button>
+                    </EmptyState>
+                  </TableCell>
+                </TableRow>
+              )}
+              {!loading && !loadError && data.length === 0 && (
+                <TableRow className="hover:bg-surface">
+                  <TableCell colSpan={7} className="!p-0">
+                    <div className="empty-state">
+                      <div className="empty-icon">
+                        <FlaskConical className="size-4" />
+                      </div>
+                      <p className="text-base font-semibold tracking-tight">
+                        {search ||
+                        filter !== "all" ||
+                        Object.values(advanced).some(Boolean)
+                          ? "No matching results"
+                          : "NO TEST DATA"}
+                      </p>
+                      <p className="text-xs text-muted">
+                        {search ||
+                        filter !== "all" ||
+                        Object.values(advanced).some(Boolean)
+                          ? "Try another keyword or clear your filters."
+                          : "Add your first record to get started."}
+                      </p>
+                      {!search &&
+                        filter === "all" &&
+                        !Object.values(advanced).some(Boolean) &&
+                        canCreate && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              resetForm();
+                              setDialogOpen(true);
+                            }}
+                          >
+                            <Plus className="size-3.5" /> New inspection
+                          </Button>
+                        )}
+                      {(search ||
+                        filter !== "all" ||
+                        Object.values(advanced).some(Boolean)) && (
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            resetForm();
-                            setDialogOpen(true);
+                            onSearchChange("");
+                            setFilter("all");
+                            setAdvanced({ ...emptyFilters });
                           }}
                         >
-                          <Plus className="size-3.5" /> New inspection
+                          Clear filters
                         </Button>
                       )}
-                    {(search ||
-                      filter !== "all" ||
-                      Object.values(advanced).some(Boolean)) && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          onSearchChange("");
-                          setFilter("all");
-                          setAdvanced({ ...emptyFilters });
-                        }}
-                      >
-                        Clear filters
-                      </Button>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading &&
-              data.map((row) => (
-                <TableRow
-                  key={row.id}
-                  className="cursor-pointer"
-                  onClick={() => openDetail(row)}
-                >
-                  <TableCell className="pl-4">
-                    <div className="font-data">{row.no_lot}</div>
-                  </TableCell>
-                  <TableCell className="text-muted">
-                    {row.master_produk?.nama_produk || "-"}
-                  </TableCell>
-                  <TableCell className="font-data text-right text-muted">
-                    {row.tgl_sampling}
-                  </TableCell>
-                  <TableCell className="font-data text-right text-muted">
-                    {row.tgl_uji}
-                  </TableCell>
-                  <TableCell>{row.inspector || "-"}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={row.status} />
-                    {row.superseded && (
-                      <Badge variant="secondary">Superseded</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell
-                    className="pr-4"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <RowActions>
-                      <CopyValue value={row.no_lot} label="Copy lot number" />
-                      <button
-                        type="button"
-                        className="row-action"
-                        onClick={() => openDetail(row)}
-                        title="Detail"
-                      >
-                        <Eye className="size-3.5" />
-                      </button>
-                      {canUpdate && !row.superseded && (
-                        <button
-                          type="button"
-                          className="row-action"
-                          onClick={() => openEdit(row)}
-                          title="Edit"
-                        >
-                          <Pencil className="size-3.5" />
-                        </button>
-                      )}
-                      {canDelete && !row.superseded && (
-                        <button
-                          type="button"
-                          className="row-action"
-                          data-tone="danger"
-                          onClick={() => handleDelete(row.id)}
-                          title="Delete"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      )}
-                    </RowActions>
+                    </div>
                   </TableCell>
                 </TableRow>
-              ))}
-          </TableBody>
-        </Table>
+              )}
+              {!loading &&
+                data.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    className="cursor-pointer"
+                    onClick={() => openDetail(row)}
+                  >
+                    <TableCell className="pl-4">
+                      <div className="font-data">{row.no_lot}</div>
+                    </TableCell>
+                    <TableCell className="text-muted">
+                      {row.master_produk?.nama_produk || "-"}
+                    </TableCell>
+                    <TableCell className="font-data text-right text-muted">
+                      {row.tgl_sampling}
+                    </TableCell>
+                    <TableCell className="font-data text-right text-muted">
+                      {row.tgl_uji}
+                    </TableCell>
+                    <TableCell>{row.inspector || "-"}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={row.status} />
+                      {row.superseded && (
+                        <Badge variant="secondary">Superseded</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell
+                      className="pr-4"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <RowActions>
+                        <CopyValue value={row.no_lot} label="Copy lot number" />
+                        <button
+                          type="button"
+                          className="row-action"
+                          onClick={() => openDetail(row)}
+                          title="Detail"
+                        >
+                          <Eye className="size-3.5" />
+                        </button>
+                        {canUpdate && !row.superseded && (
+                          <button
+                            type="button"
+                            className="row-action"
+                            onClick={() => openEdit(row)}
+                            title="Edit"
+                          >
+                            <Pencil className="size-3.5" />
+                          </button>
+                        )}
+                        {canDelete && !row.superseded && (
+                          <button
+                            type="button"
+                            className="row-action"
+                            data-tone="danger"
+                            onClick={() => handleDelete(row.id)}
+                            title="Delete"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        )}
+                      </RowActions>
+                    </TableCell>
+                  </TableRow>
+                ))}
+            </TableBody>
+          </Table>
+        </AdvancedRecordsTable>
       </div>
 
       {!loading && !loadError && data.length > 0 && (

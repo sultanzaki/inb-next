@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { entityColumns, type TableQuery } from "@/lib/tables/schema";
 import type { ERPPage, ERPAction } from "@/lib/erp/schema";
 export function useERPPage(
   entity: string,
@@ -9,6 +10,7 @@ export function useERPPage(
   id?: string,
   enabled = true,
   scope?: Record<string, unknown>,
+  tableQuery?: TableQuery,
 ) {
   const [version, setVersion] = useState(0),
     [response, setResponse] = useState<{
@@ -16,6 +18,8 @@ export function useERPPage(
       data?: ERPPage;
       error?: string;
     } | null>(null);
+  const gridKey =
+    tableQuery && entityColumns[entity] ? JSON.stringify(tableQuery) : "";
   const scopeKey = JSON.stringify(scope || {});
   const key = JSON.stringify([
     entity,
@@ -26,6 +30,7 @@ export function useERPPage(
     version,
     enabled,
     scopeKey,
+    gridKey,
   ]);
   useEffect(() => {
     if (!enabled) return;
@@ -33,6 +38,7 @@ export function useERPPage(
     const timer = setTimeout(
       () => {
         const params = new URLSearchParams({ q, state, page: String(page) });
+        if (gridKey) params.set("grid", gridKey);
         if (id) params.set("id", id);
         if (entity.startsWith("choices/")) params.set("scope", scopeKey);
         void fetch("/api/erp/" + entity + "?" + params, {
@@ -59,7 +65,7 @@ export function useERPPage(
       clearTimeout(timer);
       abort.abort();
     };
-  }, [key, entity, q, state, page, id, enabled, scopeKey]);
+  }, [key, entity, q, state, page, id, enabled, scopeKey, gridKey]);
   useEffect(() => {
     if (!enabled) return;
     const refresh = () => setVersion((v) => v + 1);

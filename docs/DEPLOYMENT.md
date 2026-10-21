@@ -74,3 +74,7 @@ Jangan mengembalikan policy public_access atau grant anonim sebagai cara mengata
 CLI shadcn yang tidak dipakai pada runtime dihapus dari dependency aplikasi. `npm audit --omit=dev` melaporkan **0 kerentanan** pada pemeriksaan perubahan ini. Audit penuh masih melaporkan **5 entri high dalam satu rantai advisory braces GHSA-vfj7-8cjw-p6xm** melalui tooling `eslint-config-next → @next/eslint-plugin-next → fast-glob → micromatch → braces`. Versi upstream braces terbaru yang tersedia saat diperiksa adalah 3.0.3, masih termasuk advisory; versi plugin Next terbaru yang diperiksa juga masih memakai fast-glob tersebut.
 
 Tidak digunakan audit fix --force, penggantian dependency tidak kompatibel, penonaktifan aturan lint, atau bypass verifikasi paket untuk menyembunyikan temuan. Semua aturan lint Next tetap aktif. Dalam konfigurasi ini rootDir glob tidak menerima input aplikasi; advisory ini bukan bukti endpoint runtime dapat dieksploitasi. Upgrade setelah patch upstream tersedia tetap diperlukan untuk menutup temuan audit tooling sepenuhnya.
+
+### Advanced table workbench (migration 017)
+
+Apply `src/lib/db/migrations/017_advanced_tables.sql` after migration 016 and before deploying the table UI. See [Advanced tables](ADVANCED-TABLES.md) for the query contract, browser-local saved views, export limits, and verification commands. No business data is rewritten by this migration.

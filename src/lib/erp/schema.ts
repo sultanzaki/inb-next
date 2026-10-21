@@ -496,6 +496,7 @@ export type OrderLine = {
   outstanding: string;
 };
 export type ERPPage = {
+  summary?: { field: string; unit: string; total: string }[];
   rows: ERPRow[];
   total: number;
   page: number;
