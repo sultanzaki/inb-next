@@ -38,6 +38,7 @@ import {
   deleteCoaAction,
 } from "@/lib/actions/coa-actions";
 import { Plus, Pencil, Trash2, Printer, Eye, FileText } from "lucide-react";
+import { coaProductionDates } from "@/lib/domain/coa-production-dates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -260,7 +261,7 @@ export default function COAPage() {
       const { data, error } = await sb
         .from("available_hasil_uji")
         .select(
-          "id, no_lot, id_produk, hasil_detail, master_produk!inner(kode_produk, nama_produk)",
+          "id, no_lot, id_produk, hasil_detail, coa_lot, master_produk!inner(kode_produk, nama_produk)",
         )
         .order("created_at", { ascending: false })
         .order("id")
@@ -558,7 +559,34 @@ export default function COAPage() {
                           }
                           onChange={(e) => {
                             const val = e.target.value;
-                            setForm((prev) => ({ ...prev, id_hasil: val }));
+                            const inspection = availableHasil.find(
+                              (h) => h.id === val,
+                            );
+                            try {
+                              const dates = coaProductionDates(
+                                inspection?.coa_lot,
+                              );
+                              setForm((prev) => ({
+                                ...prev,
+                                id_hasil: val,
+                                ...(dates || {
+                                  mfg_date: "",
+                                  tanggal_expired: "",
+                                }),
+                              }));
+                            } catch (error) {
+                              setForm((prev) => ({
+                                ...prev,
+                                id_hasil: val,
+                                mfg_date: "",
+                                tanggal_expired: "",
+                              }));
+                              toast.error(
+                                error instanceof Error
+                                  ? error.message
+                                  : "Review the production dates.",
+                              );
+                            }
                           }}
                         >
                           <option value="">Select an inspection…</option>
@@ -657,10 +685,26 @@ export default function COAPage() {
                           : form.tanggal_expired || "Set manufacturing date"}
                       </output>
                     </Field>
-                    <Field label="MFG Date" name="mfg_date" required>
+                    <Field
+                      label="MFG Date"
+                      name="mfg_date"
+                      required
+                      hint={
+                        !editingId && selectedHasil?.coa_lot?.locked
+                          ? "Taken from the posted production/stock record. Change the release date separately."
+                          : undefined
+                      }
+                    >
                       <Input
                         type="date"
                         value={form.mfg_date}
+                        readOnly={
+                          !editingId &&
+                          Boolean(
+                            selectedHasil?.coa_lot?.locked &&
+                              selectedHasil.coa_lot.mfg_date,
+                          )
+                        }
                         disabled={!canWrite}
                         onChange={(e) =>
                           setForm((prev) => ({

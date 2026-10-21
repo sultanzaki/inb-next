@@ -1,3 +1,4 @@
+import { qcMutationError } from "@/lib/domain/qc-errors";
 import { validationFields, humanLabel, type FieldError } from "@/lib/erp/ux";
 import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -39,19 +40,9 @@ export async function mutate(
     });
     if (error) {
       console.error("[qc_mutate]", { action, code: error.code });
-      const messages: Record<string, string> = {
-        "23505": "This number or code is already used.",
-        "23503":
-          "This record is referenced elsewhere or its reference is invalid.",
-        P0002: "Record not found or already deleted.",
-        "42501": "Session expired or access denied.",
-        "23514": "Check the specifications and dates.",
-        "55000":
-          "Results are certified or specifications changed. Reload the data.",
-      };
       return {
         ok: false,
-        error: messages[error.code] ?? "Could not save changes. Retry.",
+        error: qcMutationError(error.code, error.message),
       };
     }
     return { ok: true, id: data?.id };

@@ -1,3 +1,7 @@
+> Rollout 21 October 2026: migration 016 applied to the configured Supabase project. Private helper/view permissions and live REST product relationships verified. Build, lint, 33 unit tests, 117 database tests, targeted COA issuance and full desktop/mobile browser regression passed. Existing production/COA data retained.
+
+> COA production dates: apply [migration 016](../src/lib/db/migrations/016_coa_production_dates.sql) after 015 before deploying the matching code. Posted lot dates fill and lock MFG Date; release date remains editable. See [QC rollout](QC-WORKFLOWS.md).
+
 > Rollout 20 October 2026: migration 015 applied to the configured Supabase project. Server-only RPC permissions and RLS for all three new tables verified; REST rejects an empty application session with 403. Local lint, typecheck, 27 unit tests, 115 database tests, 3 HTTP tests, production build, targeted mobile controls and full browser regression passed.
 
 > Phase 4 transaction controls require [migration 015](../src/lib/db/migrations/015_transaction_controls.sql) after 014, before deploying the matching code. See [controls and correction rules](TRANSACTION-CONTROLS.md).

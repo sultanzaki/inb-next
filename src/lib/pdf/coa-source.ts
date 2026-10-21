@@ -1,3 +1,4 @@
+import { coaProductionDates } from "@/lib/domain/coa-production-dates";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { z } from "zod";
 import type { issueSchema } from "@/lib/domain/validation";
@@ -15,6 +16,15 @@ export async function loadCoaSource(form: Form) {
   if (error || !data || data.status !== "PASS" || data.qc_version !== 1)
     throw Error(
       "Select a validated, passed inspection without an existing COA.",
+    );
+  const productionDates = coaProductionDates(data.coa_lot);
+  if (
+    productionDates &&
+    (form.mfg_date !== productionDates.mfg_date ||
+      form.tanggal_expired !== productionDates.tanggal_expired)
+  )
+    throw Error(
+      "Production dates changed. Reselect the inspection to load its posted MFG date, then preview the COA again.",
     );
   const product = data.master_produk;
   const document: CoaDocument = {

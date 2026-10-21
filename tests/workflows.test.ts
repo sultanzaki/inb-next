@@ -1,3 +1,5 @@
+import { coaProductionDates } from "../src/lib/domain/coa-production-dates";
+import { qcMutationError } from "../src/lib/domain/qc-errors";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
@@ -177,8 +179,9 @@ test("PDF wraps long results across pages without dropping rows and rejects exce
 });
 
 test("preview proof rejects altered forms, changed source revisions, malformed tokens and expiry", async () => {
-  const { createPreviewProof, verifyPreviewProof } =
-    await import("../src/lib/pdf/preview-proof");
+  const { createPreviewProof, verifyPreviewProof } = await import(
+    "../src/lib/pdf/preview-proof"
+  );
   const { issueSchema } = await import("../src/lib/domain/validation");
   const before = process.env.SUPABASE_SERVICE_ROLE_KEY;
   process.env.SUPABASE_SERVICE_ROLE_KEY = "local-test-proof-key-only";
@@ -223,4 +226,74 @@ test("preview proof rejects altered forms, changed source revisions, malformed t
     if (before === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     else process.env.SUPABASE_SERVICE_ROLE_KEY = before;
   }
+});
+
+test("QC business-rule failures explain date mismatches without exposing database internals", () => {
+  const message = qcMutationError(
+    "P0001",
+    "COA dates must match the manufacturing and expiry dates of the stocked lot.",
+  );
+  assert.match(message, /MFG date recorded in production/);
+  assert.match(message, /release date can be different/);
+  assert.match(
+    qcMutationError(
+      "P0001",
+      "Use the current inspection after the approved retest.",
+    ),
+    /current passed inspection/,
+  );
+  assert.equal(
+    qcMutationError("42702", "column reference contains private SQL"),
+    "Could not save changes. Retry.",
+  );
+  assert.equal(
+    qcMutationError("P0001", "private unrecognized database details"),
+    "Could not save changes. Retry.",
+  );
+  assert.equal(
+    qcMutationError("P0001", "toString"),
+    "Could not save changes. Retry.",
+  );
+  assert.equal(qcMutationError("42501"), "Session expired or access denied.");
+});
+
+test("COA production dates are authoritative after posting and retain one-year expiry policy", () => {
+  assert.deepEqual(
+    coaProductionDates({
+      mfg_date: "2026-10-21",
+      expiry_date: "2027-10-21",
+      locked: true,
+      source: "production",
+    }),
+    { mfg_date: "2026-10-21", tanggal_expired: "2027-10-21" },
+  );
+  assert.equal(coaProductionDates(null), null);
+  assert.equal(
+    coaProductionDates({
+      mfg_date: "2026-10-21",
+      expiry_date: "2027-10-21",
+      locked: false,
+      source: "stock",
+    }),
+    null,
+  );
+  assert.deepEqual(
+    coaProductionDates({
+      mfg_date: "2024-02-29",
+      expiry_date: "2025-02-28",
+      locked: true,
+      source: "production",
+    }),
+    { mfg_date: "2024-02-29", tanggal_expired: "2025-02-28" },
+  );
+  assert.throws(
+    () =>
+      coaProductionDates({
+        mfg_date: "2026-10-21",
+        expiry_date: "2027-10-20",
+        locked: true,
+        source: "production",
+      }),
+    /one-year COA policy/,
+  );
 });

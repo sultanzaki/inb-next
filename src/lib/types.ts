@@ -86,7 +86,10 @@ export interface HasilUji {
 }
 
 /** hasil_uji + join master_produk (bentuk baris list dashboard/inspeksi). */
-export type HasilUjiRow = HasilUji & { master_produk: ProdukJoin };
+export type HasilUjiRow = HasilUji & {
+  master_produk: ProdukJoin;
+  coa_lot?: import("./domain/coa-production-dates").CoaLotDates | null;
+};
 
 /**
  * Baris tabel `coa` (bentuk flat di Postgres). Snapshot hasil uji ditulis

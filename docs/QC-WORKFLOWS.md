@@ -50,3 +50,11 @@ npm audit --omit=dev
 Database pengujian adalah PostgreSQL/PostgREST Docker lokal, terpisah dari Supabase aktif. Pengujian browser menjalankan build produksi dengan relay REST lokal dan akun fixture; tidak memakai akun pengguna produksi. Jangan menjalankan fixture pengujian terhadap database aktif.
 
 Hasil verifikasi perubahan ini: 14 pengujian domain/PDF, 32 pengujian database, 3 pengujian HTTP, dan 1 skenario browser produksi lengkap lulus. Typecheck, lint tanpa peringatan, serta build produksi lulus. Browser memeriksa aksesibilitas dan overflow pada 1440, 768, 375 dan 320 px, draft, COA/PDF, administrasi/reset password, pembatasan viewer, pencarian dan ekspor. Audit dependency runtime melaporkan 0 kerentanan; ini tidak menyatakan seluruh dependency development bebas advisory. Aset PDF juga ditemukan dalam manifest file tracing endpoint dan halaman COA untuk deployment serverless.
+
+## COA dates from posted production (migration 016)
+
+Apply `016_coa_production_dates.sql` after 015, before deploying the matching application. The private `available_hasil_uji` view exposes a minimal `coa_lot` object through a server-only security-definer helper. Direct warehouse-table access remains revoked, and public/anonymous access stays blocked.
+
+When a passed inspection belongs to a posted production/stock lot with a recorded manufacturing date, selecting the inspection fills and locks MFG Date. Expiry follows the one-year COA policy. Release date stays editable and may differ from the production date. Unposted/manual inspections retain manual MFG entry. A conflicting stored expiry requires review rather than silently changing stock dates.
+
+The preview checks posted dates before rendering; issuance retains the atomic database date guard. Changing source dates requires reselecting the inspection and a fresh preview. Known date, retest and withdrawn-certificate failures now have actionable English messages instead of a generic retry message. No existing lot dates, certificates or users are changed by the migration.
