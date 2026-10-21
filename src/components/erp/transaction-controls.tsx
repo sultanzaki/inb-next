@@ -1,4 +1,5 @@
 "use client";
+import { RecordSkeleton } from "@/components/workspace/record-loading";
 import { useState } from "react";
 import { useERPPage } from "./data";
 import { useERP } from "./context";
@@ -167,11 +168,7 @@ export function TransactionControls({
     onDone();
   };
   if (result.loading)
-    return (
-      <p className="text-xs text-muted" role="status">
-        Loading document controls…
-      </p>
-    );
+    return <RecordSkeleton compact label="Loading document controls…" />;
   if (result.error)
     return (
       <p className="erp-notice" role="alert">

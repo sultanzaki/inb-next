@@ -1,4 +1,5 @@
 "use client";
+import { RecordSkeleton } from "@/components/workspace/record-loading";
 import { useERPPage } from "./data";
 import { ERPActionButton } from "./shared";
 export function AccessPreview({
@@ -27,7 +28,7 @@ export function AccessPreview({
       {result.error ? (
         <p role="alert">{result.error}</p>
       ) : result.loading ? (
-        <p role="status">Loading access…</p>
+        <RecordSkeleton compact label="Loading access…" />
       ) : (
         <div className="access-preview-rows">
           {result.data.rows.map((r) => (

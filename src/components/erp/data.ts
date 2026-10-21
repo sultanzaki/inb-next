@@ -1,4 +1,6 @@
 "use client";
+import { requestTimeout } from "@/lib/request-timeout";
+import { useRecordLoading } from "@/components/workspace/record-loading";
 import { useEffect, useState } from "react";
 import { entityColumns, type TableQuery } from "@/lib/tables/schema";
 import type { ERPPage, ERPAction } from "@/lib/erp/schema";
@@ -41,8 +43,9 @@ export function useERPPage(
         if (gridKey) params.set("grid", gridKey);
         if (id) params.set("id", id);
         if (entity.startsWith("choices/")) params.set("scope", scopeKey);
+        const timeout = requestTimeout(abort.signal);
         void fetch("/api/erp/" + entity + "?" + params, {
-          signal: abort.signal,
+          signal: timeout.signal,
           cache: "no-store",
         })
           .then(async (r) => {
@@ -55,9 +58,14 @@ export function useERPPage(
               setResponse({
                 key,
                 error:
-                  e instanceof Error ? e.message : "Could not load records.",
+                  e instanceof Error && e.name === "TimeoutError"
+                    ? "Loading took too long. Retry this record."
+                    : e instanceof Error
+                      ? e.message
+                      : "Could not load records.",
               });
-          });
+          })
+          .finally(timeout.dispose);
       },
       q ? 250 : 0,
     );
@@ -73,6 +81,10 @@ export function useERPPage(
     return () => window.removeEventListener("focus", refresh);
   }, [enabled]);
   const current = response?.key === key ? response : null;
+  useRecordLoading(
+    enabled && !current,
+    enabled && Boolean(id) && !entity.startsWith("choices/"),
+  );
   return {
     data: current?.data ?? { rows: [], total: 0, page, page_size: 50 },
     error: current?.error,

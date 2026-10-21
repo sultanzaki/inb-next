@@ -158,6 +158,7 @@ test("purchase PDF names the supplier and preserves exact server line amounts", 
         date: "2026-10-18",
         valid_until: "2026-10-20",
         state: "confirmed",
+        notes: "Deliver in sealed bags.",
         currency: "IDR",
         customer_data: {
           name: "Original supplier",
@@ -189,8 +190,9 @@ test("purchase PDF names the supplier and preserves exact server line amounts", 
     });
     assert.match(contents, /PURCHASE ORDER/);
     assert.match(contents, /Original supplier/);
+    assert.match(contents, /Deliver in sealed bags\./);
     assert.match(contents, /3,750.075/);
-    assert.match(contents, /Expected receipt 2026-10-20/);
+    assert.match(contents, /Expected receipt: 2026-10-20/);
     assert.doesNotMatch(contents, /Valid until|Disc\. %/);
   } finally {
     await rm(folder, { recursive: true, force: true });
@@ -226,5 +228,102 @@ test("growth document links reject unsafe schemes and embedded credentials", () 
       }).success,
       false,
     );
+  }
+});
+
+test("formal Finance PDF uses the document due date, frozen party and exact amounts without empty product rows", async () => {
+  const folder = await mkdtemp(join(tmpdir(), "inb-formal-finance-"));
+  try {
+    const bytes = await renderERPDocument(
+      {
+        id,
+        number: "INV-FORMAL-001",
+        kind: "invoice",
+        state: "issued",
+        date: "2026-10-21",
+        due_date: "2026-11-20",
+        amount: "60000000",
+        notes: "Payment for the agreed supply.",
+        snapshot: {
+          number: "INV-FORMAL-001",
+          date: "2026-10-21",
+          currency: "IDR",
+          customer: {
+            name: "Frozen customer",
+            billing_address: "Original billing address",
+          },
+          order_number: "SO-ORIGINAL",
+          lines: [],
+          totals: {
+            subtotal: "54054054.054054",
+            tax: "5945945.945946",
+            freight: "0",
+            total: "60000000",
+          },
+        },
+        customer: "Renamed customer",
+        lines: [],
+      } as Parameters<typeof renderERPDocument>[0],
+      "finance",
+    );
+    const file = join(folder, "invoice.pdf");
+    await writeFile(file, bytes);
+    const doc = await PDFDocument.load(bytes);
+    assert.equal(doc.getTitle(), "INVOICE · INV-FORMAL-001");
+    assert.equal(doc.getAuthor(), "PT Inovasi Biokem Nusantara");
+    const contents = execFileSync("pdftotext", ["-layout", file, "-"], {
+      encoding: "utf8",
+    });
+    assert.match(contents, /Due date: 2026-11-20/);
+    assert.match(contents, /Frozen customer/);
+    assert.match(contents, /Original billing address/);
+    assert.match(contents, /SO-ORIGINAL/);
+    assert.match(contents, /60,000,000/);
+    assert.match(contents, /Page 1 of 1/);
+    assert.doesNotMatch(contents, /Renamed customer|undefined|NaN|Tax \(0%\)/);
+    const bounds = execFileSync("pdftotext", ["-bbox", file, "-"], {
+      encoding: "utf8",
+    });
+    for (const match of bounds.matchAll(
+      /<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)"/g,
+    )) {
+      assert.ok(
+        Number(match[1]) >= 39 && Number(match[3]) <= 556,
+        "Text stays within the print margins",
+      );
+      assert.ok(Number(match[2]) >= 10 && Number(match[4]) <= 832);
+    }
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
+});
+
+test("draft movement PDF uses location names rather than internal IDs", async () => {
+  const folder = await mkdtemp(join(tmpdir(), "inb-draft-movement-"));
+  try {
+    const bytes = await renderERPDocument(
+      {
+        id,
+        number: "MOVE-DRAFT",
+        kind: "transfer",
+        state: "draft",
+        date: "2026-10-21",
+        from_location: id,
+        to_location: id,
+        source: "Main warehouse",
+        destination: "Dispatch area",
+        lines: [],
+      } as Parameters<typeof renderERPDocument>[0],
+      "movement",
+    );
+    const file = join(folder, "draft.pdf");
+    await writeFile(file, bytes);
+    const text = execFileSync("pdftotext", [file, "-"], { encoding: "utf8" });
+    assert.match(text, /Main warehouse/);
+    assert.match(text, /Dispatch area/);
+    assert.match(text, /OPERATION DETAILS/);
+    assert.doesNotMatch(text, new RegExp(id));
+  } finally {
+    await rm(folder, { recursive: true, force: true });
   }
 });

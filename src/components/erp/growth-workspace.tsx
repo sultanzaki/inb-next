@@ -642,8 +642,20 @@ function GrowthView({ area }: { area: Area }) {
           count={result.data.rows.length}
           loading={result.loading}
         />
+        {linkedId && linked.loading && !selection && (
+          <ERPModal
+            layout="record"
+            loading
+            title="Record details"
+            description="Loading the complete record."
+            onClose={() => setSelected(null)}
+          >
+            <span />
+          </ERPModal>
+        )}
         {selected && (
           <ERPModal
+            layout="record"
             title={
               selected.number ||
               selected.name ||

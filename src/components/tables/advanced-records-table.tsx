@@ -906,12 +906,11 @@ export function AdvancedRecordsTable({
                   <select
                     aria-label="Row spacing"
                     value={layout.density}
-                    onChange={(e) =>
-                      state.setLayout((layout) => ({
-                        ...layout,
-                        density: e.target.value as typeof layout.density,
-                      }))
-                    }
+                    onChange={(e) => {
+                      const density = e.currentTarget
+                        .value as typeof layout.density;
+                      state.setLayout((layout) => ({ ...layout, density }));
+                    }}
                   >
                     <option value="comfortable">Comfortable</option>
                     <option value="compact">Compact</option>
@@ -922,12 +921,10 @@ export function AdvancedRecordsTable({
                   <select
                     aria-label="Page group summary"
                     value={layout.group}
-                    onChange={(e) =>
-                      state.setLayout((layout) => ({
-                        ...layout,
-                        group: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => {
+                      const group = e.currentTarget.value;
+                      state.setLayout((layout) => ({ ...layout, group }));
+                    }}
                   >
                     <option value="">None</option>
                     {columns
@@ -949,14 +946,15 @@ export function AdvancedRecordsTable({
                           type="checkbox"
                           checked={!layout.hidden.includes(key)}
                           disabled={key === columns[0].key}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            const checked = e.currentTarget.checked;
                             state.setLayout((layout) => ({
                               ...layout,
-                              hidden: e.target.checked
+                              hidden: checked
                                 ? layout.hidden.filter((k) => k !== key)
                                 : [...layout.hidden, key],
-                            }))
-                          }
+                            }));
+                          }}
                         />
                         {columns.find((c) => c.key === key)?.label}
                       </label>

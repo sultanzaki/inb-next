@@ -161,6 +161,7 @@ function Detail({
     <>
       <ERPModal
         layout="record"
+        loading={result.loading}
         title={value(r, "number", value(r, "name", "Record details"))}
         description={recordTitles[entity] || "Record details"}
         onClose={onClose}

@@ -1,4 +1,5 @@
 "use client";
+import { RecordSkeleton } from "@/components/workspace/record-loading";
 import { useERPPage } from "./data";
 import { humanLabel, money } from "@/lib/erp/ux";
 import { useERP } from "./context";
@@ -16,9 +17,7 @@ export function DocumentFlow({ entity, id }: { entity: string; id: string }) {
     <section className="erp-document-flow" aria-label="Document flow">
       <h3 className="text-sm font-semibold">Document flow</h3>
       {result.loading ? (
-        <p role="status" className="text-xs text-muted">
-          Loading linked documents…
-        </p>
+        <RecordSkeleton compact label="Loading linked documents…" />
       ) : result.error ? (
         <p className="text-xs text-muted">
           {result.error}{" "}
@@ -95,7 +94,10 @@ export function DispatchReadiness({
         {movementId ? "Delivery readiness" : "Financial readiness"}
       </strong>
       {result.loading ? (
-        <p role="status">Checking payment and credit requirements…</p>
+        <RecordSkeleton
+          compact
+          label="Checking payment and credit requirements…"
+        />
       ) : result.error ? (
         <p role="alert">
           {result.error}{" "}

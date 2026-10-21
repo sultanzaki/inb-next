@@ -1,4 +1,6 @@
 "use client";
+import { requestTimeout } from "@/lib/request-timeout";
+import { RecordSkeleton, useRecordLoading } from "./record-loading";
 import { useEffect, useState } from "react";
 import type { SpecVersion, SpesifikasiItem } from "@/lib/types";
 import { SpecificationParameters } from "./specification-parameters";
@@ -29,10 +31,12 @@ export function SpecHistory({
     [retry, setRetry] = useState(0),
     [page, setPage] = useState(1),
     [total, setTotal] = useState(0);
+  useRecordLoading(loading);
   useEffect(() => {
     const controller = new AbortController();
     const t = setTimeout(async () => {
       setLoading(true);
+      const timeout = requestTimeout(controller.signal);
       try {
         const r = await fetch(
           "/api/data/product_spec_versions?" +
@@ -43,7 +47,10 @@ export function SpecHistory({
               limit: "50",
               offset: String((page - 1) * 50),
             }),
-          { signal: controller.signal, headers: { Prefer: "count=exact" } },
+          {
+            signal: timeout.signal,
+            headers: { Prefer: "count=exact" },
+          },
         );
         if (!r.ok) throw Error();
         const rows = await r.json();
@@ -56,6 +63,7 @@ export function SpecHistory({
       } catch {
         if (!controller.signal.aborted) setError(true);
       } finally {
+        timeout.dispose();
         if (!controller.signal.aborted) setLoading(false);
       }
     }, 0);
@@ -91,9 +99,7 @@ export function SpecHistory({
     <section className="spec-history">
       <h3 className="text-sm font-semibold">Specification history</h3>
       {loading ? (
-        <p role="status" className="py-5 text-xs text-muted">
-          Loading history…
-        </p>
+        <RecordSkeleton compact label="Loading specification history…" />
       ) : error ? (
         <div role="alert" className="py-4 text-xs text-danger">
           Could not load version history.

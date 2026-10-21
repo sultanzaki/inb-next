@@ -1,3 +1,4 @@
+import { requestTimeout } from "../src/lib/request-timeout";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -91,4 +92,22 @@ test("Billing validation names missing sources, zero amounts and missing invoice
       for (const path of paths)
         assert.ok(r.error.issues.some((i) => i.path.join(".") === path));
   }
+});
+
+test("request timeout preserves caller cancellation and never aborts the parent signal", async () => {
+  const parent = new AbortController();
+  const timed = requestTimeout(parent.signal, 1);
+  await new Promise<void>((resolve) =>
+    timed.signal.addEventListener("abort", () => resolve(), { once: true }),
+  );
+  assert.equal(timed.signal.reason.name, "TimeoutError");
+  assert.equal(parent.signal.aborted, false);
+  timed.dispose();
+  const canceled = requestTimeout(parent.signal, 10000);
+  parent.abort();
+  assert.equal(canceled.signal.aborted, true);
+  canceled.dispose();
+  const alreadyCanceled = requestTimeout(parent.signal);
+  assert.equal(alreadyCanceled.signal.aborted, true);
+  alreadyCanceled.dispose();
 });

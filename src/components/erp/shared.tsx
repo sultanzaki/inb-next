@@ -12,6 +12,7 @@ import {
   type ReactNode,
   type FormEvent,
 } from "react";
+import { RecordLoadingBoundary } from "@/components/workspace/record-loading";
 import { toast } from "sonner";
 import { SlideConfirm } from "@/components/ui/slide-confirm";
 import { Button } from "@/components/ui/button";
@@ -176,6 +177,7 @@ export function ERPModal({
   onClose,
   dirty = false,
   layout = "form",
+  loading = false,
 }: {
   title: string;
   description: string;
@@ -183,6 +185,7 @@ export function ERPModal({
   onClose: () => void;
   dirty?: boolean;
   layout?: "form" | "record";
+  loading?: boolean;
 }) {
   const confirm = useConfirm();
   async function close() {
@@ -215,7 +218,16 @@ export function ERPModal({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        {children}
+        {layout === "record" ? (
+          <RecordLoadingBoundary
+            key={loading ? "loading" : "ready"}
+            loading={loading}
+          >
+            {children}
+          </RecordLoadingBoundary>
+        ) : (
+          children
+        )}
       </DialogContent>
     </Dialog>
   );

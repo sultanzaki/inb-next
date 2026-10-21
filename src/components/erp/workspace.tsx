@@ -685,6 +685,7 @@ function RecordDetail({
   return (
     <ERPModal
       layout="record"
+      loading={result.loading}
       title={row?.number || row?.product || row?.name || "Record details"}
       description={
         row?.state

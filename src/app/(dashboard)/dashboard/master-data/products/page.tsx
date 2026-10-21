@@ -1,4 +1,5 @@
 "use client";
+import { RecordLoadingBoundary } from "@/components/workspace/record-loading";
 import { useTableState } from "@/components/tables/use-table-state";
 import { AdvancedRecordsTable } from "@/components/tables/advanced-records-table";
 import { applyTableQuery } from "@/lib/tables/postgrest";
@@ -1026,7 +1027,7 @@ export default function ProdukPage() {
             </DialogDescription>
           </DialogHeader>
           {detail && (
-            <>
+            <RecordLoadingBoundary loading={detailLoading}>
               <dl className="my-6 grid grid-cols-2 gap-5 rounded-xl border border-border-soft bg-surface-alt p-5">
                 {[
                   ["Category", detail.kategori],
@@ -1081,7 +1082,7 @@ export default function ProdukPage() {
                 productId={detail.id}
                 current={detailSpecs}
               />
-            </>
+            </RecordLoadingBoundary>
           )}
           <DialogFooter className="mt-6">
             <DialogClose render={<Button variant="outline">Close</Button>} />

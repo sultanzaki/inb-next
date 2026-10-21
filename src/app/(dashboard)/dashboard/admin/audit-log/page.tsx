@@ -1,4 +1,5 @@
 "use client";
+import { RecordLoadingBoundary } from "@/components/workspace/record-loading";
 import { useTableState } from "@/components/tables/use-table-state";
 import { AdvancedRecordsTable } from "@/components/tables/advanced-records-table";
 import { RowActions } from "@/components/workspace/row-actions";
@@ -114,7 +115,9 @@ export default function AuditPage() {
     setDetailError(false);
     setDetailLoading(true);
     try {
-      const r = await fetch("/api/audit?id=" + row.id),
+      const r = await fetch("/api/audit?id=" + row.id, {
+          signal: AbortSignal.timeout(20000),
+        }),
         v = await r.json();
       if (!r.ok) throw Error();
       if (id === detailSeq.current) setDetail(v.data);
@@ -298,40 +301,42 @@ export default function AuditPage() {
               {detail?.aksi} · {detail?.user_name}
             </DialogDescription>
           </DialogHeader>
-          {detailLoading ? (
-            <p role="status" className="py-8 text-sm text-muted">
-              Loading changes…
-            </p>
-          ) : detailError ? (
-            <EmptyState
-              error
-              title="Could not load details"
-              description="Reload this activity."
-            >
-              <Button
-                variant="outline"
-                onClick={() => detail && void show(detail)}
+          <RecordLoadingBoundary loading={detailLoading}>
+            {detailLoading ? (
+              <p role="status" className="py-8 text-sm text-muted">
+                Loading changes…
+              </p>
+            ) : detailError ? (
+              <EmptyState
+                error
+                title="Could not load details"
+                description="Reload this activity."
               >
-                Retry
-              </Button>
-            </EmptyState>
-          ) : detail && !detail.before_data && !detail.after_data ? (
-            <p className="py-5 text-sm text-muted">
-              Detailed changes are unavailable for this older activity.
-            </p>
-          ) : (
-            <div className="audit-diff">
-              {[
-                ["Before", detail?.before_data],
-                ["After", detail?.after_data],
-              ].map(([label, value]) => (
-                <section key={String(label)}>
-                  <h3>{String(label)}</h3>
-                  <pre>{value ? JSON.stringify(value, null, 2) : "None"}</pre>
-                </section>
-              ))}
-            </div>
-          )}
+                <Button
+                  variant="outline"
+                  onClick={() => detail && void show(detail)}
+                >
+                  Retry
+                </Button>
+              </EmptyState>
+            ) : detail && !detail.before_data && !detail.after_data ? (
+              <p className="py-5 text-sm text-muted">
+                Detailed changes are unavailable for this older activity.
+              </p>
+            ) : (
+              <div className="audit-diff">
+                {[
+                  ["Before", detail?.before_data],
+                  ["After", detail?.after_data],
+                ].map(([label, value]) => (
+                  <section key={String(label)}>
+                    <h3>{String(label)}</h3>
+                    <pre>{value ? JSON.stringify(value, null, 2) : "None"}</pre>
+                  </section>
+                ))}
+              </div>
+            )}
+          </RecordLoadingBoundary>
         </DialogContent>
       </Dialog>
     </div>

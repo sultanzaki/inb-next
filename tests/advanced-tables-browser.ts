@@ -12,7 +12,10 @@ export async function exerciseAdvancedTables(
         requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
       );
       await Promise.all(
-        document.getAnimations().map((a) => a.finished.catch(() => {})),
+        document
+          .getAnimations()
+          .filter((a) => Number.isFinite(a.effect?.getComputedTiming().endTime))
+          .map((a) => a.finished.catch(() => {})),
       );
     });
   }
@@ -46,6 +49,9 @@ export async function exerciseAdvancedTables(
   await panel
     .getByLabel("Row spacing", { exact: true })
     .selectOption("compact");
+  await page.waitForFunction(() =>
+    Boolean(document.querySelector(".advanced-table-compact")),
+  );
   await panel
     .getByRole("checkbox", { name: "Category", exact: true })
     .uncheck();
