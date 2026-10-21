@@ -111,3 +111,117 @@ test("request timeout preserves caller cancellation and never aborts the parent 
   assert.equal(alreadyCanceled.signal.aborted, true);
   alreadyCanceled.dispose();
 });
+
+test("protected reads overlap authentication but never release data before authorization", async () => {
+  const { authorizedRead } = await import("../src/lib/authorized-read");
+  let authorize!: (value: { id: string } | null) => void;
+  let readStarted = false,
+    completed = false;
+  const session = new Promise<{ id: string } | null>((resolve) => {
+    authorize = resolve;
+  });
+  const result = authorizedRead(
+    () => session,
+    async () => {
+      readStarted = true;
+      return Response.json({ secret: "record" });
+    },
+  ).then((response) => {
+    completed = true;
+    return response;
+  });
+  assert.equal(
+    readStarted,
+    true,
+    "Read starts without waiting for network authentication",
+  );
+  await Promise.resolve();
+  assert.equal(completed, false);
+  authorize({ id: "allowed" });
+  const allowed = await result;
+  assert.deepEqual(await allowed.json(), { secret: "record" });
+  assert.match(
+    allowed.headers.get("Server-Timing")!,
+    /session;dur=.*read;dur=.*total;dur=/,
+  );
+  const denied = await authorizedRead(
+    async () => null,
+    async () => Response.json({ secret: "hidden" }),
+  );
+  assert.equal(denied.status, 401);
+  assert.deepEqual(await denied.json(), { message: "Session expired." });
+  const deniedFailure = await authorizedRead(
+    async () => null,
+    async () => {
+      throw Error("private query failure");
+    },
+  );
+  assert.equal(deniedFailure.status, 401);
+});
+
+test("concurrent ERP reads share a request, isolate cancellation and never cache settled data", async () => {
+  const { readERPPage, invalidateERPReads } =
+    await import("../src/lib/erp/read-request");
+  const original = globalThis.fetch;
+  let calls = 0,
+    resolve!: (value: Response) => void;
+  const signals: AbortSignal[] = [];
+  globalThis.fetch = (async (_url, options) => {
+    calls++;
+    signals.push(options!.signal as AbortSignal);
+    return new Promise<Response>((done) => {
+      resolve = done;
+    });
+  }) as typeof fetch;
+  try {
+    const one = new AbortController(),
+      two = new AbortController();
+    const a = readERPPage("/test/shared", one.signal);
+    const b = readERPPage("/test/shared", two.signal);
+    assert.equal(calls, 1);
+    const canceled = assert.rejects(a, { name: "AbortError" });
+    one.abort();
+    await canceled;
+    assert.equal(
+      signals[0].aborted,
+      false,
+      "One subscriber cannot cancel another reader",
+    );
+    resolve(Response.json({ rows: [], total: 0 }));
+    await b;
+    const c = readERPPage("/test/shared", new AbortController().signal);
+    assert.equal(
+      calls,
+      2,
+      "Completed records are not reused as stale financial data",
+    );
+    resolve(Response.json({ rows: [], total: 1 }));
+    assert.equal((await c).total, 1);
+    const d = readERPPage("/test/after-write", new AbortController().signal);
+    const firstResolve = resolve;
+    invalidateERPReads();
+    const e = readERPPage("/test/after-write", new AbortController().signal);
+    assert.equal(
+      calls,
+      4,
+      "Mutation invalidation prevents joining a pre-write read",
+    );
+    firstResolve(Response.json({ rows: [], total: 1 }));
+    resolve(Response.json({ rows: [], total: 2 }));
+    assert.equal((await d).total, 1);
+    assert.equal((await e).total, 2);
+    const last = new AbortController();
+    const abandoned = readERPPage("/test/abandoned", last.signal);
+    const abandonedRejection = assert.rejects(abandoned, {
+      name: "AbortError",
+    });
+    last.abort();
+    await abandonedRejection;
+    assert.equal(signals.at(-1)!.aborted, true);
+    resolve(Response.json({ rows: [], total: 0 }));
+    await Promise.resolve();
+  } finally {
+    globalThis.fetch = original;
+    invalidateERPReads();
+  }
+});

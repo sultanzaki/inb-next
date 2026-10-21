@@ -1,6 +1,6 @@
 "use client";
 import { requestTimeout } from "@/lib/request-timeout";
-import { RecordSkeleton, useRecordLoading } from "./record-loading";
+import { RecordSkeleton } from "./record-loading";
 import { useEffect, useState } from "react";
 import type { SpecVersion, SpesifikasiItem } from "@/lib/types";
 import { SpecificationParameters } from "./specification-parameters";
@@ -31,7 +31,6 @@ export function SpecHistory({
     [retry, setRetry] = useState(0),
     [page, setPage] = useState(1),
     [total, setTotal] = useState(0);
-  useRecordLoading(loading);
   useEffect(() => {
     const controller = new AbortController();
     const t = setTimeout(async () => {

@@ -97,7 +97,14 @@ export async function exerciseRecordLoading(
     );
     releasePrimary();
     await Promise.all([controlsSeen, flowSeen]);
-    await loading.waitFor();
+    await dialog
+      .locator(".record-ready-content")
+      .first()
+      .waitFor({ state: "visible" });
+    await loading.waitFor({ state: "hidden" });
+    await dialog
+      .getByRole("status", { name: "Loading linked documents…", exact: true })
+      .waitFor();
     const controlsReady = page.waitForResponse((r) =>
       r.url().includes("/api/erp/controls/orders"),
     );
@@ -112,8 +119,30 @@ export async function exerciseRecordLoading(
     await dialog.getByRole("heading", { name: number, exact: true }).waitFor();
     assert.equal(
       await dialog.locator(".record-ready-content").first().isVisible(),
-      false,
-      "Linked documents must finish before the record is revealed",
+      true,
+      "Slow linked documents must not block the primary record",
+    );
+    await dialog
+      .getByRole("status", { name: "Loading linked documents…", exact: true })
+      .waitFor();
+    const beforeFocus = await page.evaluate(
+      () =>
+        performance
+          .getEntriesByType("resource")
+          .filter((r) => r.name.includes("/api/erp/")).length,
+    );
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await page.waitForTimeout(100);
+    const afterFocus = await page.evaluate(
+      () =>
+        performance
+          .getEntriesByType("resource")
+          .filter((r) => r.name.includes("/api/erp/")).length,
+    );
+    assert.equal(
+      afterFocus,
+      beforeFocus,
+      "Returning focus must not reload freshly loaded ERP data",
     );
     await capture("record-loading-desktop");
     releaseFlow();

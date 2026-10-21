@@ -219,10 +219,7 @@ export function ERPModal({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         {layout === "record" ? (
-          <RecordLoadingBoundary
-            key={loading ? "loading" : "ready"}
-            loading={loading}
-          >
+          <RecordLoadingBoundary loading={loading}>
             {children}
           </RecordLoadingBoundary>
         ) : (

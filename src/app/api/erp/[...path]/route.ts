@@ -4,7 +4,8 @@ import {
   fieldValue,
 } from "@/lib/tables/schema";
 import { queryTypes } from "@/lib/tables/postgrest";
-import writeXlsxFile from "write-excel-file/node";
+import { cookies } from "next/headers";
+import { authorizedRead } from "@/lib/authorized-read";
 import { validationFields } from "@/lib/erp/ux";
 import { linkedQuoteOrder } from "@/lib/erp/quote-order";
 import { sameOrigin } from "@/lib/erp/origin";
@@ -17,8 +18,23 @@ import type { CoaDocument } from "@/lib/pdf/coa-document";
 export const maxDuration = 60;
 type Context = { params: Promise<{ path: string[] }> };
 export async function GET(request: Request, context: Context) {
-  const session = await requireUser();
-  if (!session) return privateJson({ message: "Session expired." }, 401);
+  const token = (await cookies()).get("session_token")?.value;
+  if (
+    !token ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      token,
+    )
+  )
+    return privateJson({ message: "Session expired." }, 401);
+  return authorizedRead(requireUser, (session) =>
+    readERP(request, context, session),
+  );
+}
+async function readERP(
+  request: Request,
+  context: Context,
+  session: ReturnType<typeof requireUser>,
+) {
   const { path } = await context.params,
     p = new URL(request.url).searchParams;
   let tableQuery;
@@ -241,8 +257,10 @@ export async function GET(request: Request, context: Context) {
       "currency",
       "total",
     ];
+    const actor = await session;
+    if (!actor) return privateJson({ message: "Session expired." }, 401);
     await logAudit(
-      session.user.nama_lengkap,
+      actor.user.nama_lengkap,
       "EXPORT_ERP_" + path[1],
       JSON.stringify({ q, state, count: rows.length }),
     );
@@ -263,6 +281,7 @@ export async function GET(request: Request, context: Context) {
       selected.map((key) => fieldValue(row, key)),
     );
     if (p.get("format") === "xlsx") {
+      const { default: writeXlsxFile } = await import("write-excel-file/node");
       const file = await writeXlsxFile(
         [
           headers.map((value) => ({ value, fontWeight: "bold" as const })),
@@ -343,8 +362,11 @@ export async function GET(request: Request, context: Context) {
     if (error) return erpError(error);
     const row = data?.rows?.[0];
     if (!row) return privateJson({ message: "Document not found." }, 404);
-    if (p.has("download"))
-      await logAudit(session.user.nama_lengkap, "DOWNLOAD_ERP", row.number);
+    if (p.has("download")) {
+      const actor = await session;
+      if (!actor) return privateJson({ message: "Session expired." }, 401);
+      await logAudit(actor.user.nama_lengkap, "DOWNLOAD_ERP", row.number);
+    }
     if (path[1] === "fin_documents" && path.length === 3) {
       const snapshot = row.snapshot || {};
       const bytes = await (

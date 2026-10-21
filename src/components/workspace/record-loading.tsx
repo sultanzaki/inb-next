@@ -1,30 +1,5 @@
 "use client";
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useId,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-type LoadingRegistry = {
-  report: (id: string, pending: boolean) => void;
-  remove: (id: string) => void;
-};
-const Registry = createContext<LoadingRegistry | null>(null);
-/** Register dependent reads while the record's initial presentation is assembled. */
-export function useRecordLoading(pending: boolean, enabled = true) {
-  const registry = useContext(Registry),
-    id = useId();
-  useEffect(() => {
-    if (!registry || !enabled) return;
-    registry.report(id, pending);
-    return () => registry.remove(id);
-  }, [registry, id, pending, enabled]);
-}
+import type { ReactNode } from "react";
 export function RecordSkeleton({
   label = "Loading record details…",
   compact = false,
@@ -58,6 +33,7 @@ export function RecordSkeleton({
     </div>
   );
 }
+/** Keep primary data and independent section loading separate. */
 export function RecordLoadingBoundary({
   loading = false,
   children,
@@ -65,46 +41,12 @@ export function RecordLoadingBoundary({
   loading?: boolean;
   children: ReactNode;
 }) {
-  const pending = useRef(new Map<string, boolean>()),
-    [revision, bump] = useReducer((v) => v + 1, 0),
-    [revealed, setRevealed] = useState(false);
-  const registry = useMemo<LoadingRegistry>(
-    () => ({
-      report(id, value) {
-        if (pending.current.get(id) !== value) {
-          pending.current.set(id, value);
-          bump();
-        }
-      },
-      remove(id) {
-        if (pending.current.delete(id)) bump();
-      },
-    }),
-    [],
-  );
-  useEffect(() => {
-    if (loading || revealed || [...pending.current.values()].some(Boolean))
-      return;
-    let second = 0;
-    const first = requestAnimationFrame(() => {
-      second = requestAnimationFrame(() => {
-        if (![...pending.current.values()].some(Boolean)) setRevealed(true);
-      });
-    });
-    return () => {
-      cancelAnimationFrame(first);
-      cancelAnimationFrame(second);
-    };
-  }, [loading, revealed, revision]);
-  const busy = loading || !revealed;
   return (
-    <Registry value={registry}>
-      <div className="record-loading-boundary" aria-busy={busy}>
-        {busy && <RecordSkeleton />}
-        <div hidden={busy} className="record-ready-content">
-          {children}
-        </div>
+    <div className="record-loading-boundary" aria-busy={loading}>
+      {loading && <RecordSkeleton />}
+      <div hidden={loading} className="record-ready-content">
+        {children}
       </div>
-    </Registry>
+    </div>
   );
 }

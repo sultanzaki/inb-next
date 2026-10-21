@@ -95,7 +95,12 @@ test(
     // serves it at /. This local adapter mirrors only that path mounting.
     let failRevoke = false;
     let missingPerformanceRPCs = false;
+    let holdSession: Promise<void> | null = null;
+    let observeERPRead: (() => void) | null = null;
     const relay = createServer(async (req, res) => {
+      if (req.url === "/rest/v1/rpc/qc_session_user" && holdSession)
+        await holdSession;
+      if (req.url === "/rest/v1/rpc/erp_read") observeERPRead?.();
       if (
         process.env.TEST_UX_MISSING_RPC === "1" &&
         [
@@ -360,6 +365,53 @@ test(
         return;
       }
       if (process.env.TEST_RECORD_LOADING_ONLY === "1") {
+        let releaseSession!: () => void;
+        holdSession = new Promise<void>((resolve) => {
+          releaseSession = resolve;
+        });
+        const startedRead = new Promise<void>((resolve) => {
+          observeERPRead = resolve;
+        });
+        let returned = false;
+        let concurrencyTimeout: ReturnType<typeof setTimeout> | undefined;
+        const protectedRequest = page.request
+          .get(origin + "/api/erp/units")
+          .then((response) => {
+            returned = true;
+            return response;
+          });
+        try {
+          await Promise.race([
+            startedRead,
+            new Promise<never>((_resolve, reject) => {
+              concurrencyTimeout = setTimeout(
+                () =>
+                  reject(
+                    Error(
+                      "ERP read waited for authentication instead of overlapping it",
+                    ),
+                  ),
+                3000,
+              );
+            }),
+          ]);
+          assert.equal(
+            returned,
+            false,
+            "No record data may escape before session verification",
+          );
+        } finally {
+          clearTimeout(concurrencyTimeout);
+          releaseSession();
+          holdSession = null;
+          observeERPRead = null;
+        }
+        const response = await protectedRequest;
+        assert.equal(response.status(), 200);
+        assert.match(
+          response.headers()["server-timing"],
+          /session;dur=.*read;dur=.*total;dur=/,
+        );
         await exerciseRecordLoading(page, db, origin, capture, accessible);
         assert.deepEqual(runtimeErrors, []);
         return;

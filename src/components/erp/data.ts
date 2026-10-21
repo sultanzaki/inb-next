@@ -1,7 +1,6 @@
 "use client";
-import { requestTimeout } from "@/lib/request-timeout";
-import { useRecordLoading } from "@/components/workspace/record-loading";
-import { useEffect, useState } from "react";
+import { invalidateERPReads, readERPPage } from "@/lib/erp/read-request";
+import { useEffect, useRef, useState } from "react";
 import { entityColumns, type TableQuery } from "@/lib/tables/schema";
 import type { ERPPage, ERPAction } from "@/lib/erp/schema";
 export function useERPPage(
@@ -34,6 +33,7 @@ export function useERPPage(
     scopeKey,
     gridKey,
   ]);
+  const lastRead = useRef(0);
   useEffect(() => {
     if (!enabled) return;
     const abort = new AbortController();
@@ -43,14 +43,9 @@ export function useERPPage(
         if (gridKey) params.set("grid", gridKey);
         if (id) params.set("id", id);
         if (entity.startsWith("choices/")) params.set("scope", scopeKey);
-        const timeout = requestTimeout(abort.signal);
-        void fetch("/api/erp/" + entity + "?" + params, {
-          signal: timeout.signal,
-          cache: "no-store",
-        })
-          .then(async (r) => {
-            const data = await r.json();
-            if (!r.ok) throw Error(data.message || "Could not load records.");
+        lastRead.current = Date.now();
+        void readERPPage("/api/erp/" + entity + "?" + params, abort.signal)
+          .then((data) => {
             if (!abort.signal.aborted) setResponse({ key, data });
           })
           .catch((e) => {
@@ -64,10 +59,9 @@ export function useERPPage(
                       ? e.message
                       : "Could not load records.",
               });
-          })
-          .finally(timeout.dispose);
+          });
       },
-      q ? 250 : 0,
+      q && !id ? 250 : 0,
     );
     return () => {
       clearTimeout(timer);
@@ -76,15 +70,17 @@ export function useERPPage(
   }, [key, entity, q, state, page, id, enabled, scopeKey, gridKey]);
   useEffect(() => {
     if (!enabled) return;
-    const refresh = () => setVersion((v) => v + 1);
+    const refresh = () => {
+      if (
+        document.visibilityState === "visible" &&
+        Date.now() - lastRead.current >= 30_000
+      )
+        setVersion((v) => v + 1);
+    };
     window.addEventListener("focus", refresh);
     return () => window.removeEventListener("focus", refresh);
   }, [enabled]);
   const current = response?.key === key ? response : null;
-  useRecordLoading(
-    enabled && !current,
-    enabled && Boolean(id) && !entity.startsWith("choices/"),
-  );
   return {
     data: current?.data ?? { rows: [], total: 0, page, page_size: 50 },
     error: current?.error,
@@ -101,12 +97,14 @@ export class ERPRequestError extends Error {
   }
 }
 export async function erpAction(action: ERPAction, payload: unknown) {
+  invalidateERPReads();
   const r = await fetch("/api/erp/" + action, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   const data = await r.json();
+  invalidateERPReads();
   if (!r.ok)
     throw new ERPRequestError(
       data.message || "Could not save changes.",
