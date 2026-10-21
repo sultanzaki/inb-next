@@ -2,7 +2,11 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { PDFDocument, rgb, degrees, type PDFFont, type PDFPage } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
-import { decimal, type ERPRow, type ERPLine } from "./schema";
+import type { ERPRow, ERPLine } from "./schema";
+import { formatDecimal } from "../number-format";
+// Formal English ERP documents keep English separators, with compact decimals.
+const decimal = (value: Parameters<typeof formatDecimal>[0]) =>
+  formatDecimal(value, { locale: "en-US" });
 type Snapshot = {
   number: string;
   date: string;
@@ -472,7 +476,7 @@ export async function renderERPDocument(
       [
         "tax",
         data.tax_rate != null && data.tax_rate !== ""
-          ? "Tax (" + data.tax_rate + "%)"
+          ? "Tax (" + decimal(data.tax_rate) + "%)"
           : "Tax",
       ],
       ["freight", "Freight"],

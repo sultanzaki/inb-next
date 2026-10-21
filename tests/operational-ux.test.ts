@@ -21,7 +21,7 @@ test("Indonesian numeric input parses grouping and decimals without float conver
     assert.equal(parseNumberInput(input), expected);
   for (const input of ["1.5", "1,000,000", "1e6", "1.2.3", "Infinity", "abc"])
     assert.equal(parseNumberInput(input), null);
-  assert.equal(displayNumber("1250.750000"), "1.250,750000");
+  assert.equal(displayNumber("1250.750000"), "1.250,75");
   assert.equal(displayNumber("0.000001"), "0,000001");
 });
 test("DP suggestions subtract existing requests rather than requesting paid funds twice", () => {

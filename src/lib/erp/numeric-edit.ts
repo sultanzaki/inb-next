@@ -2,12 +2,7 @@ import { displayNumber, parseNumberInput } from "./ux";
 
 /** Database/transport values use a decimal point, never grouping separators. */
 export function numericDisplay(value: string | number): string {
-  const raw = String(value);
-  if (!/^-?\d*(\.\d*)?$/.test(raw)) return raw;
-  const compact = raw.includes(".")
-    ? raw.replace(/0+$/, "").replace(/\.$/, "")
-    : raw;
-  return displayNumber(compact);
+  return displayNumber(value);
 }
 
 /** Localized text is only a view. Regroup incomplete separators during native edits. */
@@ -24,7 +19,7 @@ export function numericEdit(text: string, caret: number, nativeEdit = false) {
   let canonical = parsed.replace(/^(-?)0+(?=\d)/, "$1");
   if (canonical.startsWith(".")) canonical = "0" + canonical;
   if (canonical.startsWith("-.")) canonical = "-0" + canonical.slice(1);
-  const formatted = displayNumber(canonical);
+  const formatted = displayNumber(canonical, { editing: true });
   // Count meaningful characters, not grouping marks, to preserve a mid-number cursor.
   const prefix = text
     .slice(0, caret)

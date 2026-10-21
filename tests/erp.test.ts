@@ -46,9 +46,9 @@ test("ERP quantities normalize decimal commas and reject ambiguous/invalid input
   );
 });
 test("ERP display keeps large decimal strings exact", () => {
-  assert.equal(decimal("123456789012.123456"), "123,456,789,012.123456");
-  assert.equal(decimal("0.300000"), "0.3");
-  assert.equal(decimal("-123.050000"), "-123.05");
+  assert.equal(decimal("123456789012.123456"), "123.456.789.012,123456");
+  assert.equal(decimal("0.300000"), "0,3");
+  assert.equal(decimal("-123.050000"), "-123,05");
   assert.equal(decimal(null), "—");
 });
 test("ERP server PDF retains every line, immutable customer details and draft labels", async () => {
@@ -82,7 +82,7 @@ test("ERP server PDF retains every line, immutable customer details and draft la
     },
     lines,
     terms: "Frozen terms",
-    tax_rate: "11",
+    tax_rate: "11.0000",
     totals: { subtotal: "228000", tax: "25080", freight: "0", total: "253080" },
   };
   const row: ERPRow = {
@@ -104,6 +104,8 @@ test("ERP server PDF retains every line, immutable customer details and draft la
     });
     for (let i = 0; i < 60; i++) assert.ok(text.includes("Unique item " + i));
     assert.ok(text.includes("Original frozen address"));
+    assert.ok(text.includes("Tax (11%)"));
+    assert.ok(!text.includes("11.0000%"));
     assert.ok(!text.includes("Changed customer"));
     assert.ok(!text.includes("Changed number"));
     const draft = await renderERPDocument(

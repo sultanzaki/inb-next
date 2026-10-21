@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { displayNumber } from "../src/lib/erp/ux";
+import { formatDecimal } from "../src/lib/number-format";
 import { numericDisplay, numericEdit } from "../src/lib/erp/numeric-edit";
 
 test("database decimals display compactly without treating decimal points as grouping", () => {
@@ -69,4 +71,25 @@ test("paste validates separators and never silently changes ambiguous numbers", 
   assert.equal(numericEdit(",25", 3, true).value, "0.25");
   assert.equal(numericEdit("00012", 5, true).text, "12");
   assert.equal(numericEdit("-", 1, true).valid, false);
+});
+
+test("read-only quantities and percentages trim padding without rounding meaningful digits", () => {
+  for (const [raw, expected] of [
+    ["200.000000", "200"],
+    ["10.0000", "10"],
+    ["2.5000", "2,5"],
+    ["200.125000", "200,125"],
+    ["0.000001", "0,000001"],
+    ["999999999999999.123456", "999.999.999.999.999,123456"],
+    ["-200.125000", "-200,125"],
+    ["0.000000", "0"],
+  ])
+    assert.equal(displayNumber(raw), expected);
+  assert.equal(formatDecimal("1250.750000", { locale: "en-US" }), "1,250.75");
+  assert.equal(formatDecimal("10.0000", { locale: "en-US" }), "10");
+  assert.equal(formatDecimal(null), "—");
+  assert.equal(formatDecimal("not a number"), "not a number");
+  assert.equal(numericEdit("200,00", 6, true).text, "200,00");
+  assert.equal(numericEdit("200,", 4, true).text, "200,");
+  assert.equal(numericDisplay("200.00"), "200");
 });

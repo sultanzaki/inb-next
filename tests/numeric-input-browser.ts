@@ -46,6 +46,7 @@ export async function exerciseNumericInput(
   );
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(origin + "/dashboard/purchase?view=purchases&record=" + po);
+  await page.getByText(/Ordered 1\.250,75/).waitFor();
   await page.getByRole("button", { name: "Edit draft", exact: true }).click();
   const dialog = () => page.locator("[role=dialog].erp-dialog").last();
   const quantity = () =>

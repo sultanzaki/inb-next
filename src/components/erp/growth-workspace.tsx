@@ -1122,7 +1122,7 @@ function RecordDetail({ row: r, entity }: { row: RecordRow; entity: string }) {
             ].includes(k)
               ? decimal(text(value))
               : k === "probability"
-                ? text(value) + "%"
+                ? decimal(text(value)) + "%"
                 : typeof value === "boolean"
                   ? value
                     ? "Yes"

@@ -1,3 +1,4 @@
+import { formatDecimal } from "../number-format";
 import { operationalSchemas } from "./operational-schema";
 import { z } from "zod";
 const id = z.uuid(),
@@ -502,12 +503,7 @@ export type ERPPage = {
   page: number;
   page_size: number;
 };
-/** Preserve decimal strings, including trailing stock precision, without IEEE-754 calculations. */
+/** Compact, localized display; exact transport values remain unchanged. */
 export function decimal(value: string | number | null | undefined) {
-  if (value === null || value === undefined) return "—";
-  const [integer, fraction = ""] = String(value).split(".");
-  return (
-    integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",") +
-    (fraction.replace(/0+$/, "") ? "." + fraction.replace(/0+$/, "") : "")
-  );
+  return formatDecimal(value);
 }

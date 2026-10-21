@@ -1,6 +1,7 @@
 "use client";
 import {
   humanLabel,
+  displayNumber,
   fieldHelp,
   money,
   requestSuggestion,
@@ -921,8 +922,9 @@ export function WorkflowForm({
                     {value(sourceTerms, "state", "Not configured")}
                   </p>
                   <p>
-                    Deposit: {value(sourceTerms, "deposit_percent", "0")}% ·
-                    Requested:{" "}
+                    Deposit:{" "}
+                    {displayNumber(value(sourceTerms, "deposit_percent", "0"))}%
+                    · Requested:{" "}
                     {money(
                       value(billing, "requested", "0"),
                       value(source as WorkflowRow, "currency", "IDR"),

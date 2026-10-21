@@ -1,4 +1,5 @@
 "use client";
+import { displayNumber } from "@/lib/erp/ux";
 import { useFileDownload } from "@/components/workspace/use-file-download";
 import {
   Fragment,
@@ -57,12 +58,7 @@ function elements(node: ReactNode): El[] {
 function display(value: unknown, type?: string) {
   if (value == null || value === "") return "—";
   if (type === "number" && /^-?\d+(\.\d+)?$/.test(String(value))) {
-    const [integer, fraction = ""] = String(value).split(".");
-    const decimals = fraction.replace(/0+$/, "");
-    return (
-      integer.replace(/\B(?=(\d{3})+(?!\d))/g, ".") +
-      (decimals ? "," + decimals : "")
-    );
+    return displayNumber(String(value));
   }
   if (type === "boolean")
     return value === true || value === "true" ? "Yes" : "No";

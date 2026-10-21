@@ -1,12 +1,10 @@
+import { formatDecimal } from "../number-format";
 /** Display uses Indonesian separators; transport always uses ungrouped decimal strings. */
-export function displayNumber(value: string | number): string {
-  const raw = String(value);
-  if (!/^-?\d*(\.\d*)?$/.test(raw)) return raw;
-  const [whole, fraction] = raw.split(".");
-  return (
-    whole.replace(/\B(?=(\d{3})+(?!\d))/g, ".") +
-    (fraction === undefined ? "" : "," + fraction)
-  );
+export function displayNumber(
+  value: string | number,
+  options?: { editing?: boolean },
+): string {
+  return formatDecimal(value, options);
 }
 export function parseNumberInput(input: string): string | null {
   const raw = input
