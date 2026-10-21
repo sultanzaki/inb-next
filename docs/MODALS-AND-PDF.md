@@ -17,3 +17,5 @@ Concurrent identical browser reads share one in-flight request. Results are remo
 These changes remove sequential network waits and redundant reads; production latency and region placement still require deployment measurement. No database migration is needed.
 
 Local production-build spot check (synthetic Sales Order, local Postgres/PostgREST): server-side `total` was 20.4 ms for detail, 47.2 ms for controls and 42.7 ms for document flow during concurrent requests. These are diagnostic samples, not production latency guarantees; database/session work overlaps rather than adding sequential network round trips.
+
+Download/export controls share a synchronous request lock, visible busy states and a preparation toast. CSV and Excel controls lock together; COA and ERP PDF downloads stay busy until the response body is ready. Failures restore the controls for retry; unmount cancels the fetch and timeouts stop indefinite preparation. Server-provided filenames are retained and sanitized. `TEST_DOWNLOADS_ONLY=1 npm run test:e2e` holds an export response to verify same-tick double-click protection, cross-format locking, filename delivery, error recovery and mobile fit.

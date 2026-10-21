@@ -1,3 +1,4 @@
+import { exerciseDownloads } from "./downloads-browser";
 import { exerciseRecordLoading } from "./record-loading-browser";
 import { exerciseAdvancedTables } from "./advanced-tables-browser";
 import { exerciseCoaProductionDates } from "./coa-production-dates-browser";
@@ -362,6 +363,11 @@ test(
         );
         assert.equal(scoped.status(), 503);
         assert.match((await scoped.json()).message, /database update/);
+        return;
+      }
+      if (process.env.TEST_DOWNLOADS_ONLY === "1") {
+        await exerciseDownloads(page, origin);
+        assert.deepEqual(runtimeErrors, []);
         return;
       }
       if (process.env.TEST_RECORD_LOADING_ONLY === "1") {
@@ -878,6 +884,7 @@ test(
       await exerciseOperationalUX(page, db, origin, capture, accessible);
       await exerciseTransactionControls(page, db, origin, capture, accessible);
       await exerciseNumericInput(page, db, origin);
+      await exerciseDownloads(page, origin);
       await exerciseAdvancedTables(page, origin, capture, accessible);
       await exerciseRecordLoading(page, db, origin, capture, accessible);
       await exerciseCoaProductionDates(page, db, origin, capture, accessible);

@@ -1,4 +1,5 @@
 "use client";
+import { useFileDownload } from "@/components/workspace/use-file-download";
 import {
   Fragment,
   Children,
@@ -103,6 +104,7 @@ export function AdvancedRecordsTable({
   context?: Record<string, string>;
   onContext?: (context: Record<string, string>) => void;
 }) {
+  const fileDownload = useFileDownload();
   const { columns, query, layout } = state;
   const [panel, setPanel] = useState<
       "filters" | "columns" | "views" | "sort" | null
@@ -206,22 +208,13 @@ export function AdvancedRecordsTable({
       (exportAll ? columns : visible).map((c) => c.key).join(","),
     );
     url.searchParams.set("format", format);
-    try {
-      const r = await fetch(url);
-      if (!r.ok) {
-        const e = await r.json();
-        throw Error(e.message || "Export failed.");
-      }
-      const target = URL.createObjectURL(await r.blob()),
-        a = document.createElement("a");
-      a.href = target;
-      a.download = `${state.entity}.${format}`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(target), 10000);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Export failed.");
-    }
+    await fileDownload.download(
+      url.toString(),
+      `${state.entity}.${format}`,
+      format,
+    );
   }
+
   const grouped = layout.group
     ? rows.reduce<Map<string, number>>((groups, r) => {
         const k = display(fieldValue(r, layout.group));
@@ -259,17 +252,21 @@ export function AdvancedRecordsTable({
             <Button
               variant="outline"
               size="sm"
+              disabled={Boolean(fileDownload.busy)}
+              loading={fileDownload.busy === "csv"}
               onClick={() => void download("csv")}
             >
-              <Download className="size-3.5" />
-              CSV
+              {!fileDownload.busy && <Download className="size-3.5" />}
+              {fileDownload.busy === "csv" ? "Preparing CSV…" : "CSV"}
             </Button>
             <Button
               variant="outline"
               size="sm"
+              disabled={Boolean(fileDownload.busy)}
+              loading={fileDownload.busy === "xlsx"}
               onClick={() => void download("xlsx")}
             >
-              Excel
+              {fileDownload.busy === "xlsx" ? "Preparing Excel…" : "Excel"}
             </Button>
           </>
         )}

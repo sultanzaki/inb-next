@@ -20,6 +20,7 @@ type ActionProps = {
   children?: ReactNode;
   title?: string;
   "aria-label"?: string;
+  "aria-busy"?: boolean;
   "data-tone"?: string;
   onClick?: MouseEventHandler<HTMLElement>;
   disabled?: boolean;
@@ -63,6 +64,7 @@ export function RowActions({
                     p["data-tone"] === "danger" ? "destructive" : "default"
                   }
                   disabled={p.disabled}
+                  aria-busy={p["aria-busy"]}
                   onClick={p.onClick}
                   {...(p.href
                     ? {

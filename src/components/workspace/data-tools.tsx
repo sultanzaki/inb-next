@@ -1,4 +1,5 @@
 "use client";
+import { useFileDownload } from "./use-file-download";
 import { useEffect, useEffectEvent, useState } from "react";
 import {
   Copy,
@@ -109,8 +110,8 @@ export function DataTools({
   const mobile = useMobile();
   const [desktopOpen, setDesktopOpen] = useState(false),
     [mobileOpen, setMobileOpen] = useState(false),
-    [draft, setDraft] = useState<AdvancedFilters>({ ...filters }),
-    [exporting, setExporting] = useState("");
+    [draft, setDraft] = useState<AdvancedFilters>({ ...filters });
+  const { busy: exporting, download: downloadFile } = useFileDownload();
   const open = mobile ? mobileOpen : desktopOpen;
   function toggle() {
     if (mobile) {
@@ -158,37 +159,21 @@ export function DataTools({
     return () => controller.abort();
   }, [open, module]);
   async function download(format: "csv" | "xlsx") {
-    setExporting(format);
-    try {
-      const r = await fetch(
-        "/api/export?" +
-          new URLSearchParams({
-            module,
-            search,
-            filter,
-            order,
-            ...filters,
-            format,
-          }),
-      );
-      if (!r.ok) {
-        const e = await r.json();
-        throw Error(e.message || "Export failed.");
-      }
-      const blob = await r.blob(),
-        url = URL.createObjectURL(blob),
-        a = document.createElement("a");
-      a.href = url;
-      a.download = `${module}.${format}`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-      toast.success("Export ready.");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Export failed.");
-    } finally {
-      setExporting("");
-    }
+    await downloadFile(
+      "/api/export?" +
+        new URLSearchParams({
+          module,
+          search,
+          filter,
+          order,
+          ...filters,
+          format,
+        }),
+      `${module}.${format}`,
+      format,
+    );
   }
+
   return (
     <div className="data-tools">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -208,6 +193,7 @@ export function DataTools({
                 variant="outline"
                 size="sm"
                 disabled={loading || Boolean(exporting)}
+                aria-busy={exporting === format || undefined}
                 onClick={() => void download(format)}
               >
                 {exporting === format ? (
@@ -215,7 +201,11 @@ export function DataTools({
                 ) : (
                   <Download className="size-3.5" />
                 )}
-                {format === "xlsx" ? "Excel" : "CSV"}
+                {exporting === format
+                  ? "Preparing…"
+                  : format === "xlsx"
+                    ? "Excel"
+                    : "CSV"}
               </Button>
             ))}
           </div>

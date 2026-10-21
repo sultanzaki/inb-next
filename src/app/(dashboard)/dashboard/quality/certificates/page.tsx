@@ -1,11 +1,12 @@
 "use client";
+import { useFileDownload } from "@/components/workspace/use-file-download";
 import { useTableState } from "@/components/tables/use-table-state";
 import { AdvancedRecordsTable } from "@/components/tables/advanced-records-table";
 import { applyTableQuery } from "@/lib/tables/postgrest";
 import { useERP } from "@/components/erp/context";
 import { coaExpiryDate } from "@/lib/domain/coa-dates";
 import { RowActions } from "@/components/workspace/row-actions";
-import { Download } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { PdfPreview } from "@/components/workspace/pdf-preview";
 import {
   DataTools,
@@ -475,23 +476,13 @@ export default function COAPage() {
   function handlePrint(coa: CoaRow) {
     window.open(`/api/coa/${coa.id}/pdf`, "_blank", "noopener,noreferrer");
   }
+  const fileDownload = useFileDownload();
   async function downloadPdf(coa: CoaRow) {
-    try {
-      const r = await fetch(`/api/coa/${coa.id}/pdf?download=1`);
-      if (!r.ok) {
-        const data = await r.json();
-        toast.error(data.message || "Could not create the PDF.");
-        return;
-      }
-      const url = URL.createObjectURL(await r.blob()),
-        a = document.createElement("a");
-      a.href = url;
-      a.download = coa.no_coa.replace(/[^a-zA-Z0-9_.-]/g, "_") + ".pdf";
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-    } catch {
-      toast.error("Connection lost. Retry.");
-    }
+    await fileDownload.download(
+      `/api/coa/${coa.id}/pdf?download=1`,
+      coa.no_coa.replace(/[^a-zA-Z0-9_.-]/g, "_") + ".pdf",
+      coa.id,
+    );
   }
 
   function openDetail(coa: CoaRow) {
@@ -709,7 +700,7 @@ export default function COAPage() {
                           !editingId &&
                           Boolean(
                             selectedHasil?.coa_lot?.locked &&
-                              selectedHasil.coa_lot.mfg_date,
+                            selectedHasil.coa_lot.mfg_date,
                           )
                         }
                         disabled={!canWrite}
@@ -1002,11 +993,20 @@ export default function COAPage() {
                         <button
                           type="button"
                           className="row-action"
-                          title="Download PDF"
-                          disabled={coa.withdrawn}
+                          title={
+                            fileDownload.busy === coa.id
+                              ? "Preparing PDF…"
+                              : "Download PDF"
+                          }
+                          aria-busy={fileDownload.busy === coa.id || undefined}
+                          disabled={coa.withdrawn || Boolean(fileDownload.busy)}
                           onClick={() => void downloadPdf(coa)}
                         >
-                          <Download className="size-3.5" />
+                          {fileDownload.busy === coa.id ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <Download className="size-3.5" />
+                          )}
                         </button>
                         <button
                           type="button"

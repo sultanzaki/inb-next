@@ -1,4 +1,5 @@
 "use client";
+import { useFileDownload } from "@/components/workspace/use-file-download";
 import { useTableState } from "@/components/tables/use-table-state";
 import { AdvancedRecordsTable } from "@/components/tables/advanced-records-table";
 import { TransactionControls } from "./transaction-controls";
@@ -682,6 +683,7 @@ function RecordDetail({
     write = erp.can(scope, "write"),
     approve = erp.can(scope, "approve");
   const docURL = "/api/erp/documents/" + entity + "/" + id;
+  const fileDownload = useFileDownload();
   return (
     <ERPModal
       layout="record"
@@ -864,14 +866,24 @@ function RecordDetail({
               </Button>
             )}
             {(movement || quote) && (
-              <a
-                className="erp-document-link"
-                href={docURL + "?download=1"}
-                download
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={Boolean(fileDownload.busy)}
+                loading={fileDownload.busy === "pdf"}
+                onClick={() =>
+                  void fileDownload.download(
+                    docURL + "?download=1",
+                    `${row.number || "document"}.pdf`,
+                    "pdf",
+                  )
+                }
               >
-                <FileDown className="size-3.5" />
-                Download PDF
-              </a>
+                {!fileDownload.busy && <FileDown className="size-3.5" />}
+                {fileDownload.busy === "pdf"
+                  ? "Preparing PDF…"
+                  : "Download PDF"}
+              </Button>
             )}
             {movement && row.state === "draft" && write && (
               <>
@@ -1108,13 +1120,23 @@ function RecordDetail({
                     Boolean(
                       (row.snapshot?.lines as ERPLine[] | undefined)?.[i]?.coa,
                     ) && (
-                      <a
-                        href={docURL + "/coa/" + i + "?download=1"}
-                        className="erp-document-link"
-                        download
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={Boolean(fileDownload.busy)}
+                        loading={fileDownload.busy === `coa-${i}`}
+                        onClick={() =>
+                          void fileDownload.download(
+                            docURL + "/coa/" + i + "?download=1",
+                            "COA.pdf",
+                            `coa-${i}`,
+                          )
+                        }
                       >
-                        Download attached COA
-                      </a>
+                        {fileDownload.busy === `coa-${i}`
+                          ? "Preparing COA…"
+                          : "Download attached COA"}
+                      </Button>
                     )}
                 </article>
               ))}

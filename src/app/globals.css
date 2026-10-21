@@ -677,7 +677,15 @@ kbd {
     border-color 0.16s,
     color 0.16s;
 }
-.row-action:hover {
+.row-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.row-action[aria-busy="true"] {
+  opacity: 1;
+  cursor: progress;
+}
+.row-action:not(:disabled):hover {
   background: var(--color-surface-alt);
   border-color: var(--color-border);
   color: var(--color-primary);
