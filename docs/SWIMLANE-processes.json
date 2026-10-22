@@ -1,0 +1,1295 @@
+[
+  {
+    "id": "sales",
+    "title": "Penjualan & pengiriman",
+    "subtitle": "Dari kebutuhan pelanggan sampai bukti penerimaan barang.",
+    "lanes": [
+      "Pelanggan",
+      "CRM / Sales",
+      "Finance",
+      "Warehouse",
+      "Quality",
+      "Service"
+    ],
+    "nodes": [
+      {
+        "id": "s1",
+        "l": 0,
+        "r": 0,
+        "title": "Kebutuhan / permintaan harga",
+        "detail": "Pelanggan meminta produk, jumlah, dan tujuan pengiriman.",
+        "kind": "task"
+      },
+      {
+        "id": "s2",
+        "l": 1,
+        "r": 1,
+        "title": "Customer & quotation draft",
+        "detail": "Gunakan customer yang ada. Opportunity CRM dapat ditautkan bila dipakai; tidak wajib menjadi awal penjualan.",
+        "kind": "task"
+      },
+      {
+        "id": "s3",
+        "l": 1,
+        "r": 2,
+        "title": "Review & issue quotation",
+        "detail": "Preview PDF sebelum issue. Diskon di atas 10% memerlukan approval Sales. Dokumen issued menggunakan snapshot.",
+        "kind": "task"
+      },
+      {
+        "id": "s4",
+        "l": 0,
+        "r": 3,
+        "title": "Terima quotation?",
+        "detail": "Jika tidak diterima, tindak lanjuti atau revisi quotation sesuai statusnya. Diagram utama meneruskan jalur accepted.",
+        "kind": "decision"
+      },
+      {
+        "id": "s5",
+        "l": 1,
+        "r": 4,
+        "title": "Buat satu Sales Order",
+        "detail": "Satu keluarga quotation accepted hanya boleh menghasilkan satu SO. Customer reference dapat dicatat.",
+        "kind": "task"
+      },
+      {
+        "id": "s6",
+        "l": 2,
+        "r": 5,
+        "title": "Approve payment terms",
+        "detail": "Tetapkan prepaid / deposit-before / deposit-credit / credit serta invoice trigger. Berlaku ketika Finance aktif.",
+        "kind": "task"
+      },
+      {
+        "id": "s7",
+        "l": 2,
+        "r": 6,
+        "title": "Cek pembayaran / kredit",
+        "detail": "Prepaid/DP memakai pembayaran terverifikasi yang dialokasikan. Kredit memerlukan kebijakan, limit, dan pemeriksaan hold/overdue.",
+        "kind": "task"
+      },
+      {
+        "id": "s8",
+        "l": 3,
+        "r": 7,
+        "title": "Reservasi lot & stok",
+        "detail": "Pilih lot released, belum expired, dan jumlah available. Reservasi tidak sama dengan pengeluaran fisik barang.",
+        "kind": "task"
+      },
+      {
+        "id": "s9",
+        "l": 4,
+        "r": 7,
+        "title": "COA valid untuk lot",
+        "detail": "Ketika Quality aktif, pengiriman memerlukan COA yang sesuai lot dan tanggal. Certificate withdrawn tidak boleh dipakai sebagai bukti valid.",
+        "kind": "task"
+      },
+      {
+        "id": "s10",
+        "l": 3,
+        "r": 8,
+        "title": "Siapkan Delivery Order",
+        "detail": "Draft pengiriman dari reservasi aktif. Pengiriman parsial diperbolehkan; satu lokasi asal per draft.",
+        "kind": "task"
+      },
+      {
+        "id": "s11",
+        "l": 3,
+        "r": 9,
+        "title": "Lolos pemeriksaan posting?",
+        "detail": "Server mengecek ulang order, reservasi, stock count freeze, status lot, expiry, COA, dan financial clearance. Exception keuangan perlu approval dan alasan.",
+        "kind": "decision"
+      },
+      {
+        "id": "s12",
+        "l": 3,
+        "r": 10,
+        "title": "Post movement / dispatch",
+        "detail": "Stok dan reservasi berubah atomik. Snapshot pengiriman dan COA tersimpan. DO draft belum mengubah stok.",
+        "kind": "task"
+      },
+      {
+        "id": "s13",
+        "l": 0,
+        "r": 11,
+        "title": "Terima & periksa barang",
+        "detail": "Catat jumlah diterima/ditolak dan bukti pendukung. Selisih diproses melalui klaim, bukan mengubah riwayat pengiriman.",
+        "kind": "task"
+      },
+      {
+        "id": "s14",
+        "l": 5,
+        "r": 12,
+        "title": "Catat POD / customer receipt",
+        "detail": "Service mencatat penerima, tanggal, quantity accepted/rejected, dan bukti. POD diperlukan untuk invoice trigger receipt.",
+        "kind": "task"
+      },
+      {
+        "id": "s15",
+        "l": 2,
+        "r": 13,
+        "title": "Lanjutkan billing & settlement",
+        "detail": "Gunakan diagram Penagihan. Waktu invoice mengikuti trigger yang disetujui; dapat lebih awal dari langkah ini.",
+        "kind": "handoff"
+      },
+      {
+        "id": "s16",
+        "l": 1,
+        "r": 13,
+        "title": "Pantau outstanding order",
+        "detail": "SO menjadi fulfilled jika seluruh quantity terkirim. Sisa dapat ditutup dengan review dan alasan; penutupan bukan pelunasan.",
+        "kind": "end"
+      }
+    ],
+    "edges": [
+      {
+        "a": "s1",
+        "b": "s2",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "s2",
+        "b": "s3",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "s3",
+        "b": "s4",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "s4",
+        "b": "s5",
+        "label": "Accepted",
+        "kind": "normal"
+      },
+      {
+        "a": "s5",
+        "b": "s6",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "s6",
+        "b": "s7",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "s7",
+        "b": "s8",
+        "label": "Siapkan fulfillment",
+        "kind": "normal"
+      },
+      {
+        "a": "s8",
+        "b": "s10",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "s9",
+        "b": "s11",
+        "label": "Syarat Quality",
+        "kind": "conditional"
+      },
+      {
+        "a": "s10",
+        "b": "s11",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "s7",
+        "b": "s11",
+        "label": "Gate Finance aktif",
+        "kind": "conditional"
+      },
+      {
+        "a": "s11",
+        "b": "s12",
+        "label": "Lolos",
+        "kind": "normal"
+      },
+      {
+        "a": "s12",
+        "b": "s13",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "s13",
+        "b": "s14",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "s14",
+        "b": "s15",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "s12",
+        "b": "s16",
+        "label": "Quantity terkirim",
+        "kind": "conditional"
+      }
+    ],
+    "notes": [
+      "Jika gate posting gagal, selesaikan blocker yang ditunjukkan lalu periksa ulang. Barang tidak boleh diposting dengan mengabaikan gate.",
+      "Reservasi dapat disiapkan sebelum financial clearance. Clearance tetap diperiksa ulang saat posting; diagram memperlihatkan urutan kerja yang disarankan.",
+      "Quotation ditolak/expired tidak otomatis menghasilkan SO. Produksi dan QC dapat berjalan independen sebelum SO dibuat."
+    ]
+  },
+  {
+    "id": "billing",
+    "title": "Penagihan & pembayaran",
+    "subtitle": "Pisahkan dokumen tagihan, uang aktual, verifikasi, dan alokasi.",
+    "lanes": [
+      "Sales / Warehouse",
+      "Service",
+      "Finance",
+      "Pelanggan"
+    ],
+    "nodes": [
+      {
+        "id": "b1",
+        "l": 0,
+        "r": 0,
+        "title": "SO + payment terms",
+        "detail": "Sumber transaksi menyediakan party, currency, nilai, pajak/ongkir, serta terms yang telah disetujui.",
+        "kind": "task"
+      },
+      {
+        "id": "b2",
+        "l": 2,
+        "r": 1,
+        "title": "Perlu uang muka?",
+        "detail": "Prepaid/DP menggunakan payment request. Kredit dapat langsung mengikuti invoice trigger.",
+        "kind": "decision"
+      },
+      {
+        "id": "b3",
+        "l": 2,
+        "r": 2,
+        "title": "Issue payment request",
+        "detail": "Request berasal dari SO dan tidak sama dengan invoice final atau faktur pajak. Jumlah DP mengikuti kesepakatan.",
+        "kind": "task"
+      },
+      {
+        "id": "b4",
+        "l": 3,
+        "r": 3,
+        "title": "Bayar ke rekening perusahaan",
+        "detail": "Transaksi bank aktual terjadi di luar aplikasi. Aplikasi tidak mengeksekusi transfer bank.",
+        "kind": "task"
+      },
+      {
+        "id": "b5",
+        "l": 2,
+        "r": 4,
+        "title": "Record → verify actual funds",
+        "detail": "Catat bank reference, tanggal, jumlah, party, currency, dan bukti. Verifikasi mengikuti hak approval.",
+        "kind": "task"
+      },
+      {
+        "id": "b6",
+        "l": 2,
+        "r": 5,
+        "title": "Allocate ke payment request",
+        "detail": "Verified payment harus dipasangkan ke dokumen issued dengan party dan currency yang sama. Verify saja belum melunasi dokumen.",
+        "kind": "task"
+      },
+      {
+        "id": "b7",
+        "l": 0,
+        "r": 6,
+        "title": "Penuhi invoice trigger",
+        "detail": "Order: berdasarkan SO yang memenuhi syarat. Dispatch: pilih delivery posted. Receipt: memerlukan bukti customer receipt.",
+        "kind": "task"
+      },
+      {
+        "id": "b8",
+        "l": 1,
+        "r": 6,
+        "title": "POD jika trigger receipt",
+        "detail": "POD berasal dari proses penerimaan pelanggan. Untuk trigger lain, tahap ini bukan prasyarat invoice.",
+        "kind": "handoff"
+      },
+      {
+        "id": "b9",
+        "l": 2,
+        "r": 7,
+        "title": "Buat & issue invoice",
+        "detail": "Dokumen dibuat dari konteks SO/delivery/receipt sesuai trigger. Jumlah parsial dibatasi quantity yang belum ditagih; bukan invoice otomatis setiap DO diposting.",
+        "kind": "task"
+      },
+      {
+        "id": "b10",
+        "l": 2,
+        "r": 8,
+        "title": "Pindahkan alokasi DP",
+        "detail": "Jika ada DP, pindahkan alokasi dari request ke invoice final. Jangan mencatat ulang penerimaan bank yang sama.",
+        "kind": "task"
+      },
+      {
+        "id": "b11",
+        "l": 3,
+        "r": 9,
+        "title": "Bayar sisa / pembayaran tempo",
+        "detail": "Pembayaran dapat parsial. Setiap uang aktual dicatat sekali, diverifikasi, kemudian dialokasikan.",
+        "kind": "task"
+      },
+      {
+        "id": "b12",
+        "l": 2,
+        "r": 10,
+        "title": "Verify & allocate ke invoice",
+        "detail": "Saldo outstanding dihitung dari dokumen serta alokasi yang sah. Jumlah yang belum dialokasikan tetap menjadi saldo pembayaran tersedia.",
+        "kind": "task"
+      },
+      {
+        "id": "b13",
+        "l": 2,
+        "r": 11,
+        "title": "Masih outstanding?",
+        "detail": "Jika masih ada saldo, pantau due date. Jika lunas, dokumen selesai secara operasional.",
+        "kind": "decision"
+      },
+      {
+        "id": "b14",
+        "l": 2,
+        "r": 12,
+        "title": "AR aging & collection",
+        "detail": "Catat follow-up, promise atau dispute. Overdue/credit hold dapat menghalangi dispatch baru. Promise tidak mengubah due date.",
+        "kind": "task"
+      },
+      {
+        "id": "b15",
+        "l": 2,
+        "r": 13,
+        "title": "Invoice settled",
+        "detail": "Pelunasan berasal dari alokasi dana/credit yang sah. Ini tidak membuat jurnal general ledger.",
+        "kind": "end"
+      }
+    ],
+    "edges": [
+      {
+        "a": "b1",
+        "b": "b2",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "b2",
+        "b": "b3",
+        "label": "Ya",
+        "kind": "normal"
+      },
+      {
+        "a": "b3",
+        "b": "b4",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "b4",
+        "b": "b5",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "b5",
+        "b": "b6",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "b6",
+        "b": "b7",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "b2",
+        "b": "b7",
+        "label": "Tidak / kredit",
+        "kind": "conditional"
+      },
+      {
+        "a": "b7",
+        "b": "b9",
+        "label": "Trigger terpenuhi",
+        "kind": "normal"
+      },
+      {
+        "a": "b8",
+        "b": "b9",
+        "label": "Khusus receipt",
+        "kind": "conditional"
+      },
+      {
+        "a": "b9",
+        "b": "b10",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "b10",
+        "b": "b11",
+        "label": "Jika ada sisa",
+        "kind": "normal"
+      },
+      {
+        "a": "b11",
+        "b": "b12",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "b12",
+        "b": "b13",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "b13",
+        "b": "b14",
+        "label": "Ya",
+        "kind": "normal"
+      },
+      {
+        "a": "b13",
+        "b": "b15",
+        "label": "Tidak",
+        "kind": "conditional"
+      },
+      {
+        "a": "b10",
+        "b": "b13",
+        "label": "DP menutup invoice",
+        "kind": "conditional"
+      }
+    ],
+    "notes": [
+      "Jalur DP dan kredit adalah alternatif. Tidak semua pelanggan harus melewati payment request.",
+      "Finance aktif/read-only tetap memberlakukan dispatch gate. Dispatch exception tidak menghapus utang atau membuktikan adanya pembayaran.",
+      "Aging, limit, dan alokasi dipisahkan per currency. Sistem belum mencakup jurnal, integrasi bank, atau pelaporan pajak resmi."
+    ]
+  },
+  {
+    "id": "production",
+    "title": "Produksi → QC → stok siap",
+    "subtitle": "Identitas batch berasal dari posting produksi; pemeriksaan menentukan kelayakan lot.",
+    "lanes": [
+      "Production",
+      "Sistem",
+      "Quality",
+      "Warehouse"
+    ],
+    "nodes": [
+      {
+        "id": "p1",
+        "l": 0,
+        "r": 0,
+        "title": "Catat draft hasil produksi",
+        "detail": "Pilih finished product, unit, quantity, manufacturing date, lokasi tujuan, dan referensi. Belum ada perubahan stok.",
+        "kind": "task"
+      },
+      {
+        "id": "p2",
+        "l": 0,
+        "r": 1,
+        "title": "Review & post produksi",
+        "detail": "Produk harus memiliki seri unik dan konversi unit yang sesuai. Satu baris mewakili satu batch.",
+        "kind": "task"
+      },
+      {
+        "id": "p3",
+        "l": 1,
+        "r": 2,
+        "title": "Alokasikan nomor batch",
+        "detail": "Format Seri.Batch.DDMMYYYY.TahunEXP. Sequence per produk dan tahun MFG; nomor resmi tidak dipakai ulang setelah reversal.",
+        "kind": "task"
+      },
+      {
+        "id": "p4",
+        "l": 3,
+        "r": 3,
+        "title": "Terima stok quarantine",
+        "detail": "Posting menambah stok fisik. Stok quarantine belum tersedia untuk dijual. Pencatatan hasil produksi tidak otomatis mengonsumsi bahan baku.",
+        "kind": "task"
+      },
+      {
+        "id": "p5",
+        "l": 2,
+        "r": 4,
+        "title": "Pilih lot & draft inspeksi",
+        "detail": "Dengan Production aktif/read-only, pilih lot yang benar-benar sudah diterima/diproduksi. Gunakan versi spesifikasi yang berlaku.",
+        "kind": "task"
+      },
+      {
+        "id": "p6",
+        "l": 2,
+        "r": 5,
+        "title": "Input hasil & finalisasi",
+        "detail": "Server mengevaluasi hasil parameter. FAIL memerlukan penjelasan; draft inspeksi belum menjadi hasil final.",
+        "kind": "task"
+      },
+      {
+        "id": "p7",
+        "l": 2,
+        "r": 6,
+        "title": "Hasil inspeksi?",
+        "detail": "PASS valid dapat merelease lot normal bila tidak ada hold/disposisi khusus. FAIL membuat lot tidak layak dikirim.",
+        "kind": "decision"
+      },
+      {
+        "id": "p8",
+        "l": 3,
+        "r": 7,
+        "title": "Lot released",
+        "detail": "Syarat lain tetap berlaku: tidak held, belum expired, saldo tersedia, dan tidak terkena count freeze.",
+        "kind": "task"
+      },
+      {
+        "id": "p9",
+        "l": 2,
+        "r": 8,
+        "title": "Preview → issue COA",
+        "detail": "MFG lot produksi diambil dari posting; expiry mengikuti kebijakan satu tahun dan guard tanggal. Release date dapat diisi sesuai aturan.",
+        "kind": "task"
+      },
+      {
+        "id": "p10",
+        "l": 3,
+        "r": 9,
+        "title": "Siap reservasi / pengiriman",
+        "detail": "COA yang sesuai dipakai saat dispatch jika Quality aktif. Penerbitan COA tidak menambah atau mengurangi stok.",
+        "kind": "end"
+      },
+      {
+        "id": "p11",
+        "l": 3,
+        "r": 10,
+        "title": "Lot FAIL / blocked",
+        "detail": "Barang tetap tercatat fisik namun tidak tersedia untuk dijual. Jangan mengubah hasil lama untuk melewati pembatasan.",
+        "kind": "exception"
+      },
+      {
+        "id": "p12",
+        "l": 2,
+        "r": 11,
+        "title": "Review / retest terkontrol",
+        "detail": "Gunakan kasus lot dan approval. Withdraw COA sebelumnya bila perlu, lalu buat inspeksi baru. Retest tidak memperpanjang expiry.",
+        "kind": "task"
+      },
+      {
+        "id": "p13",
+        "l": 3,
+        "r": 12,
+        "title": "Disposition / hold review",
+        "detail": "Hold tidak otomatis hilang hanya karena retest PASS. Lot retur memerlukan disposition tersendiri; disposal dicatat sebagai issue.",
+        "kind": "exception"
+      }
+    ],
+    "edges": [
+      {
+        "a": "p1",
+        "b": "p2",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "p2",
+        "b": "p3",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "p3",
+        "b": "p4",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "p4",
+        "b": "p5",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "p5",
+        "b": "p6",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "p6",
+        "b": "p7",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "p7",
+        "b": "p8",
+        "label": "PASS",
+        "kind": "normal"
+      },
+      {
+        "a": "p8",
+        "b": "p9",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "p9",
+        "b": "p10",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "p7",
+        "b": "p11",
+        "label": "FAIL",
+        "kind": "exception"
+      },
+      {
+        "a": "p11",
+        "b": "p12",
+        "label": "Perlu investigasi",
+        "kind": "exception"
+      },
+      {
+        "a": "p12",
+        "b": "p13",
+        "label": "Keputusan terkontrol",
+        "kind": "exception"
+      },
+      {
+        "a": "p12",
+        "b": "p6",
+        "label": "Inspeksi baru",
+        "kind": "conditional"
+      }
+    ],
+    "notes": [
+      "Kotak released dan FAIL berada pada lane yang sama tetapi merupakan jalur alternatif; bukan dua status yang terjadi sekaligus.",
+      "Jika Quality nonaktif, release manual hanya dilakukan approver Warehouse dengan alasan; tidak menciptakan inspeksi PASS atau COA.",
+      "BOM, MRP, rework serta split/merge batch belum menjadi bagian alur ini."
+    ]
+  },
+  {
+    "id": "purchase",
+    "title": "Pembelian & bahan baku",
+    "subtitle": "Dari PO sampai penerimaan, pemakaian manual, dan pembayaran supplier.",
+    "lanes": [
+      "Purchasing",
+      "Supplier",
+      "Warehouse",
+      "Finance",
+      "Production"
+    ],
+    "nodes": [
+      {
+        "id": "u1",
+        "l": 0,
+        "r": 0,
+        "title": "Supplier & master material",
+        "detail": "Material memiliki kode unik, unit dasar, dan minimum stock. Identitasnya terpisah dari finished product.",
+        "kind": "task"
+      },
+      {
+        "id": "u2",
+        "l": 0,
+        "r": 1,
+        "title": "Draft → confirm PO",
+        "detail": "Review supplier, material, jumlah, harga, tanggal, dan terms. Confirmation membutuhkan approval Purchasing.",
+        "kind": "task"
+      },
+      {
+        "id": "u3",
+        "l": 1,
+        "r": 2,
+        "title": "Kirim barang / invoice supplier",
+        "detail": "Supply dapat datang sebagian. Nomor invoice supplier dicatat sebagai referensi billing, bukan nomor PO.",
+        "kind": "task"
+      },
+      {
+        "id": "u4",
+        "l": 2,
+        "r": 3,
+        "title": "Post penerimaan aktual",
+        "detail": "Pilih PO, quantity diterima, supplier lot, expiry bila ada, lokasi dan referensi. Posting memerlukan akses Purchase dan Warehouse.",
+        "kind": "task"
+      },
+      {
+        "id": "u5",
+        "l": 2,
+        "r": 4,
+        "title": "Update material stock & ledger",
+        "detail": "Penerimaan parsial mempertahankan sisa PO. Over-receipt, lot expired, dan duplikasi posting diblokir.",
+        "kind": "task"
+      },
+      {
+        "id": "u6",
+        "l": 3,
+        "r": 5,
+        "title": "Draft supplier bill",
+        "detail": "Tagih hanya quantity received/unbilled. Sebelum penerimaan, uang muka menggunakan supplier advance request.",
+        "kind": "task"
+      },
+      {
+        "id": "u7",
+        "l": 3,
+        "r": 6,
+        "title": "PO / receipt / bill matching",
+        "detail": "Periksa quantity dan harga. Price variance memerlukan review approver dan alasan; tidak dihapus otomatis.",
+        "kind": "decision"
+      },
+      {
+        "id": "u8",
+        "l": 3,
+        "r": 7,
+        "title": "Issue bill → verify payment",
+        "detail": "Catat dana keluar aktual lalu verifikasi. Aplikasi mencatat pembayaran, tidak memerintahkan bank mentransfer uang.",
+        "kind": "task"
+      },
+      {
+        "id": "u9",
+        "l": 3,
+        "r": 8,
+        "title": "Allocate → AP aging / settled",
+        "detail": "Alokasikan pembayaran ke dokumen yang sesuai. Saldo belum lunas tetap dipantau dalam AP aging.",
+        "kind": "task"
+      },
+      {
+        "id": "u10",
+        "l": 4,
+        "r": 5,
+        "title": "Kebutuhan pemakaian material",
+        "detail": "Referensi pemakaian dapat mengacu pada produksi. Belum ada pengurangan otomatis dari posting finished production.",
+        "kind": "task"
+      },
+      {
+        "id": "u11",
+        "l": 2,
+        "r": 6,
+        "title": "Issue material manual",
+        "detail": "Pilih material lot/lokasi dan jumlah aktual, beserta alasan/referensi. Stok held, expired atau tidak cukup tidak boleh dipakai.",
+        "kind": "task"
+      },
+      {
+        "id": "u12",
+        "l": 0,
+        "r": 9,
+        "title": "Selesaikan sisa PO",
+        "detail": "Terima sisa yang masih dibutuhkan atau tutup remainder dengan review/alasan. Received stock dan kewajiban billing tetap tercatat.",
+        "kind": "end"
+      }
+    ],
+    "edges": [
+      {
+        "a": "u1",
+        "b": "u2",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "u2",
+        "b": "u3",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "u3",
+        "b": "u4",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "u4",
+        "b": "u5",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "u5",
+        "b": "u6",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "u6",
+        "b": "u7",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "u7",
+        "b": "u8",
+        "label": "Matching / variance approved",
+        "kind": "normal"
+      },
+      {
+        "a": "u8",
+        "b": "u9",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "u5",
+        "b": "u10",
+        "label": "Material tersedia",
+        "kind": "conditional"
+      },
+      {
+        "a": "u10",
+        "b": "u11",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "u5",
+        "b": "u12",
+        "label": "Kelola sisa PO",
+        "kind": "conditional"
+      }
+    ],
+    "notes": [
+      "Pemakaian material dan pembayaran supplier adalah pekerjaan berbeda; keduanya tidak harus menunggu satu sama lain.",
+      "Supplier advance merupakan jalur alternatif sebelum receiving. Alokasi advance dipindahkan sesuai dokumen final, tanpa menduplikasi uang keluar.",
+      "Kasus barang supplier bermasalah dapat menghasilkan hold dan supplier return yang ditautkan ke receipt asal."
+    ]
+  },
+  {
+    "id": "service",
+    "title": "Klaim, retur & koreksi",
+    "subtitle": "Pisahkan keputusan komersial, pergerakan fisik, dan penyelesaian uang.",
+    "lanes": [
+      "Pelanggan",
+      "Service / approver",
+      "Warehouse",
+      "Quality",
+      "Finance"
+    ],
+    "nodes": [
+      {
+        "id": "c1",
+        "l": 0,
+        "r": 0,
+        "title": "Laporkan selisih / masalah",
+        "detail": "Gunakan DO/POD atau sumber transaksi asli; lengkapi quantity, bukti, serta keterangan masalah.",
+        "kind": "task"
+      },
+      {
+        "id": "c2",
+        "l": 1,
+        "r": 1,
+        "title": "Buat & investigasi case",
+        "detail": "Pilih jenis kasus, sumber, owner, due date dan evidence. Status kasus bukan bukti bahwa barang atau uang sudah diproses.",
+        "kind": "task"
+      },
+      {
+        "id": "c3",
+        "l": 1,
+        "r": 2,
+        "title": "Approve resolusi",
+        "detail": "Tentukan replacement, return, credit/refund atau penanganan lain. Tetapkan cost responsibility dan settlement amount jika diperlukan.",
+        "kind": "decision"
+      },
+      {
+        "id": "c4",
+        "l": 2,
+        "r": 3,
+        "title": "Replacement shipment",
+        "detail": "Gunakan stok released yang memenuhi syarat melalui linked issue. Tidak menambah delivered quantity SO asal sekali lagi.",
+        "kind": "task"
+      },
+      {
+        "id": "c5",
+        "l": 2,
+        "r": 4,
+        "title": "Return request → receive",
+        "detail": "Retur fisik direferensikan ke delivery asal. Receive ke return lot terpisah dalam quarantine/hold; original delivered quantity tetap.",
+        "kind": "task"
+      },
+      {
+        "id": "c6",
+        "l": 3,
+        "r": 5,
+        "title": "Inspeksi ulang return lot",
+        "detail": "Hasil baru diperlukan. Return lot tidak langsung menjadi stok yang boleh dijual.",
+        "kind": "task"
+      },
+      {
+        "id": "c7",
+        "l": 2,
+        "r": 6,
+        "title": "Approve disposition",
+        "detail": "Release hanya bila syarat QC dan expiry terpenuhi; disposal membutuhkan alasan dan membuat issue stok.",
+        "kind": "task"
+      },
+      {
+        "id": "c8",
+        "l": 4,
+        "r": 3,
+        "title": "Credit note / refund review",
+        "detail": "Credit menurunkan tagihan; refund adalah arus uang keluar. Keduanya berbeda dari penerimaan barang retur.",
+        "kind": "task"
+      },
+      {
+        "id": "c9",
+        "l": 4,
+        "r": 4,
+        "title": "Issue / verify / allocate",
+        "detail": "Gunakan dokumen dan pembayaran yang cocok party/currency. Refund membutuhkan bukti dana aktual serta verified settlement.",
+        "kind": "task"
+      },
+      {
+        "id": "c10",
+        "l": 1,
+        "r": 7,
+        "title": "Cek bukti penyelesaian",
+        "detail": "Case hanya dapat diselesaikan setelah aksi fisik yang diwajibkan dan settlement yang disetujui benar-benar diproses.",
+        "kind": "decision"
+      },
+      {
+        "id": "c11",
+        "l": 1,
+        "r": 8,
+        "title": "Resolve / close case",
+        "detail": "Simpan keputusan, biaya aktual, dokumen, dan timeline. Riwayat sumber tidak dihapus.",
+        "kind": "end"
+      }
+    ],
+    "edges": [
+      {
+        "a": "c1",
+        "b": "c2",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "c2",
+        "b": "c3",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "c3",
+        "b": "c4",
+        "label": "Replacement",
+        "kind": "conditional"
+      },
+      {
+        "a": "c3",
+        "b": "c5",
+        "label": "Return",
+        "kind": "conditional"
+      },
+      {
+        "a": "c3",
+        "b": "c8",
+        "label": "Credit / refund",
+        "kind": "conditional"
+      },
+      {
+        "a": "c5",
+        "b": "c6",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "c6",
+        "b": "c7",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "c8",
+        "b": "c9",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "c4",
+        "b": "c10",
+        "label": "Bukti fisik",
+        "kind": "normal"
+      },
+      {
+        "a": "c7",
+        "b": "c10",
+        "label": "Disposition",
+        "kind": "normal"
+      },
+      {
+        "a": "c9",
+        "b": "c10",
+        "label": "Settlement",
+        "kind": "normal"
+      },
+      {
+        "a": "c10",
+        "b": "c11",
+        "label": "Syarat terpenuhi",
+        "kind": "normal"
+      }
+    ],
+    "notes": [
+      "Cabang resolusi dipilih sesuai keputusan kasus. Satu kasus tidak otomatis wajib melakukan replacement, return, dan refund sekaligus.",
+      "Verified settlement yang kurang dari approved claim amount memblokir penyelesaian komersial. Ongkir/handling cost tidak otomatis menggantikan settlement amount.",
+      "Posted stock dikoreksi melalui reversal yang memenuhi syarat atau transaksi baru; invoice issued menggunakan credit note, bukan mengedit riwayat."
+    ]
+  },
+  {
+    "id": "count",
+    "title": "Stock opname",
+    "subtitle": "Hitung fisik tanpa menimpa saldo atau menghilangkan jejak pergerakan.",
+    "lanes": [
+      "Warehouse planner",
+      "Counter",
+      "Warehouse approver",
+      "Sistem"
+    ],
+    "nodes": [
+      {
+        "id": "t1",
+        "l": 0,
+        "r": 0,
+        "title": "Plan count per lokasi",
+        "detail": "Pilih lokasi dan counter yang memenuhi akses. Blind count menyembunyikan baseline dari lembar hitung counter.",
+        "kind": "task"
+      },
+      {
+        "id": "t2",
+        "l": 0,
+        "r": 1,
+        "title": "Start count",
+        "detail": "Mulai snapshot saldo yang menjadi baseline perbandingan.",
+        "kind": "task"
+      },
+      {
+        "id": "t3",
+        "l": 3,
+        "r": 2,
+        "title": "Freeze lokasi",
+        "detail": "Penerimaan, issue, transfer dan dispatch yang menyentuh lokasi diblokir selama counting/submitted.",
+        "kind": "task"
+      },
+      {
+        "id": "t4",
+        "l": 1,
+        "r": 3,
+        "title": "Input quantity fisik",
+        "detail": "Isi semua baris termasuk nol. Lot di luar daftar dapat ditambahkan; lot baru tetap quarantine.",
+        "kind": "task"
+      },
+      {
+        "id": "t5",
+        "l": 1,
+        "r": 4,
+        "title": "Submit count",
+        "detail": "Entry dibekukan untuk review. Submit belum mengubah saldo ledger.",
+        "kind": "task"
+      },
+      {
+        "id": "t6",
+        "l": 2,
+        "r": 5,
+        "title": "Review variance + alasan",
+        "detail": "Approver meninjau selisih serta reservasi. Penyesuaian tidak boleh membuat saldo di bawah reservasi.",
+        "kind": "task"
+      },
+      {
+        "id": "t7",
+        "l": 3,
+        "r": 6,
+        "title": "Post adjustment & ledger",
+        "detail": "Buat movement adjustment dan ledger atomik. Baseline dan hasil hitung tetap ada dalam histori.",
+        "kind": "task"
+      },
+      {
+        "id": "t8",
+        "l": 3,
+        "r": 7,
+        "title": "Lepas freeze lokasi",
+        "detail": "Setelah posting atau cancellation sebelum posting yang sah, pekerjaan lokasi dapat berlanjut.",
+        "kind": "end"
+      }
+    ],
+    "edges": [
+      {
+        "a": "t1",
+        "b": "t2",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "t2",
+        "b": "t3",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "t3",
+        "b": "t4",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "t4",
+        "b": "t5",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "t5",
+        "b": "t6",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "t6",
+        "b": "t7",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "t7",
+        "b": "t8",
+        "label": "",
+        "kind": "normal"
+      }
+    ],
+    "notes": [
+      "Jika count salah sebelum posting, gunakan cancellation dan mulai ulang sesuai aturan. Jangan memperbaiki saldo dengan SQL atau menimpa ledger.",
+      "Approval menggunakan izin yang berlaku. Diagram tidak mengasumsikan approval bertingkat yang sebelumnya tidak dipilih untuk perusahaan."
+    ]
+  },
+  {
+    "id": "governance",
+    "title": "Dokumen & kontrol akses",
+    "subtitle": "Dua alur pendukung yang menjaga kelayakan dokumen dan kewenangan pengguna.",
+    "lanes": [
+      "Administrator",
+      "Document owner",
+      "Approver",
+      "Sistem"
+    ],
+    "nodes": [
+      {
+        "id": "g1",
+        "l": 1,
+        "r": 0,
+        "title": "Draft dokumen produk",
+        "detail": "Pilih product, jenis SDS/TDS/Halal/ISO/Other, bahasa, file link versi tertentu, effective dan expiry date.",
+        "kind": "task"
+      },
+      {
+        "id": "g2",
+        "l": 2,
+        "r": 1,
+        "title": "Review → publish",
+        "detail": "Dokumen harus berlaku dan belum expired. Publikasi merevisi series product/type/language dan supersede versi lama.",
+        "kind": "task"
+      },
+      {
+        "id": "g3",
+        "l": 3,
+        "r": 2,
+        "title": "Pantau masa berlaku",
+        "detail": "Status valid/expiring/expired dihitung dari tanggal bisnis Jakarta. Pekerjaan yang perlu perhatian masuk inbox.",
+        "kind": "task"
+      },
+      {
+        "id": "g4",
+        "l": 1,
+        "r": 3,
+        "title": "New revision / withdrawal",
+        "detail": "Metadata published tidak ditimpa. New revision membuat draft baru; withdrawal menyimpan alasan dan histori.",
+        "kind": "end"
+      },
+      {
+        "id": "g5",
+        "l": 0,
+        "r": 4,
+        "title": "Kelola akun & RBAC",
+        "detail": "Buat akun, tetapkan role per modul atau grant khusus. Administrator tetap memiliki akses penuh; izin lain mengikuti konfigurasi.",
+        "kind": "task"
+      },
+      {
+        "id": "g6",
+        "l": 0,
+        "r": 5,
+        "title": "Atur mode modul",
+        "detail": "Active / read-only / disabled. Transaksi terbuka dan ketergantungan modul dapat mencegah disable.",
+        "kind": "task"
+      },
+      {
+        "id": "g7",
+        "l": 3,
+        "r": 6,
+        "title": "Enforce izin setiap operasi",
+        "detail": "Menu bukan satu-satunya penjaga: API/RPC memeriksa sesi, module mode, dan izin read/write/approve.",
+        "kind": "task"
+      },
+      {
+        "id": "g8",
+        "l": 3,
+        "r": 7,
+        "title": "Audit & work inbox",
+        "detail": "Simpan actor, waktu, alasan, serta before/after. Tugas selesai mengikuti transaksi sumber, bukan checkbox terpisah.",
+        "kind": "end"
+      }
+    ],
+    "edges": [
+      {
+        "a": "g1",
+        "b": "g2",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "g2",
+        "b": "g3",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "g3",
+        "b": "g4",
+        "label": "Perlu revisi / tarik",
+        "kind": "normal"
+      },
+      {
+        "a": "g5",
+        "b": "g6",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "g6",
+        "b": "g7",
+        "label": "",
+        "kind": "normal"
+      },
+      {
+        "a": "g7",
+        "b": "g8",
+        "label": "",
+        "kind": "normal"
+      }
+    ],
+    "notes": [
+      "Alur dokumen dan administrasi adalah dua jalur terpisah. Garis tidak menyatakan bahwa setiap publish harus membuat akun baru.",
+      "Modul Documents mengelola referensi file dan revisi; bukan upload file internal. Hak akses file tetap mengikuti penyedia file asal.",
+      "Reset password mewajibkan perubahan password pada login berikutnya. Akun/grant dan perubahan penting tetap mengikuti pemeriksaan sesi serta audit."
+    ]
+  }
+]
