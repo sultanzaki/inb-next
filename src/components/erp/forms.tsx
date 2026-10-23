@@ -338,6 +338,10 @@ export function MoveForm({
             <ERPField name={`lines.${i}.quantity`} label="Quantity">
               <Input
                 inputMode="decimal"
+                suffix={
+                  line.product?.units?.find((unit) => unit.id === line.unit_id)
+                    ?.code || "Select unit"
+                }
                 value={line.quantity}
                 required
                 onChange={(e) => change(i, { quantity: e.target.value })}
@@ -612,6 +616,16 @@ export function QuoteForm({ row, onDone }: { row?: ERPRow; onDone: Done }) {
                 <Input
                   required
                   inputMode="decimal"
+                  prefix={key === "price" ? value.currency : undefined}
+                  suffix={
+                    key === "discount"
+                      ? "%"
+                      : key === "quantity"
+                        ? line.product?.units?.find(
+                            (unit) => unit.id === line.unit_id,
+                          )?.code || "Select unit"
+                        : undefined
+                  }
                   value={line[key]}
                   onChange={(e) => change(i, { [key]: e.target.value })}
                 />
@@ -666,6 +680,8 @@ export function QuoteForm({ row, onDone }: { row?: ERPRow; onDone: Done }) {
                 <Input
                   required
                   inputMode="decimal"
+                  prefix={key === "freight" ? value.currency : undefined}
+                  suffix={key === "tax_rate" ? "%" : undefined}
                   value={value[key]}
                   onChange={(e) =>
                     setValue({ ...value, [key]: e.target.value })
@@ -766,6 +782,7 @@ export function CountEntryForm({
         <Input
           required
           inputMode="decimal"
+          suffix={line.unit}
           value={qty}
           onChange={(e) => setQty(e.target.value)}
         />
@@ -846,6 +863,7 @@ export function ReserveForm({
         <Input
           required
           inputMode="decimal"
+          suffix={line.unit}
           value={quantity}
           onChange={(e) => setQuantity(e.target.value)}
         />
@@ -897,6 +915,7 @@ export function DeliveryForm({ row, onDone }: { row: ERPRow; onDone: Done }) {
           >
             <Input
               inputMode="decimal"
+              suffix={r.unit}
               value={selected[r.id] || ""}
               onChange={(e) =>
                 setSelected({ ...selected, [r.id]: e.target.value })

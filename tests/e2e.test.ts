@@ -78,6 +78,11 @@ test(
         "Pengujian Lokal",
       ],
     );
+    // Abandoned browser-only drafts must not trip the real module-disable guard
+    // on subsequent runs. The connection above is the disposable local database.
+    await db.query(
+      "delete from erp_incoming_inspections i using users u where i.created_by=u.id and u.username like 'e2e-%' and i.state='draft'",
+    );
     await db.query(
       "delete from master_produk where nama_produk like 'E2E Product %'",
     );
@@ -1003,7 +1008,19 @@ test(
           Math.abs(tiles[0].y - tiles[1].y) < 1 && tiles[1].x > tiles[0].x,
           "Two-column launcher: " + JSON.stringify(tiles),
         );
-        assert.ok(tiles.every((r) => Math.abs(r.width - r.height) < 1));
+        if (width < 768)
+          assert.ok(tiles.every((r) => Math.abs(r.width - r.height) < 1));
+        else
+          assert.equal(
+            await page
+              .locator(".work-directory .workspace-launcher")
+              .evaluate(
+                (el) =>
+                  getComputedStyle(el).gridTemplateColumns.split(" ").length,
+              ),
+            3,
+            "tablet directory uses three columns",
+          );
         await capture("21-mobile-work-" + width);
         await accessible();
         await page

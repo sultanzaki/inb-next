@@ -264,6 +264,15 @@ export function WorkflowForm({
         : allocationDocument.kind === "supplier_credit"
           ? "supplier_refund"
           : "receipt";
+  const fieldCurrency = String(
+    action === "fin_create_document"
+      ? related?.currency ||
+          source?.currency ||
+          row?.currency ||
+          form.currency ||
+          "IDR"
+      : form.currency || row?.currency || source?.currency || "IDR",
+  );
   const field = (
     key: string,
     label: string,
@@ -274,6 +283,22 @@ export function WorkflowForm({
     <ERPField key={key} name={key} label={label} hint={hint}>
       <Input
         type={type}
+        prefix={
+          /amount|cost|credit_limit|^price$/.test(key)
+            ? fieldCurrency
+            : undefined
+        }
+        suffix={
+          key.endsWith("percent")
+            ? "%"
+            : /days$/.test(key)
+              ? "days"
+              : key === "quantity"
+                ? String(
+                    lot?.unit || source?.unit || row?.unit || "Select unit",
+                  )
+                : undefined
+        }
         required={required}
         value={
           key === "amount"
@@ -462,6 +487,7 @@ export function WorkflowForm({
             >
               <Input
                 inputMode="decimal"
+                suffix={value(l, "base_unit", value(l, "unit", "Select unit"))}
                 required
                 value={String(
                   current[k] ?? (k === "accepted" ? l.base_quantity : "0"),
@@ -509,6 +535,7 @@ export function WorkflowForm({
               )}
               <Input
                 inputMode="decimal"
+                suffix={value(l, "unit", value(l, "base_unit", "Select unit"))}
                 value={String(
                   current.quantity ?? (amendment ? l.quantity : ""),
                 )}
@@ -531,6 +558,7 @@ export function WorkflowForm({
               >
                 <Input
                   inputMode="decimal"
+                  prefix={fieldCurrency}
                   value={String(current.price ?? l.price ?? "")}
                   onChange={(e) => {
                     const lines = lineRows.map((x, j) => ({

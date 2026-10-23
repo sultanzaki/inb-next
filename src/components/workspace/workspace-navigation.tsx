@@ -1,11 +1,18 @@
 "use client";
 import Link from "next/link";
+import { useState } from "react";
+import {
+  navigationSections,
+  workspaceLinkActive,
+} from "@/lib/workspace/navigation";
+import { Input } from "@/components/ui/input";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useERP } from "@/components/erp/context";
 import { useUser } from "@/app/(dashboard)/user-context";
 import { canAction } from "@/lib/types";
 import {
   ArrowRight,
+  ChevronDown,
   Factory,
   FlaskConical,
   Warehouse,
@@ -266,19 +273,14 @@ export function WorkspaceSidebar({ collapsed }: { collapsed: boolean }) {
   const groups = useWorkspaceGroups(),
     path = usePathname(),
     params = useSearchParams();
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState<{
+    route: string;
+    name: string | null;
+  } | null>(null);
+  const route = path + "?" + params.toString();
   function active(href: string) {
-    const [p, q] = href.split("?");
-    return (
-      path === p &&
-      (!q ||
-        new URLSearchParams(q).get("view") ===
-          (params.get("view") ||
-            (p.endsWith("warehouse")
-              ? "stock"
-              : p.endsWith("sales")
-                ? "quotes"
-                : "modules")))
-    );
+    return workspaceLinkActive(href, path, params.get("view"));
   }
   if (collapsed)
     return (
@@ -293,31 +295,92 @@ export function WorkspaceSidebar({ collapsed }: { collapsed: boolean }) {
         ))}
       </nav>
     );
+  const query = search.trim().toLowerCase();
+  const activeModule = groups.find((group) =>
+    group.links.some(([, href]) => active(href)),
+  )?.name;
+  const openModule = expanded?.route === route ? expanded.name : activeModule;
+  const filtered = groups
+    .map((group) => ({
+      ...group,
+      links:
+        query && !group.name.toLowerCase().includes(query)
+          ? group.links.filter(([label]) => label.toLowerCase().includes(query))
+          : group.links,
+    }))
+    .filter((group) => group.links.length);
   return (
     <nav aria-label="Main navigation" className="workspace-sidebar-nav">
-      {groups.map(({ name, icon: Icon, links }) => (
-        <details
-          key={name}
-          open={collapsed || links.some(([, href]) => active(href))}
-        >
-          <summary title={name}>
+      <div className="sidebar-page-search">
+        <Input
+          type="search"
+          aria-label="Find a page"
+          placeholder="Find a page…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+      {!filtered.length && (
+        <p className="sidebar-no-results">No matching pages.</p>
+      )}
+      {filtered.map(({ name, icon: Icon, links }) => (
+        <details key={name} open={Boolean(query) || openModule === name}>
+          <summary
+            title={name}
+            onClick={(event) => {
+              event.preventDefault();
+              setExpanded({ route, name: openModule === name ? null : name });
+            }}
+          >
             <Icon className="size-4" />
             <span>{name}</span>
+            <ChevronDown className="sidebar-chevron" aria-hidden="true" />
           </summary>
           <div>
-            {links.map(([label, href]) => (
-              <Link
-                title={label}
-                key={href}
-                href={href}
-                aria-current={active(href) ? "page" : undefined}
-              >
-                {label}
-              </Link>
-            ))}
+            {navigationSections(name, links).map((section) => {
+              const pages = section.links.map(([label, href]) => (
+                <Link
+                  title={label}
+                  key={href}
+                  href={href}
+                  aria-current={active(href) ? "page" : undefined}
+                  onClick={() => setSearch("")}
+                >
+                  {label}
+                </Link>
+              ));
+              return section.name ? (
+                <details
+                  className="sidebar-section"
+                  key={route + section.name + query}
+                  open={
+                    Boolean(query) ||
+                    section.links.some(([, href]) => active(href)) ||
+                    undefined
+                  }
+                >
+                  <summary>
+                    {section.name}
+                    <ChevronDown
+                      className="sidebar-chevron"
+                      aria-hidden="true"
+                    />
+                  </summary>
+                  <div>{pages}</div>
+                </details>
+              ) : (
+                <div className="sidebar-direct-pages" key="pages">
+                  {pages}
+                </div>
+              );
+            })}
           </div>
         </details>
       ))}
+      <Link className="sidebar-inbox" href="/dashboard/workspaces">
+        <LayoutDashboard className="size-4" />
+        <span>All workspaces</span>
+      </Link>
       <Link className="sidebar-inbox" href="/dashboard/inbox">
         <Inbox className="size-4" />
         <span>Work inbox</span>

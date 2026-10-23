@@ -343,10 +343,10 @@ export function TransactionControls({
         ) : (
           <ol className="control-history">
             {control.history.map((event) => (
-              <li key={event.id}>
+              <li key={event.id} id={"audit-ERP-" + event.id}>
                 <strong>{eventTitle(event.action)}</strong>
                 <p>
-                  {event.actor} · {stamp(event.created_at)}
+                  {event.actor} · {stamp(event.created_at)} · ERP-{event.id}
                 </p>
                 {event.reason && <p>{event.reason}</p>}
                 <details>

@@ -21,6 +21,7 @@ export function ReferencePicker({
   disabled,
   id,
   invalid,
+  onResolve,
 }: {
   field: WorkField;
   value: string;
@@ -30,6 +31,7 @@ export function ReferencePicker({
   disabled?: boolean;
   id?: string;
   invalid?: boolean;
+  onResolve?: (value: string, unit: string) => void;
 }) {
   const [open, setOpen] = useState(false),
     [q, setQ] = useState(""),
@@ -90,6 +92,12 @@ export function ReferencePicker({
       : field.local
         ? local.find((row) => row.id === value)
         : selected.data.rows[0];
+  const resolvedUnit = String(
+    record?.unit || (source === "units" ? record?.code || "" : ""),
+  );
+  useEffect(() => {
+    if (value && resolvedUnit) onResolve?.(value, resolvedUnit);
+  }, [value, resolvedUnit, onResolve]);
   function label(row: WorkRow) {
     return String(
       row.label ||
