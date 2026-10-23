@@ -1,4 +1,5 @@
 "use client";
+import { RecordOverview } from "@/components/workspace/record-overview";
 import { useWorkPosition } from "@/components/workspace/use-work-position";
 import { useOperatorState } from "@/components/workspace/form-recovery";
 import { useTableState } from "@/components/tables/use-table-state";
@@ -142,9 +143,9 @@ const names = {
 };
 const descriptions = {
   purchase: "Suppliers, purchase orders and lot-based receiving.",
-  crm: "Keep every prospect and next conversation moving.",
+  crm: "Opportunities and follow-ups.",
   documents: "Controlled revisions, product references and expiry dates.",
-  materials: "Track incoming materials, available lots and consumption.",
+  materials: "Materials, lots and consumption.",
 };
 const states: Record<string, string[]> = {
   purchases: [
@@ -512,12 +513,6 @@ function GrowthView({ area }: { area: Area }) {
             locked; create a new revision to replace them.
           </p>
         )}
-        {area === "materials" && (
-          <p className="growth-context-note">
-            Quantities use each material’s base unit. Receipts come from
-            Purchase; issues record manual consumption.
-          </p>
-        )}
         <DataToolbar
           search={q}
           onSearch={(v) => {
@@ -658,7 +653,7 @@ function GrowthView({ area }: { area: Area }) {
             layout="record"
             loading
             title="Record details"
-            description="Loading the complete record."
+            description="Loading…"
             onClose={() => setSelected(null)}
           >
             <span />
@@ -677,16 +672,17 @@ function GrowthView({ area }: { area: Area }) {
             onClose={() => setSelected(null)}
           >
             <div className="growth-detail">
+              <RecordOverview row={selected} entity={tab.key} />
               <>
                 {tab.key === "purchases" && (
                   <>
+                    <DocumentFlow entity="purchases" id={selected.id} />
                     <TransactionControls
                       entity="purchases"
                       id={selected.id}
                       currency={text(selected.currency) || "IDR"}
                       onDone={done}
                     />
-                    <DocumentFlow entity="purchases" id={selected.id} />
                   </>
                 )}
                 <RecordDetail row={selected} entity={tab.key} />
@@ -937,7 +933,7 @@ function GrowthView({ area }: { area: Area }) {
                         ? "New document revision"
                         : tab.create || "New record"
             }
-            description="Changes are validated and recorded in the audit log."
+            description=""
             onClose={() => setForm(null)}
           >
             <GrowthForm

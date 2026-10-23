@@ -40,10 +40,7 @@ export function LoginForm() {
         </span>
       </div>
       <p className="mb-3 text-xs font-medium text-muted">INBIONUSA account</p>
-      <h1>Welcome back.</h1>
-      <p className="mt-4 text-[13px] leading-relaxed text-muted">
-        Sign in to your INBIONUSA workspace.
-      </p>
+      <h1>Sign in</h1>
       <form action={action} className="mt-8 space-y-5">
         <div className="space-y-2">
           <label htmlFor="username" className="text-xs font-semibold">

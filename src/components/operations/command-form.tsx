@@ -1,4 +1,5 @@
 "use client";
+import { ContextSummary } from "@/components/workspace/record-overview";
 import { SaveStatus } from "@/components/workspace/save-status";
 import { saveRequest, SaveRequestError } from "@/lib/save-request";
 import { invalidateERPReads } from "@/lib/erp/read-request";
@@ -553,70 +554,77 @@ function CommandFormContent({
         onSubmit={submit}
         noValidate
       >
-        <div className="erp-form-body">
-          <RecoveryNotice />
-          <SaveStatus
-            uncertain={uncertain}
-            onChecked={() => setUncertain(false)}
-          />
-          {busy && (
-            <p role="status" className="save-status">
-              Saving changes… Keep this form open.
-            </p>
-          )}
-          <details
-            className="work-command-help"
-            open={command.confirm || undefined}
-          >
-            <summary>
-              <Info className="size-4 shrink-0" />
-              About this form
-            </summary>
-            <p>{command.help}</p>
-          </details>
-          <FormJourney
-            ref={journey}
-            sections={(() => {
-              const long =
-                command.fields.length > 6 ||
-                command.fields.some((f) => f.kind === "lines");
-              const details = command.fields.filter(
-                (f) =>
-                  !long ||
-                  (f.kind !== "lines" &&
-                    f.kind !== "results" &&
-                    f.kind !== "textarea"),
-              );
-              const extra = command.fields.filter((f) => !details.includes(f));
-              return [
-                { title: "Details", fields: details },
-                ...(extra.length
-                  ? [
-                      {
-                        title: extra.some((f) => f.kind === "lines")
-                          ? "Items and notes"
-                          : "Measurements and notes",
-                        fields: extra,
-                      },
-                    ]
-                  : []),
-              ].map((group) => ({
-                title: group.title,
-                content: (
-                  <div className="work-field-grid">
-                    {group.fields.map((field) =>
-                      renderField(field, field.key, values, update),
-                    )}
-                  </div>
-                ),
-              }));
-            })()}
-          />
-          {failure && (
-            <div className="work-form-error" role="alert">
-              {failure}
-            </div>
-          )}
+        <div className="erp-form-body contextual-form-body">
+          <ContextSummary values={values} />
+          <div className="context-form-main">
+            <RecoveryNotice />
+            <SaveStatus
+              uncertain={uncertain}
+              onChecked={() => setUncertain(false)}
+            />
+            {busy && (
+              <p role="status" className="save-status">
+                Saving changes… Keep this form open.
+              </p>
+            )}
+            {command.help && (
+              <details
+                className="work-command-help"
+                open={command.confirm || undefined}
+              >
+                <summary>
+                  <Info className="size-4 shrink-0" />
+                  Requirements
+                </summary>
+                <p>{command.help}</p>
+              </details>
+            )}
+            <FormJourney
+              ref={journey}
+              sections={(() => {
+                const long =
+                  command.fields.length > 6 ||
+                  command.fields.some((f) => f.kind === "lines");
+                const details = command.fields.filter(
+                  (f) =>
+                    !long ||
+                    (f.kind !== "lines" &&
+                      f.kind !== "results" &&
+                      f.kind !== "textarea"),
+                );
+                const extra = command.fields.filter(
+                  (f) => !details.includes(f),
+                );
+                return [
+                  { title: "Details", fields: details },
+                  ...(extra.length
+                    ? [
+                        {
+                          title: extra.some((f) => f.kind === "lines")
+                            ? "Items and notes"
+                            : "Measurements and notes",
+                          fields: extra,
+                        },
+                      ]
+                    : []),
+                ].map((group) => ({
+                  title: group.title,
+                  content: (
+                    <div className="work-field-grid">
+                      {group.fields.map((field) =>
+                        renderField(field, field.key, values, update),
+                      )}
+                    </div>
+                  ),
+                }));
+              })()}
+            />
+            {failure && (
+              <div className="work-form-error" role="alert">
+                {failure}
+              </div>
+            )}
+          </div>
         </div>
         <div className="erp-form-actions work-form-footer">
           <Button

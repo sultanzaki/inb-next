@@ -61,7 +61,6 @@ export function ModuleInsights({
         <Activity aria-hidden="true" />
         <span>
           <strong>Operational insights</strong>
-          <small>Trends, current workload and items to review</small>
         </span>
         <ChevronDown aria-hidden="true" />
       </button>

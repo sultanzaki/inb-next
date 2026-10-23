@@ -33,7 +33,7 @@ export function useWorkspaceGroups() {
   return [
     {
       name: "Overview",
-      description: "Your day, priorities and performance",
+      description: "Tasks and performance",
       icon: LayoutDashboard,
       links: [
         ["Home", "/dashboard"],
@@ -252,7 +252,6 @@ export function WorkspaceDirectory() {
       <div>
         <p className="micro-label">WORKSPACE</p>
         <h1>All workspaces</h1>
-        <p>Choose where to work. Everything stays connected.</p>
       </div>
       <nav className="workspace-launcher" aria-label="All workspaces">
         {groups.map(({ name, description, icon: Icon, links }) => (

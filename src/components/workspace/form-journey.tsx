@@ -59,7 +59,7 @@ export function FormJourney({
               {all
                 ? "All fields"
                 : step === sections.length
-                  ? "Review before saving"
+                  ? "Review"
                   : `Step ${step + 1} of ${sections.length + 1}`}
             </strong>
             <Button
@@ -93,12 +93,6 @@ export function FormJourney({
                 </button>
               ))}
             </nav>
-          )}
-          {!all && step === sections.length && (
-            <p className="erp-notice">
-              Review the information below. Nothing is submitted until you save
-              or confirm.
-            </p>
           )}
         </>
       )}

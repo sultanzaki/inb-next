@@ -15,7 +15,7 @@ export function DocumentFlow({ entity, id }: { entity: string; id: string }) {
   const result = useERPPage("flow/" + entity, "", "", 1, id);
   return (
     <section className="erp-document-flow" aria-label="Document flow">
-      <h3 className="text-sm font-semibold">Document flow</h3>
+      <h3 className="text-sm font-semibold">Document journey</h3>
       {result.loading ? (
         <RecordSkeleton compact label="Loading linked documents…" />
       ) : result.error ? (
@@ -28,41 +28,83 @@ export function DocumentFlow({ entity, id }: { entity: string; id: string }) {
       ) : result.data.rows.length === 0 ? (
         <p className="text-xs text-muted">No linked documents yet.</p>
       ) : (
-        <ol className="mt-2 grid gap-2 sm:grid-cols-2">
-          {result.data.rows.map((row) => {
-            const r = row as unknown as Record<string, string>;
-            return (
-              <li
-                key={r.entity + r.id}
-                className="rounded-md border p-3 text-xs"
-              >
-                <a
-                  className="font-semibold text-primary underline"
-                  href={
-                    routes[r.entity] +
-                    "&record=" +
-                    r.id +
-                    "&q=" +
-                    encodeURIComponent(r.number)
-                  }
-                  target="_blank"
-                  rel="noopener noreferrer"
+        <div className="document-journey">
+          <ol className="document-journey-stages">
+            {(["purchases", "fin_purchases"].includes(entity) ||
+            result.data.rows.some(
+              (row) =>
+                String((row as unknown as Record<string, unknown>).entity) ===
+                "purchases",
+            )
+              ? [
+                  ["purchases", "Purchase order"],
+                  ["movements", "Goods movement"],
+                  ["fin_documents", "Billing"],
+                  ["fin_payments", "Payment"],
+                ]
+              : [
+                  ["quotes", "Quotation"],
+                  ["orders", "Sales order"],
+                  ["movements", "Goods movement"],
+                  ["fin_documents", "Billing"],
+                  ["fin_payments", "Payment"],
+                ]
+            ).map(([kind, label], index) => {
+              const documents = result.data.rows
+                .map((row) => row as unknown as Record<string, string>)
+                .filter((row) => row.entity === kind);
+              return (
+                <li
+                  key={kind}
+                  className="document-stage"
+                  data-present={documents.length > 0}
                 >
-                  {r.number}
-                </a>
-                <p>
-                  {humanLabel(r.entity)} · {humanLabel(r.state)}
-                </p>
-                <p className="text-muted">
-                  {r.date}
-                  {r.amount && r.currency
-                    ? " · " + money(r.amount, r.currency)
-                    : ""}
-                </p>
-              </li>
-            );
-          })}
-        </ol>
+                  <div className="document-stage-heading">
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <h4>{label}</h4>
+                    <small>{documents.length}</small>
+                  </div>
+                  <div className="document-stage-records">
+                    {documents.length ? (
+                      documents.map((r) => (
+                        <a
+                          key={r.entity + r.id}
+                          href={
+                            routes[r.entity] +
+                            "&record=" +
+                            encodeURIComponent(r.id) +
+                            "&q=" +
+                            encodeURIComponent(r.number || "")
+                          }
+                          className="document-journey-card"
+                          aria-current={
+                            r.id === id &&
+                            (r.entity === entity ||
+                              (entity === "fulfillment" &&
+                                r.entity === "orders"))
+                              ? "page"
+                              : undefined
+                          }
+                        >
+                          <strong>{r.number}</strong>
+                          <span>{humanLabel(r.state)}</span>
+                          <small>
+                            {r.date}
+                            {r.amount && r.currency
+                              ? " · " + money(r.amount, r.currency)
+                              : ""}
+                          </small>
+                        </a>
+                      ))
+                    ) : (
+                      <p className="document-stage-empty">No linked record</p>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
       )}
     </section>
   );
@@ -83,8 +125,7 @@ export function DispatchReadiness({
     movementId || orderId,
   );
   const record = result.data.rows[0] as unknown as
-    | Record<string, unknown>
-    | undefined;
+    Record<string, unknown> | undefined;
   const status = movementId
     ? (record?.finance as Record<string, unknown> | undefined)
     : record;

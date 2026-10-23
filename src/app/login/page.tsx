@@ -15,10 +15,10 @@ export const metadata: Metadata = {
     "Your INBIONUSA workspace for production, quality, warehouse and sales.",
 };
 const modules = [
-  { name: "Production", note: "From plan to finished batch", icon: Factory },
+  { name: "Production", note: "Production batches", icon: Factory },
   { name: "Quality", note: "Confidence in every release", icon: FlaskConical },
   { name: "Warehouse", note: "Every lot, accounted for", icon: Warehouse },
-  { name: "Sales", note: "From quotation to delivery", icon: Handshake },
+  { name: "Sales", note: "Quotations and deliveries", icon: Handshake },
 ];
 export default function LoginPage() {
   return (
@@ -38,16 +38,7 @@ export default function LoginPage() {
           </div>
         </div>
         <div className="login-story-content">
-          <p className="login-eyebrow">ONE CONNECTED WORKSPACE</p>
-          <h2>
-            Good work.
-            <br />
-            All together.
-          </h2>
-          <p className="login-story-description">
-            From the first batch to the final delivery. Keep your teams,
-            products and decisions connected.
-          </p>
+          <h2>Operations</h2>
           <div className="login-modules">
             {modules.map(({ name, note, icon: Icon }) => (
               <div className="login-module" key={name}>

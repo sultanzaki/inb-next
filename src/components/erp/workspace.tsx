@@ -1,4 +1,5 @@
 "use client";
+import { RecordOverview } from "@/components/workspace/record-overview";
 import { useWorkPosition } from "@/components/workspace/use-work-position";
 import { useFileDownload } from "@/components/workspace/use-file-download";
 import { useTableState } from "@/components/tables/use-table-state";
@@ -115,9 +116,9 @@ const names: Record<Area, string> = {
   settings: "Administration",
 };
 const descriptions: Record<Area, string> = {
-  warehouse: "Know what is on hand, where it is, and what is ready to ship.",
-  production: "Record finished batches. Review and post before stock changes.",
-  sales: "From a clear quotation to a fulfilled customer order.",
+  warehouse: "Stock, locations and deliveries.",
+  production: "Finished batches and stock posting.",
+  sales: "Quotations, orders and customers.",
   settings: "Modules, manual units, storage locations, and team access.",
 };
 const states: Record<string, string[]> = {
@@ -608,11 +609,7 @@ export function ERPWorkspace({ area }: { area: Area }) {
         {create && (
           <ERPModal
             title={config.create || "New record"}
-            description={
-              area === "production"
-                ? "Record actual finished output, then review the draft before posting."
-                : "Complete the details. Changes are validated on the server."
-            }
+            description=""
             onClose={() => setCreate(false)}
           >
             {tab === "series" ? (
@@ -702,7 +699,7 @@ function RecordDetail({
       description={
         row?.state
           ? "Status: " + (row.display_state || row.state).replaceAll("_", " ")
-          : "Review this record and its history."
+          : ""
       }
       onClose={onClose}
     >
@@ -717,8 +714,10 @@ function RecordDetail({
         <p>Record not found.</p>
       ) : (
         <>
+          <RecordOverview row={row} entity={entity} />
           {(order || quote || movement) && (
             <>
+              <DocumentFlow entity={entity} id={id} />
               <TransactionControls
                 entity={entity}
                 id={id}
@@ -728,7 +727,6 @@ function RecordDetail({
                   onDone(id, entity);
                 }}
               />
-              <DocumentFlow entity={entity} id={id} />
             </>
           )}
           {movement &&
@@ -763,7 +761,7 @@ function RecordDetail({
                   ? "Create invoice"
                   : "Request down payment"
               }
-              description="Source order is already selected. Review payment terms and amounts."
+              description=""
               onClose={() => setBillingKind(null)}
             >
               <WorkflowForm
@@ -1361,7 +1359,7 @@ function RecordDetail({
                   delivery: "Create delivery",
                 }[subForm.type] || "Details"
               }
-              description="Quantities are validated against the current server state."
+              description=""
               onClose={() => setSubForm(null)}
             >
               {subForm.type === "assign_count" ? (

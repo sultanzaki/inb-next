@@ -1,4 +1,5 @@
 "use client";
+import { ContextSummary } from "@/components/workspace/record-overview";
 import {
   useRef,
   useEffect,
@@ -442,94 +443,97 @@ export function ERPForm({
           }
         }}
       >
-        <div className="erp-form-body">
-          <RecoveryNotice />
-          <SaveStatus
-            uncertain={uncertain}
-            onChecked={() => setUncertain(false)}
-          />
-          {busy && (
-            <p role="status" className="save-status">
-              Saving changes… Keep this form open.
-            </p>
-          )}
-          {error && (
-            <div role="alert" tabIndex={-1} className="erp-error">
-              <p>{error}</p>
-              {fields.length > 0 && (
-                <ul className="mt-2 space-y-1">
-                  {fields.map((f, i) => (
-                    <li key={i}>
-                      <button
-                        type="button"
-                        className="text-left underline"
-                        onClick={() => focusField(f.path)}
-                      >
-                        {humanLabel(
-                          f.path.replace(
-                            /\.(\d+)\./g,
-                            (_, n) => ` · line ${Number(n) + 1} · `,
-                          ),
-                        )}
-                        : {f.message}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-          <FormJourney
-            ref={journey}
-            sections={(() => {
-              const items = Children.toArray(children);
-              if (
-                items.length === 1 &&
-                isValidElement<{ className?: string; children?: ReactNode }>(
-                  items[0],
-                ) &&
-                items[0].props.className?.includes("erp-form-grid")
-              ) {
-                const fields = Children.toArray(items[0].props.children);
-                if (fields.length > 6)
-                  return [
-                    {
-                      title: "Primary details",
-                      content: (
-                        <div className="erp-form-grid">
-                          {fields.slice(0, 4)}
-                        </div>
-                      ),
-                    },
-                    {
-                      title: "Additional information",
-                      content: (
-                        <div className="erp-form-grid">{fields.slice(4)}</div>
-                      ),
-                    },
-                  ];
-              }
+        <div className="erp-form-body contextual-form-body">
+          <ContextSummary values={payload} />
+          <div className="context-form-main">
+            <RecoveryNotice />
+            <SaveStatus
+              uncertain={uncertain}
+              onChecked={() => setUncertain(false)}
+            />
+            {busy && (
+              <p role="status" className="save-status">
+                Saving changes… Keep this form open.
+              </p>
+            )}
+            {error && (
+              <div role="alert" tabIndex={-1} className="erp-error">
+                <p>{error}</p>
+                {fields.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {fields.map((f, i) => (
+                      <li key={i}>
+                        <button
+                          type="button"
+                          className="text-left underline"
+                          onClick={() => focusField(f.path)}
+                        >
+                          {humanLabel(
+                            f.path.replace(
+                              /\.(\d+)\./g,
+                              (_, n) => ` · line ${Number(n) + 1} · `,
+                            ),
+                          )}
+                          : {f.message}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+            <FormJourney
+              ref={journey}
+              sections={(() => {
+                const items = Children.toArray(children);
+                if (
+                  items.length === 1 &&
+                  isValidElement<{ className?: string; children?: ReactNode }>(
+                    items[0],
+                  ) &&
+                  items[0].props.className?.includes("erp-form-grid")
+                ) {
+                  const fields = Children.toArray(items[0].props.children);
+                  if (fields.length > 6)
+                    return [
+                      {
+                        title: "Primary details",
+                        content: (
+                          <div className="erp-form-grid">
+                            {fields.slice(0, 4)}
+                          </div>
+                        ),
+                      },
+                      {
+                        title: "Additional information",
+                        content: (
+                          <div className="erp-form-grid">{fields.slice(4)}</div>
+                        ),
+                      },
+                    ];
+                }
 
-              const line = items.findIndex(
-                (item) =>
-                  isValidElement<{ className?: string }>(item) &&
-                  item.props.className?.includes("erp-line-editor"),
-              );
-              const cut = line > 0 ? line : Math.ceil(items.length / 2);
-              return items.length >= 5
-                ? [
-                    { title: "Details", content: items.slice(0, cut) },
-                    {
-                      title:
-                        line >= 0
-                          ? "Items and terms"
-                          : "Additional information",
-                      content: items.slice(cut),
-                    },
-                  ]
-                : [{ title: "Details", content: children }];
-            })()}
-          />
+                const line = items.findIndex(
+                  (item) =>
+                    isValidElement<{ className?: string }>(item) &&
+                    item.props.className?.includes("erp-line-editor"),
+                );
+                const cut = line > 0 ? line : Math.ceil(items.length / 2);
+                return items.length >= 5
+                  ? [
+                      { title: "Details", content: items.slice(0, cut) },
+                      {
+                        title:
+                          line >= 0
+                            ? "Items and terms"
+                            : "Additional information",
+                        content: items.slice(cut),
+                      },
+                    ]
+                  : [{ title: "Details", content: children }];
+              })()}
+            />
+          </div>
         </div>
         <DialogFooter>
           {requiresSlide ? (
@@ -590,7 +594,7 @@ export function ERPActionButton({
       {open && (
         <ERPModal
           title={typeof children === "string" ? children : "Confirm action"}
-          description="This action is recorded in the audit log."
+          description=""
           onClose={() => setOpen(false)}
         >
           <ERPForm

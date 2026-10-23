@@ -1,4 +1,8 @@
 "use client";
+import {
+  RecordOverview,
+  WarehouseBoard,
+} from "@/components/workspace/record-overview";
 import { useWorkPosition } from "@/components/workspace/use-work-position";
 import Link from "next/link";
 import { useState, useEffect } from "react";
@@ -10,7 +14,6 @@ import {
   Clock3,
   Printer,
   Download,
-  ShieldCheck,
   Search,
 } from "lucide-react";
 import { useERP } from "@/components/erp/context";
@@ -313,6 +316,7 @@ export function OperationsWorkspace({ entity }: { entity: string }) {
     setState(saved.state);
     setPage(saved.page);
   });
+  const [visual, setVisual] = useState(false);
   const files = useFileDownload();
   const table = useTableState("work_" + entity, () => setPage(1));
   useEffect(() => {
@@ -425,13 +429,6 @@ export function OperationsWorkspace({ entity }: { entity: string }) {
             </Button>
           ) : undefined}
         </PageHeader>
-        <div className="work-context-strip">
-          <span>
-            <ShieldCheck className="size-3.5" />
-            Traceable operations
-          </span>
-          <span>Drafts preserve stock · Posted actions retain history</span>
-        </div>
         <div className="work-list-tools">
           <div className="work-search">
             <Search className="size-4" />
@@ -486,6 +483,30 @@ export function OperationsWorkspace({ entity }: { entity: string }) {
             {list.loading ? "Loading…" : `${list.data.total} records`}
           </span>
         </div>
+        {["warehouses", "locations", "pallets"].includes(entity) && (
+          <div
+            className="warehouse-view-switch"
+            role="group"
+            aria-label="Warehouse presentation"
+          >
+            <Button
+              size="sm"
+              variant={!visual ? "default" : "outline"}
+              aria-pressed={!visual}
+              onClick={() => setVisual(false)}
+            >
+              Table view
+            </Button>
+            <Button
+              size="sm"
+              variant={visual ? "default" : "outline"}
+              aria-pressed={visual}
+              onClick={() => setVisual(true)}
+            >
+              Visual overview
+            </Button>
+          </div>
+        )}
         {list.error ? (
           <EmptyState
             error
@@ -498,6 +519,18 @@ export function OperationsWorkspace({ entity }: { entity: string }) {
           </EmptyState>
         ) : (
           <AdvancedRecordsTable
+            visualization={
+              visual &&
+              !list.loading &&
+              ["warehouses", "locations", "pallets"].includes(entity) ? (
+                <WarehouseBoard
+                  rows={list.data.rows}
+                  entity={entity}
+                  total={list.data.total}
+                  onSelect={select}
+                />
+              ) : undefined
+            }
             state={table}
             rows={list.data.rows}
             summary={list.data.summary}
@@ -604,10 +637,6 @@ export function OperationsWorkspace({ entity }: { entity: string }) {
             onPageChange={setPage}
           />
         )}
-        <p className="work-workspace-footnote">
-          Quantities use the configured product or material unit. Dates follow
-          the Jakarta business calendar.
-        </p>
       </div>
       {selected && !action && (
         <ERPModal
@@ -635,6 +664,7 @@ export function OperationsWorkspace({ entity }: { entity: string }) {
             <p>Record not found.</p>
           ) : (
             <>
+              <RecordOverview row={row} entity={entity} />
               <div className="work-detail-identity">
                 <Badge>{humanLabel(row.state || "record")}</Badge>
                 <CopyValue value={String(row.number || row.id)} />

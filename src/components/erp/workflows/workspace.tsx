@@ -1,4 +1,5 @@
 "use client";
+import { RecordOverview } from "@/components/workspace/record-overview";
 import { useWorkPosition } from "@/components/workspace/use-work-position";
 import { CaseGuide } from "@/components/operations/case-guide";
 import { useTableState } from "@/components/tables/use-table-state";
@@ -176,6 +177,7 @@ function Detail({
           <p>Record not found.</p>
         ) : (
           <>
+            <RecordOverview row={r} entity={entity} />
             <div className="workflow-record-meta">
               <Badge variant="secondary">{human(value(r, "state"))}</Badge>
               {Boolean(r.kind) && (
@@ -635,7 +637,7 @@ function Detail({
       {action && (
         <ERPModal
           title={human(action)}
-          description="Review the source, quantities and approval requirements before saving."
+          description=""
           onClose={() => setAction(null)}
         >
           <WorkflowForm action={action} row={actionRow} onDone={done} />
@@ -746,7 +748,7 @@ export function OperationalWorkspace({
           description={
             area === "finance"
               ? "Billing, verified payments, credit and dispatch clearance."
-              : "Claims, receipt evidence and accountable resolution across teams."
+              : "Claims, receipts and resolutions."
           }
         >
           {write && createAction && (
@@ -981,7 +983,7 @@ export function OperationalWorkspace({
         {action && (
           <ERPModal
             title={human(action)}
-            description="Drafts, approvals and physical execution are tracked separately."
+            description=""
             onClose={() => setAction(null)}
           >
             <WorkflowForm

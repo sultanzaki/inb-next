@@ -84,7 +84,6 @@ export function OperationsDashboard() {
         <div>
           <p className="micro-label">INBIONUSA OPERATIONS</p>
           <h1>Your workspace</h1>
-          <p>See what needs attention. Keep work moving.</p>
         </div>
         <Link href="/dashboard/workspaces">
           Explore workspace <ArrowUpRight className="inline size-4" />
@@ -220,7 +219,7 @@ export function OperationsDashboard() {
             </article>
           ))
         ) : (
-          <p>Your recorded activity will appear here.</p>
+          <p>No activity yet.</p>
         )}
       </section>
     </div>
