@@ -12,6 +12,12 @@ export async function exerciseOperations(
   accessible: () => Promise<void>,
 ) {
   await db.query("update erp_modules set state='active'");
+  assert.equal((await fetch(origin + "/api/operations/pallets")).status, 401);
+  assert.equal(
+    (await fetch(origin + "/api/operations-document/batch/" + randomUUID()))
+      .status,
+    401,
+  );
   async function command(name: string, data: Record<string, unknown>) {
     const response = await page.request.post(
       origin + "/api/operations/" + name,
@@ -77,6 +83,32 @@ export async function exerciseOperations(
   );
   assert.equal(label.status(), 200);
   assert.match(await label.text(), /<svg/);
+  const palletRecord = await (
+    await page.request.get(origin + "/api/operations/pallets?id=" + recordId)
+  ).json();
+  const palletNumber = encodeURIComponent(palletRecord.rows[0].number);
+  const exported = await page.request.get(
+    origin + "/api/operations/pallets?q=" + palletNumber + "&export=csv",
+  );
+  assert.equal(exported.status(), 200);
+  assert.equal(
+    (await exported.text()).trim().split(/\r?\n/).length,
+    2,
+    "filtered CSV exports exactly the selected pallet",
+  );
+  const excel = await page.request.get(
+    origin +
+      "/api/operations/pallets?q=" +
+      palletNumber +
+      "&export=csv&format=xlsx",
+  );
+  assert.equal(excel.status(), 200);
+  assert.equal(
+    (await excel.body()).subarray(0, 2).toString(),
+    "PK",
+    "Excel requests return an XLSX archive",
+  );
+
   const crossOrigin = await page.request.post(
     origin + "/api/operations/create_pallet",
     {

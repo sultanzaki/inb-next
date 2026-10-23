@@ -103,7 +103,7 @@ Log interactions with an owner and optional follow-up date. Complete a follow-up
 
 ## Verification
 
-Automated checks include domain/number/PDF tests, the existing database regression suite plus manufacturing/logistics regressions, production build/type/lint checks and authenticated browser workflows on desktop/mobile. Test services use only disposable loopback PostgreSQL/PostgREST, never production. See the PR validation results for final counts.
+Automated checks include domain/number/PDF tests, the existing database regression suite plus manufacturing/logistics regressions, production build/type/lint checks and authenticated browser workflows on desktop/mobile. Test services use only disposable loopback PostgreSQL/PostgREST, never production. Validation completed: 44 unit/domain/PDF tests; 135 database regression tests, including 13 manufacturing/logistics/access/concurrency scenarios; authenticated full browser regression; focused desktop/mobile operations checks; HTTP access checks; lint, TypeScript and production build. The final browser pass also checks filtered CSV/Excel, anonymous API rejection and dark mode.
 
 ```bash
 npm test
