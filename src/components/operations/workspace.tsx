@@ -332,7 +332,10 @@ export function OperationsWorkspace({ entity }: { entity: string }) {
     const next = new URLSearchParams(params.toString());
     if (id) next.set("record", id);
     else next.delete("record");
-    router.replace(pathname + (next.size ? "?" + next : ""), { scroll: false });
+    if (next.toString() !== params.toString())
+      router.replace(pathname + (next.size ? "?" + next : ""), {
+        scroll: false,
+      });
   }
   function permitted(name: string) {
     const command = workCommands[name];
@@ -400,6 +403,7 @@ export function OperationsWorkspace({ entity }: { entity: string }) {
         >
           {definition.create && permitted(definition.create) ? (
             <Button
+              disabled={Boolean(action)}
               onClick={() => {
                 select(null);
                 setAction(definition.create!);
@@ -693,6 +697,7 @@ export function OperationsWorkspace({ entity }: { entity: string }) {
                     variant={name === commands[0] ? "default" : "outline"}
                     size="sm"
                     key={name}
+                    disabled={Boolean(action)}
                     onClick={() => setAction(name)}
                   >
                     {workCommands[name].label}

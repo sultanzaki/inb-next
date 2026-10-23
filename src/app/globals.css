@@ -880,18 +880,6 @@ kbd {
     transform: translateY(0);
   }
 }
-::view-transition-old(.workspace-page) {
-  animation: page-out 0.12s ease-out both;
-}
-::view-transition-new(.workspace-page) {
-  animation: surface-enter 0.28s var(--ease-workspace) both;
-}
-@keyframes page-out {
-  to {
-    opacity: 0;
-    transform: translateY(-5px);
-  }
-}
 .skeleton-shimmer,
 [data-slot="skeleton"] {
   background: linear-gradient(
@@ -917,8 +905,6 @@ kbd {
     color-mix(in srgb, var(--color-primary-ink) 18%, transparent);
 }
 [data-slot="dialog-content"] {
-  border-radius: 20px;
-  overflow-wrap: anywhere;
   border-radius: 20px;
   overflow-wrap: anywhere;
 }
@@ -6998,4 +6984,49 @@ html.dark {
   .sidebar-chevron {
     transition: none;
   }
+}
+
+/* Keep search, choices and paging within the available overlay height. */
+.work-picker-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.work-picker-options > button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+  background: var(--color-surface-alt);
+}
+
+@media (max-width: 767px) {
+  /* iOS zooms focused controls below 16px, moving overlays outside the viewport. */
+  input:not([type="checkbox"]):not([type="radio"]), textarea, select {
+    font-size: 16px;
+  }
+}
+
+.work-command-help {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface-alt);
+  font-size: 12px;
+}
+.work-command-help summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-weight: 500;
+}
+.work-command-help summary::after {
+  content: "+";
+  margin-left: auto;
+}
+.work-command-help[open] summary::after { content: "−"; }
+.work-command-help p {
+  padding: 0 12px 12px;
+  color: var(--color-muted);
+  line-height: 1.7;
 }

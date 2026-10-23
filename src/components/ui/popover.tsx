@@ -9,7 +9,7 @@ export function PopoverContent({
   className = "",
   align = "start",
   label = "Choose an option",
-  collisionPadding,
+  collisionPadding = 12,
 }: {
   children: ReactNode;
   className?: string;
@@ -29,7 +29,7 @@ export function PopoverContent({
           data-slot="popover-content"
           aria-label={label}
           className={cn(
-            "rounded-lg border border-border bg-popover text-popover-foreground shadow-lg outline-none",
+            "max-w-[calc(100vw-24px)] rounded-lg border border-border bg-popover text-popover-foreground shadow-lg outline-none",
             className,
           )}
         >
