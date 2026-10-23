@@ -237,6 +237,14 @@ export async function exerciseOperations(
     "long mobile forms have a scrollable body",
   );
   await formBody.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+  await page.evaluate(async () => {
+    await Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => Number.isFinite(a.effect?.getComputedTiming().endTime))
+        .map((a) => a.finished.catch(() => {})),
+    );
+  });
   await capture("operations-formula-mobile-bottom");
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1440, height: 1000 });
