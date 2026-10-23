@@ -1,3 +1,5 @@
+import { type ApprovalStamp } from "@/lib/pdf/approval";
+import { approvalPanel } from "@/lib/pdf/approval-panel";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { PDFDocument, rgb, degrees, type PDFFont, type PDFPage } from "pdf-lib";
@@ -43,6 +45,7 @@ type Snapshot = {
 export async function renderERPDocument(
   row: ERPRow & { notes?: string; amount?: string },
   type: "quotation" | "movement" | "purchase" | "finance",
+  approval?: ApprovalStamp | null,
 ) {
   const purchase = type === "purchase",
     finance = type === "finance",
@@ -540,6 +543,20 @@ export async function renderERPDocument(
       "Received by: ____________________     Date: ____________________",
     );
     paragraph("Signature: ______________________");
+  }
+  if (!draft && approval) {
+    const panel = approvalPanel(approval, 515, (value, strong = false) =>
+      [...value].every((character) => supported.has(character.codePointAt(0)!))
+        ? strong
+          ? bold
+          : regular
+        : fallback,
+    );
+    ensure(panel.height + 20);
+    y -= 10;
+    panel.draw(page, 40, y);
+    y -= panel.height + 10;
+    pdf.setKeywords(["INBIONUSA", "Internal approval", approval.eventId]);
   }
   const pages = pdf.getPages();
   pages.forEach((p, i) => {

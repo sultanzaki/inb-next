@@ -1,3 +1,4 @@
+import { loadDocumentApproval } from "@/lib/pdf/approval-server";
 import { requireUser, logAudit } from "@/lib/auth";
 import { authorizedRead } from "@/lib/authorized-read";
 import { privateJson } from "@/lib/api-response";
@@ -28,7 +29,17 @@ export async function GET(
     });
     if (error) return erpUxError(error);
     const { renderOperationDocument } = await import("@/lib/operations/pdf");
-    const bytes = await renderOperationDocument(data, kind);
+    const evidence = await loadDocumentApproval(
+      entities[kind],
+      id,
+      String(data.state),
+    );
+    if (evidence.error)
+      return privateJson(
+        { message: "Could not verify document approval. Retry." },
+        503,
+      );
+    const bytes = await renderOperationDocument(data, kind, evidence.approval);
     const actor = await session;
     if (!actor) return privateJson({ message: "Session expired." }, 401);
     await logAudit(

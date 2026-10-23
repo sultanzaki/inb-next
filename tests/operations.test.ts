@@ -88,3 +88,108 @@ test("formal work documents paginate long identities and results without remote 
     assert.ok(doc.getPageCount() >= 1);
   }
 });
+
+test("navigation preserves every destination and selects only the current tab", async () => {
+  const { navigationSections, workspaceLinkActive } =
+    await import("../src/lib/workspace/navigation");
+  const links = [
+    "Stock",
+    "Stock counts",
+    "Pallet tracking",
+    "Warehouse transfers",
+    "Stock ledger",
+    "Warehouses",
+    "Storage locations",
+  ].map((name, i) => [name, "/" + i]);
+  const sections = navigationSections("Warehouse", links);
+  assert.equal(sections.length, 4);
+  assert.deepEqual(sections.flatMap((s) => s.links).sort(), [...links].sort());
+  assert.equal(
+    workspaceLinkActive("/dashboard/finance", "/dashboard/finance", "payments"),
+    false,
+  );
+  assert.equal(
+    workspaceLinkActive(
+      "/dashboard/finance?view=payments",
+      "/dashboard/finance",
+      "payments",
+    ),
+    true,
+  );
+  assert.equal(
+    workspaceLinkActive(
+      "/dashboard/sales?view=quotes",
+      "/dashboard/sales",
+      null,
+    ),
+    true,
+  );
+  assert.equal(
+    workspaceLinkActive("/dashboard", "/dashboard/finance", null),
+    false,
+  );
+});
+test("internal approval stamps require actual matching audit evidence and never attest drafts", async () => {
+  const { approvalFromEvents, approvalLines, approvalActions } =
+    await import("../src/lib/pdf/approval");
+  assert.deepEqual(approvalActions("purchases", "partial"), [
+    "confirm_purchase",
+  ]);
+  assert.ok(
+    approvalActions("warehouse_transfers", "partial").includes(
+      "dispatch_warehouse_transfer",
+    ),
+  );
+  const id = randomUUID();
+  const evidence = {
+    id: "251",
+    record_id: id,
+    entity: "incoming_inspections",
+    action: "finalize_incoming_inspection",
+    actor: "Quality Officer",
+    actor_id: randomUUID(),
+    created_at: "2026-10-23T06:00:00Z",
+  };
+  assert.equal(
+    approvalFromEvents("incoming_inspections", id, "draft", [evidence]),
+    null,
+  );
+  assert.equal(
+    approvalFromEvents("incoming_inspections", randomUUID(), "pass", [
+      evidence,
+    ]),
+    null,
+  );
+  assert.equal(
+    approvalFromEvents("incoming_inspections", id, "pass", [
+      { ...evidence, action: "save_incoming_results" },
+    ]),
+    null,
+  );
+  assert.equal(
+    approvalFromEvents("incoming_inspections", id, "pass", [
+      { ...evidence, created_at: "invalid" },
+    ]),
+    null,
+  );
+  assert.equal(
+    approvalFromEvents("incoming_inspections", id, "pass", []),
+    null,
+  );
+  const stamp = approvalFromEvents("incoming_inspections", id, "fail", [
+    evidence,
+  ])!;
+  assert.equal(stamp.name, "Quality Officer");
+  assert.equal(stamp.eventId, "WORK-251");
+  assert.match(
+    approvalLines(stamp).find(([key]) => key === "Recorded at")![1],
+    /13:00:00 WIB$/,
+  );
+  const pdf = await renderOperationDocument(
+    { id, number: "IN-251", state: "fail", results: [] },
+    "incoming",
+    stamp,
+  );
+  const doc = await PDFDocument.load(pdf);
+  assert.ok(doc.getPageCount() > 0);
+});

@@ -49,6 +49,7 @@ export function CommandForm({
   onDone: (result: { id: string; entity: string }) => void;
 }) {
   const command = workCommands[action];
+  const [unitLabels, setUnitLabels] = useState<Record<string, string>>({});
   const formId = useId();
   const confirm = useConfirm();
   const [values, setValues] = useState<Record<string, unknown>>(() => {
@@ -223,6 +224,41 @@ export function CommandForm({
       ].includes(field.key),
     );
     const val = current[field.key];
+    const unit =
+      [
+        "unit_id",
+        "line_id",
+        "reservation_id",
+        "input_id",
+        "content_id",
+        "lot_id",
+        "material_id",
+        "product_id",
+        "formula_id",
+      ]
+        .map((key) => unitLabels[String(current[key] || "")])
+        .find(Boolean) ||
+      ([
+        "record_manufacturing_output",
+        "complete_manufacturing_order",
+        "create_sample_quotation",
+        "dispose_material_quality",
+      ].includes(action)
+        ? String(row?.unit || "")
+        : "");
+    const suffix =
+      field.kind === "number"
+        ? /percent|tax_rate/.test(field.key)
+          ? "%"
+          : /quantity/.test(field.key)
+            ? unit || "Select unit"
+            : undefined
+        : undefined;
+    const prefix =
+      field.kind === "number" && /^(price|amount|freight)$/.test(field.key)
+        ? String(current.currency || values.currency || row?.currency || "IDR")
+        : undefined;
+
     if (field.kind === "lines") {
       const rows = (val as Record<string, unknown>[]) || [];
       return (
@@ -321,6 +357,7 @@ export function CommandForm({
                   </span>
                   <Input
                     numberFormat="raw"
+                    suffix={String(parameter?.unit || "")}
                     value={result.value}
                     aria-label={result.name + " result"}
                     onChange={(e) =>
@@ -362,6 +399,13 @@ export function CommandForm({
             values={{ ...row, ...values, ...current }}
             disabled={busy || isReadonly}
             invalid={Boolean(error)}
+            onResolve={(value, unit) =>
+              setUnitLabels((previous) =>
+                previous[value] === unit
+                  ? previous
+                  : { ...previous, [value]: unit },
+              )
+            }
             onChange={(value, selected) => set(field.key, value, selected)}
           />
         ) : field.kind === "boolean" ? (
@@ -403,6 +447,9 @@ export function CommandForm({
             id={id}
             type={field.kind === "date" ? "date" : "text"}
             inputMode={field.kind === "number" ? "decimal" : undefined}
+            suffix={suffix}
+            prefix={prefix}
+            aria-describedby={id + "-help"}
             numberFormat={field.kind === "raw" ? "raw" : "localized"}
             value={String(val ?? "")}
             disabled={busy || isReadonly}
@@ -413,7 +460,9 @@ export function CommandForm({
         <small id={id + "-help"}>
           {field.hint ||
             (field.kind === "number"
-              ? "Use a comma for decimals. The selected material or product defines the unit."
+              ? suffix === "Select unit"
+                ? "Choose the material, product or unit first."
+                : "Use a comma for decimals."
               : "")}
         </small>
         {error && (

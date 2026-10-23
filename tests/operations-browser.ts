@@ -1,3 +1,4 @@
+import { exerciseWorkspaceUX, assertAffixes } from "./workspace-ux-browser";
 import {
   workCollections,
   workCommands,
@@ -86,6 +87,7 @@ export async function exerciseOperations(
   await picker.getByRole("option").first().click();
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
   await page.locator(".work-detail-identity").waitFor();
+  await page.waitForURL((url) => Boolean(url.searchParams.get("record")));
   const recordId = new URL(page.url()).searchParams.get("record");
   assert.ok(recordId);
   const label = await page.request.get(
@@ -159,6 +161,11 @@ export async function exerciseOperations(
     .click();
   await dialog.getByLabel("Purity", { exact: false }).fill("99.5");
   assert.equal(
+    await dialog.locator(".input-affix-label").first().innerText(),
+    "%",
+    "inspection input shows its specification unit",
+  );
+  assert.equal(
     await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth + 2),
     true,
     "mobile form does not overflow",
@@ -194,6 +201,33 @@ export async function exerciseOperations(
   assert.match(pdf.headers()["cache-control"], /no-store/);
   const pdfDocument = await PDFDocument.load(await pdf.body());
   assert.match(pdfDocument.getTitle() || "", /INCOMING/);
+  await command("finalize_incoming_inspection", {
+    id: inspection.id,
+    version: 2,
+    results: [{ name: "Purity", value: "99.5" }],
+    reason: "Reviewed measured purity against approved specification",
+  });
+  const finalPdf = await page.request.get(
+    origin + "/api/operations-document/incoming/" + inspection.id,
+  );
+  assert.equal(
+    finalPdf.status(),
+    200,
+    "final inspection PDF loads audit-backed approval",
+  );
+  const finalDocument = await PDFDocument.load(await finalPdf.body());
+  assert.ok(finalDocument.getPageCount() >= 1);
+  assert.match(
+    finalDocument.getKeywords() || "",
+    /WORK-\d+/,
+    "final PDF contains real audit approval evidence",
+  );
+  assert.doesNotMatch(
+    pdfDocument.getKeywords() || "",
+    /Internal approval/,
+    "draft PDF cannot attest approval",
+  );
+
   for (const route of [
     "production/formulas",
     "production/orders",
@@ -241,6 +275,27 @@ export async function exerciseOperations(
   }
   await page.goto(origin + "/dashboard/production/formulas");
   await page.getByRole("button", { name: "New formula", exact: true }).click();
+  await dialog.getByRole("combobox", { name: "Material", exact: true }).click();
+  await page
+    .locator(".work-picker")
+    .getByPlaceholder("Search material…")
+    .fill("Browser stearic acid");
+  await page.locator(".work-picker").getByRole("option").first().click();
+  const materialQuantity = dialog.locator(
+    '[data-field-path="lines.0.quantity"]',
+  );
+  await materialQuantity
+    .locator(".input-affix-label")
+    .getByText("Select unit", { exact: true })
+    .waitFor({ state: "hidden" });
+  assert.ok(
+    (await materialQuantity.locator(".input-affix-label").innerText()).trim(),
+  );
+  await materialQuantity.getByRole("textbox").fill("1.200,5");
+  assert.equal(
+    await materialQuantity.getByRole("textbox").inputValue(),
+    "1.200,5",
+  );
   const formBody = page.getByRole("dialog").locator(".erp-form-body");
   assert.ok(
     await formBody.evaluate((el) => el.scrollHeight > el.clientHeight),
@@ -256,7 +311,7 @@ export async function exerciseOperations(
     );
   });
   await capture("operations-formula-mobile-bottom");
-  await page.keyboard.press("Escape");
+  await page.goto(origin + "/dashboard/production/orders");
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(origin + "/dashboard/production/orders");
   await page.locator(".work-context-strip").waitFor();
@@ -304,6 +359,7 @@ export async function exerciseOperations(
           dark ? "rgb(19, 30, 34)" : "rgb(255, 255, 255)",
           entity + " form surface",
         );
+        await assertAffixes(page);
         assert.equal(surface.opacity, "1");
         assert.equal(surface.overflow, false, entity + " form width");
         const reference = dialog.getByRole("combobox").first();
@@ -343,5 +399,6 @@ export async function exerciseOperations(
       }
     }
   }
+  await exerciseWorkspaceUX(page, origin, capture);
   assert.ok(user);
 }

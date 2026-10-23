@@ -143,7 +143,7 @@ function History({ entity, id }: { entity: string; id: string }) {
         <>
           <ol className="work-history">
             {result.data.rows.map((event) => (
-              <li key={event.id}>
+              <li key={event.id} id={"audit-WORK-" + event.id}>
                 <span className="work-history-dot" />
                 <div>
                   <strong>{humanLabel(String(event.action))}</strong>
@@ -153,7 +153,11 @@ function History({ entity, id }: { entity: string; id: string }) {
                       "en-GB",
                       { timeZone: "Asia/Jakarta" },
                     )}{" "}
-                    WIB
+                    WIB · WORK-{event.id}{" "}
+                    <CopyValue
+                      value={"WORK-" + event.id}
+                      label="Copy audit reference"
+                    />
                   </p>
                   {Boolean(event.reason) && <p>{String(event.reason)}</p>}
                   <details>

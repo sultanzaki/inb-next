@@ -1461,6 +1461,18 @@ function GrowthForm({
                 required={!f.optional}
                 type={f.type === "number" ? "text" : f.type || "text"}
                 inputMode={f.type === "number" ? "decimal" : undefined}
+                prefix={
+                  /expected_value|price|amount/.test(f.key)
+                    ? value.currency || "IDR"
+                    : undefined
+                }
+                suffix={
+                  f.key === "probability"
+                    ? "%"
+                    : f.key === "quantity"
+                      ? picks.material_id?.unit || "Select material"
+                      : undefined
+                }
                 maxLength={f.type === "url" ? 2000 : 150}
                 value={value[f.key] || ""}
                 onChange={(e) => update(f.key, e.target.value)}
@@ -1506,6 +1518,7 @@ function GrowthForm({
                   <Input
                     required
                     inputMode="decimal"
+                    suffix={l.material?.unit || "Select material"}
                     value={l.quantity}
                     onChange={(e) =>
                       setPurchaseLines((v) =>
@@ -1520,6 +1533,7 @@ function GrowthForm({
                   <Input
                     required
                     inputMode="decimal"
+                    prefix={value.currency || "IDR"}
                     value={l.price}
                     onChange={(e) =>
                       setPurchaseLines((v) =>
@@ -1625,6 +1639,7 @@ function GrowthForm({
                     </button>
                     <Input
                       inputMode="decimal"
+                      suffix={source?.unit || "Select unit"}
                       value={l.quantity}
                       onChange={(e) => change("quantity", e.target.value)}
                     />

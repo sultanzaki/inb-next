@@ -1,3 +1,5 @@
+import { type ApprovalStamp } from "@/lib/pdf/approval";
+import { approvalPanel } from "@/lib/pdf/approval-panel";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { PDFDocument, rgb, degrees, type PDFPage } from "pdf-lib";
@@ -18,7 +20,11 @@ const quantity = (value: unknown) =>
 const rows = (value: unknown) => (Array.isArray(value) ? (value as Row[]) : []);
 
 /** Uses frozen batch data for closed orders; the authorized RPC selects that snapshot. */
-export async function renderOperationDocument(row: Row, kind: string) {
+export async function renderOperationDocument(
+  row: Row,
+  kind: string,
+  approval?: ApprovalStamp | null,
+) {
   if (!Object.hasOwn(operationDocuments, kind))
     throw Error("Unknown document.");
   const pdf = await PDFDocument.create();
@@ -62,7 +68,7 @@ export async function renderOperationDocument(row: Row, kind: string) {
     height = 841.89,
     margin = 38,
     contentWidth = width - margin * 2;
-  let page: PDFPage,
+  let page!: PDFPage,
     y = 0;
   function fontFor(value: string, strong = false) {
     const font = strong ? bold : regular;
@@ -407,6 +413,13 @@ export async function renderOperationDocument(row: Row, kind: string) {
     paragraph(
       "Dispatch removes source stock. Destination stock is recognized only for actual received quantities. Outstanding quantities remain in transit; recorded shortages require approval.",
     );
+  }
+  if (!draft && approval) {
+    const panel = approvalPanel(approval, contentWidth, fontFor);
+    space(panel.height + 16);
+    panel.draw(page, margin, y);
+    y -= panel.height + 16;
+    pdf.setKeywords(["INBIONUSA", "Internal approval", approval.eventId]);
   }
   const pages = pdf.getPages();
   pages.forEach((p, i) => {
