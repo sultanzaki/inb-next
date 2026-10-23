@@ -1,3 +1,8 @@
+import {
+  workCollections,
+  workCommands,
+  workPaths,
+} from "../src/lib/operations/catalog";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
@@ -72,6 +77,11 @@ export async function exerciseOperations(
     .getByRole("combobox", { name: "Pallet location", exact: true })
     .click();
   const picker = page.locator(".work-picker");
+  assert.notEqual(
+    await picker.evaluate((el) => getComputedStyle(el).backgroundColor),
+    "rgba(0, 0, 0, 0)",
+    "reference choices must have an opaque surface above the form",
+  );
   await picker.getByPlaceholder("Search pallet location…").fill(locationName);
   await picker.getByRole("option").first().click();
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
@@ -261,5 +271,77 @@ export async function exerciseOperations(
     await page.evaluate(() =>
       document.documentElement.classList.remove("dark"),
     );
+  // Every new-record form uses the same overlay contract in both themes and sizes.
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
+    for (const dark of [false, true]) {
+      for (const [entity, collection] of Object.entries(workCollections)) {
+        if (!collection.create || !workPaths[entity]) continue;
+        await page.goto(origin + "/dashboard/" + workPaths[entity]);
+        await page
+          .getByRole("button", {
+            name: workCommands[collection.create].label,
+            exact: true,
+          })
+          .click();
+        await page.evaluate(
+          (dark) => document.documentElement.classList.toggle("dark", dark),
+          dark,
+        );
+
+        await dialog.evaluate(async (el) => {
+          await Promise.all(
+            el.getAnimations().map((a) => a.finished.catch(() => {})),
+          );
+        });
+        const surface = await dialog.evaluate((el) => ({
+          background: getComputedStyle(el).backgroundColor,
+          opacity: getComputedStyle(el).opacity,
+          overflow: el.scrollWidth > el.clientWidth + 2,
+        }));
+        assert.equal(
+          surface.background,
+          dark ? "rgb(19, 30, 34)" : "rgb(255, 255, 255)",
+          entity + " form surface",
+        );
+        assert.equal(surface.opacity, "1");
+        assert.equal(surface.overflow, false, entity + " form width");
+        const reference = dialog.getByRole("combobox").first();
+        if (!(await reference.count())) continue;
+        await reference.click();
+        const choices = page.locator(".work-picker");
+        await choices.waitFor();
+        const bounds = await choices.evaluate((el) => ({
+          background: getComputedStyle(el).backgroundColor,
+          color: getComputedStyle(el).color,
+          border: getComputedStyle(el).borderTopWidth,
+          width: el.getBoundingClientRect().width,
+          left: el.getBoundingClientRect().left,
+          right: el.getBoundingClientRect().right,
+          top: el.getBoundingClientRect().top,
+          bottom: el.getBoundingClientRect().bottom,
+        }));
+        assert.equal(
+          bounds.background,
+          surface.background,
+          entity + " picker surface",
+        );
+        assert.notEqual(bounds.color, bounds.background);
+        assert.notEqual(bounds.border, "0px");
+        assert.ok(
+          bounds.left >= 0 && bounds.right <= width + 1,
+          entity + " picker fits viewport",
+        );
+        assert.ok(
+          bounds.top >= 0 && bounds.bottom <= (width === 390 ? 844 : 1000) + 1,
+          entity + " picker height",
+        );
+        if (["manufacturing_orders", "sample_requests"].includes(entity))
+          await capture(
+            `form-picker-${entity}-${width}-${dark ? "dark" : "light"}`,
+          );
+      }
+    }
+  }
   assert.ok(user);
 }
