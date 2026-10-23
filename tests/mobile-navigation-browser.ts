@@ -56,7 +56,7 @@ export async function exerciseMobileNavigation(
     await workspaces
       .getByRole("link", { name: "Warehouse", exact: true })
       .click();
-    await page.waitForURL("**/dashboard/warehouse?view=stock");
+    await page.waitForURL("**/dashboard/warehouse/inventory");
     await nav.getByRole("button", { name: "Choose page", exact: true }).click();
     const pages = page.getByRole("dialog", {
       name: "Workspace pages",

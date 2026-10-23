@@ -1,3 +1,4 @@
+import { workColumnDefinitions } from "../operations/catalog";
 import { z } from "zod";
 export type Column = {
   key: string;
@@ -23,6 +24,7 @@ const money = [
   c("outstanding", "Outstanding", "number"),
 ];
 export const entityColumns: Record<string, Column[]> = {
+  ...workColumnDefinitions,
   users: [
     c("nama_lengkap", "Name"),
     c("username", "Username"),
@@ -387,8 +389,7 @@ export function parseTableQuery(
 export function fieldValue(row: Record<string, unknown>, key: string): unknown {
   if (key === "product_name") {
     const snapshot = row.hasil_uji_snapshot as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
     const product = row.master_produk as Record<string, unknown> | undefined;
     return row.product_name ?? snapshot?.produk ?? product?.nama_produk;
   }

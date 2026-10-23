@@ -37,9 +37,13 @@ export function useWorkspaceGroups() {
       ? [
           {
             name: "Production",
-            description: "Record finished batches",
+            description: "Formulas, material usage and finished batches",
             icon: Factory,
-            links: [["Production records", "/dashboard/production"]],
+            links: [
+              ["Production orders", "/dashboard/production/orders"],
+              ["Formulas & BOM", "/dashboard/production/formulas"],
+              ["Production records", "/dashboard/production"],
+            ],
           },
         ]
       : []),
@@ -51,6 +55,25 @@ export function useWorkspaceGroups() {
             icon: FlaskConical,
             links: [
               ["Inspections", "/dashboard/quality/inspections"],
+              [
+                "Incoming inspections",
+                "/dashboard/quality/incoming-inspections",
+              ],
+              [
+                "Material lots & disposition",
+                "/dashboard/quality/material-lots",
+              ],
+              [
+                "Material specifications",
+                "/dashboard/quality/material-specifications",
+              ],
+              [
+                "Material release policies",
+                "/dashboard/quality/material-policies",
+              ],
+              ["Approved suppliers", "/dashboard/quality/approved-suppliers"],
+              ["Deviations", "/dashboard/quality/deviations"],
+              ["CAPA actions", "/dashboard/quality/capa"],
               ["Certificates", "/dashboard/quality/certificates"],
               ["Quality analytics", "/dashboard/quality"],
             ],
@@ -64,6 +87,11 @@ export function useWorkspaceGroups() {
             description: "Stock, traceability and dispatch",
             icon: Warehouse,
             links: [
+              ["Inventory by warehouse", "/dashboard/warehouse/inventory"],
+              ["Pallet tracking", "/dashboard/warehouse/pallets"],
+              ["Warehouse transfers", "/dashboard/warehouse/transfers"],
+              ["Warehouses", "/dashboard/warehouse/sites"],
+              ["Storage locations", "/dashboard/warehouse/locations"],
               ["Stock", "/dashboard/warehouse?view=stock"],
               ["Movements", "/dashboard/warehouse?view=movements"],
               ["Stock counts", "/dashboard/warehouse?view=counts"],
@@ -71,10 +99,7 @@ export function useWorkspaceGroups() {
               ["Dispatch", "/dashboard/warehouse?view=fulfillment"],
               ["Returns", "/dashboard/warehouse?view=returns"],
               ["Stock ledger", "/dashboard/warehouse?view=ledger"],
-              [
-                "Material stock",
-                "/dashboard/warehouse/materials?view=material_stock",
-              ],
+              ["Material stock", "/dashboard/warehouse/material-inventory"],
               [
                 "Material ledger",
                 "/dashboard/warehouse/materials?view=material_ledger",
@@ -140,6 +165,9 @@ export function useWorkspaceGroups() {
             links: [
               ["Pipeline", "/dashboard/crm?view=opportunities"],
               ["Activities", "/dashboard/crm?view=crm_activities"],
+              ["Customer samples", "/dashboard/crm/samples"],
+              ["Customer interactions", "/dashboard/crm/interactions"],
+              ["Document distribution", "/dashboard/crm/documents"],
             ],
           },
         ]
@@ -150,7 +178,13 @@ export function useWorkspaceGroups() {
             name: "Product documents",
             description: "SDS, TDS and controlled revisions",
             icon: Files,
-            links: [["Product documents", "/dashboard/product-documents"]],
+            links: [
+              ["Product documents", "/dashboard/product-documents"],
+              [
+                "Material & supplier documents",
+                "/dashboard/product-documents/materials",
+              ],
+            ],
           },
         ]
       : []),
@@ -192,6 +226,10 @@ export function useWorkspaceGroups() {
             links: [
               ["Users", "/dashboard/admin/users"],
               ["Access", "/dashboard/admin/settings?view=access"],
+              [
+                "Warehouse access",
+                "/dashboard/admin/settings/warehouse-access",
+              ],
               ["Module settings", "/dashboard/admin/settings?view=modules"],
               ["Audit log", "/dashboard/admin/audit-log"],
             ],

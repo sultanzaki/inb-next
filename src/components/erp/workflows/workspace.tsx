@@ -1,4 +1,5 @@
 "use client";
+import { CaseGuide } from "@/components/operations/case-guide";
 import { useTableState } from "@/components/tables/use-table-state";
 import { AdvancedRecordsTable } from "@/components/tables/advanced-records-table";
 import { TransactionControls } from "../transaction-controls";
@@ -185,6 +186,7 @@ function Detail({
             </div>
             {entity === "ops_cases" && (
               <>
+                <CaseGuide id={id} version={Number(r.version)} />
                 <p className="text-sm">{value(r, "description")}</p>
                 <dl className="workflow-key-values">
                   <dt>Source</dt>
