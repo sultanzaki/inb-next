@@ -1,13 +1,6 @@
 "use client";
 import { roleLabel } from "@/lib/rbac";
-import {
-  Suspense,
-  useEffect,
-  useRef,
-  useState,
-  ViewTransition,
-  type ReactNode,
-} from "react";
+import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { ThemeControl } from "@/components/theme/theme-control";
 import Image from "next/image";
 import Link from "next/link";
@@ -361,11 +354,9 @@ export function AppShell({
         </div>
       </header>
       <main id="main-content" tabIndex={-1} className="workspace-main app-main">
-        <ViewTransition name="workspace-content" default="workspace-page">
-          <div key={pathname} className="surface-enter">
-            {children}
-          </div>
-        </ViewTransition>
+        <div key={pathname} className="surface-enter">
+          {children}
+        </div>
         <footer className="workspace-copyright">{footer}</footer>
       </main>
       <CommandDialog

@@ -118,6 +118,7 @@ export function ReferencePicker({
         row.id,
     );
   }
+  const searching = !field.local && (q !== search || result.loading);
   const rows = field.local
     ? local.filter((row) => label(row).toLowerCase().includes(q.toLowerCase()))
     : result.data.rows;
@@ -142,108 +143,150 @@ export function ReferencePicker({
           {record
             ? label(record)
             : value
-              ? "Loading selection…"
+              ? selected.loading
+                ? "Loading selection…"
+                : selected.error
+                  ? "Could not load selection. Choose again."
+                  : "Selection unavailable. Choose again."
               : "Choose " + field.label.toLowerCase()}
         </span>
         <ChevronsUpDown className="size-3.5 shrink-0" />
       </PopoverTrigger>
       <PopoverContent align="start" className="work-picker" label={field.label}>
-        <div className="work-picker-search">
-          <Search className="size-4" />
-          <Input
-            autoFocus
-            placeholder={"Search " + field.label.toLowerCase() + "…"}
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-        </div>
-        {!field.local && result.loading ? (
-          <RecordSkeleton compact label="Loading choices…" />
-        ) : result.error ? (
-          <div role="alert">
-            {result.error}
-            <Button variant="outline" size="sm" onClick={result.refresh}>
-              Retry
-            </Button>
+        <div
+          className="work-picker-body"
+          onKeyDown={(event) => {
+            if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key))
+              return;
+            const options = Array.from(
+              event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                '[role="option"]',
+              ),
+            );
+            if (!options.length) return;
+            // Preserve text-editing Home/End inside the search field.
+            if (
+              event.target instanceof HTMLInputElement &&
+              ["Home", "End"].includes(event.key)
+            )
+              return;
+            event.preventDefault();
+            const current = options.indexOf(
+              document.activeElement as HTMLButtonElement,
+            );
+            const next =
+              event.key === "Home"
+                ? 0
+                : event.key === "End"
+                  ? options.length - 1
+                  : event.key === "ArrowDown"
+                    ? (current + 1) % options.length
+                    : current < 0
+                      ? options.length - 1
+                      : (current - 1 + options.length) % options.length;
+            options[next]?.focus();
+          }}
+        >
+          <div className="work-picker-search">
+            <Search className="size-4" />
+            <Input
+              autoFocus
+              placeholder={"Search " + field.label.toLowerCase() + "…"}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
           </div>
-        ) : (
-          <div
-            id={generated + "-options"}
-            className="work-picker-options"
-            role="listbox"
-            aria-label={field.label}
-          >
-            {!rows.length && <p>No matching records.</p>}
-            {rows.map((row) => (
-              <button
-                type="button"
-                key={row.id}
-                role="option"
-                aria-selected={String(row[field.pick || "id"]) === value}
-                onClick={() => {
-                  setChosen(row);
-                  onChange(String(row[field.pick || "id"]), row);
-                  setOpen(false);
-                }}
-              >
-                <span>
-                  <strong>{label(row)}</strong>
-                  <small>
-                    {[
-                      row.state ? humanLabel(String(row.state)) : "",
-                      row.available != null
-                        ? "Available " +
-                          displayNumber(String(row.available)) +
-                          " " +
-                          (row.unit || "")
-                        : "",
-                      row.expiry_date ? "Expires " + row.expiry_date : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </small>
-                </span>
-                {String(row[field.pick || "id"]) === value && (
-                  <Check className="size-4" />
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-        <div className="work-picker-footer">
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={!value}
-            onClick={() => {
-              setChosen(null);
-              onChange("");
-              setOpen(false);
-            }}
-          >
-            Clear
-          </Button>
-          {!field.local && (
-            <>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={page === 1 || result.loading}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                Previous
+          {searching ? (
+            <RecordSkeleton compact label="Loading choices…" />
+          ) : result.error ? (
+            <div role="alert">
+              {result.error}
+              <Button variant="outline" size="sm" onClick={result.refresh}>
+                Retry
               </Button>
-              <span>{page}</span>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={page * 50 >= result.data.total || result.loading}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next
-              </Button>
-            </>
+            </div>
+          ) : (
+            <div
+              id={generated + "-options"}
+              className="work-picker-options"
+              role="listbox"
+              aria-label={field.label}
+            >
+              {!rows.length && <p>No matching records.</p>}
+              {rows.map((row) => (
+                <button
+                  type="button"
+                  key={row.id}
+                  role="option"
+                  aria-selected={String(row[field.pick || "id"]) === value}
+                  onClick={() => {
+                    setChosen(row);
+                    onChange(String(row[field.pick || "id"]), row);
+                    setOpen(false);
+                  }}
+                >
+                  <span>
+                    <strong>{label(row)}</strong>
+                    <small>
+                      {[
+                        row.state ? humanLabel(String(row.state)) : "",
+                        row.available != null
+                          ? "Available " +
+                            displayNumber(String(row.available)) +
+                            " " +
+                            (row.unit || "")
+                          : "",
+                        row.expiry_date ? "Expires " + row.expiry_date : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </small>
+                  </span>
+                  {String(row[field.pick || "id"]) === value && (
+                    <Check className="size-4" />
+                  )}
+                </button>
+              ))}
+            </div>
           )}
+          <div className="work-picker-footer">
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={!value}
+              onClick={() => {
+                setChosen(null);
+                onChange("");
+                setOpen(false);
+              }}
+            >
+              Clear
+            </Button>
+            {!field.local && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={page === 1 || searching}
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  Previous
+                </Button>
+                <span>{page}</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={
+                    page * result.data.page_size >= result.data.total ||
+                    searching
+                  }
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </PopoverContent>
     </Popover>

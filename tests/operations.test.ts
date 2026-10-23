@@ -193,3 +193,34 @@ test("internal approval stamps require actual matching audit evidence and never 
   const doc = await PDFDocument.load(pdf);
   assert.ok(doc.getPageCount() > 0);
 });
+
+test("changing a reference source clears scoped choices without changing quantities", async () => {
+  const { clearDependentReferences } =
+    await import("../src/lib/operations/form-state");
+  const values = {
+    from_location: "a",
+    to_location: "b",
+    lines: [{ lot_id: "lot-a", quantity: "12" }],
+    pallet_ids: [{ id: "pallet-a" }],
+  };
+  const result = clearDependentReferences(
+    workCommands.create_warehouse_transfer.fields,
+    values,
+    "from_location",
+  );
+  assert.deepEqual(result.lines, [{ lot_id: "", quantity: "12" }]);
+  assert.deepEqual(result.pallet_ids, [{ id: "" }]);
+  assert.equal(result.to_location, "b");
+  assert.equal(
+    values.lines[0].lot_id,
+    "lot-a",
+    "previous state must not be mutated",
+  );
+  const reservation = clearDependentReferences(
+    workCommands.reserve_manufacturing_material.fields,
+    { lot_id: "old-lot", quantity: "7" },
+    "material_id",
+  );
+  assert.equal(reservation.lot_id, "");
+  assert.equal(reservation.quantity, "7");
+});

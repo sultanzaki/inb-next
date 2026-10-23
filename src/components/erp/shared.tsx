@@ -1,6 +1,7 @@
 "use client";
 import {
   useRef,
+  useEffect,
   useState,
   useId,
   createContext,
@@ -188,35 +189,70 @@ export function ERPModal({
   loading?: boolean;
 }) {
   const confirm = useConfirm();
+  const [open, setOpen] = useState(true);
+  const popup = useRef<HTMLDivElement>(null);
+  const closing = useRef(false);
+  useEffect(() => {
+    function beforeUnload(event: BeforeUnloadEvent) {
+      if (
+        dirty ||
+        popup.current?.querySelector(
+          'form[data-dirty="true"], form[aria-busy="true"]',
+        )
+      ) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    }
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [dirty]);
+
   async function close() {
-    if (document.querySelector('form.erp-form[aria-busy="true"]')) return;
     if (
-      (dirty ||
-        Boolean(document.querySelector('form.erp-form[data-dirty="true"]'))) &&
-      !(await confirm({
-        title: "Discard changes?",
-        description: "Your unsaved changes will be lost.",
-        confirmLabel: "Discard changes",
-      }))
+      closing.current ||
+      popup.current?.querySelector('form[aria-busy="true"]')
     )
       return;
-    onClose();
+    closing.current = true;
+    try {
+      if (
+        (dirty ||
+          Boolean(popup.current?.querySelector('form[data-dirty="true"]'))) &&
+        !(await confirm({
+          title: "Discard changes?",
+          description: "Your unsaved changes will be lost.",
+          confirmLabel: "Discard changes",
+        }))
+      )
+        return;
+      setOpen(false);
+    } finally {
+      closing.current = false;
+    }
   }
   return (
     <Dialog
-      open
-      onOpenChange={(v) => {
-        if (!v) void close();
+      open={open}
+      onOpenChange={(next, details) => {
+        if (!next) {
+          details.cancel();
+          void close();
+        }
+      }}
+      onOpenChangeComplete={(next) => {
+        if (!next) onClose();
       }}
     >
       <DialogContent
+        ref={popup}
         className={
           "erp-dialog" + (layout === "record" ? " erp-record-dialog" : "")
         }
       >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+          {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
         {layout === "record" ? (
           <RecordLoadingBoundary loading={loading}>

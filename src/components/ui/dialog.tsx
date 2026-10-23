@@ -44,28 +44,40 @@ function DialogContent({
   children,
   showCloseButton = true,
   initialFocus,
+  ref,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean;
 }) {
   const popup = React.useRef<HTMLDivElement>(null);
+  const setPopup = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      popup.current = node;
+      if (typeof ref === "function") return ref(node);
+      if (ref) ref.current = node;
+    },
+    [ref],
+  );
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
-        ref={popup}
+        ref={setPopup}
         initialFocus={
           initialFocus ??
           ((type) =>
             type === "touch"
               ? popup.current
-              : (popup.current?.querySelector<HTMLElement>(
-                  'input:not([disabled]):not([type="hidden"]),textarea:not([disabled])',
-                ) ?? popup.current))
+              : (Array.from(
+                  popup.current?.querySelectorAll<HTMLElement>(
+                    'input:not([disabled]):not([readonly]):not([type="hidden"]),textarea:not([disabled])',
+                  ) || [],
+                ).find((element) => element.getClientRects().length > 0) ??
+                popup.current))
         }
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] max-h-[90svh] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border bg-popover p-4 text-sm text-popover-foreground duration-200 outline-none sm:max-w-lg transition-[opacity,scale,translate] ease-out data-starting-style:opacity-0 data-starting-style:scale-95 data-ending-style:opacity-0 data-ending-style:scale-95",
+          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] max-h-[90dvh] overflow-y-auto overscroll-contain -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border bg-popover p-4 text-sm text-popover-foreground duration-150 outline-none sm:max-w-lg transition-[scale] ease-out data-starting-style:scale-[0.985] data-ending-style:scale-[0.985]",
           className,
         )}
         {...props}

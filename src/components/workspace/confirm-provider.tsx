@@ -28,23 +28,28 @@ type Confirm = (options: Options) => Promise<boolean>;
 const Context = createContext<Confirm | null>(null);
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [options, setOptions] = useState<Options | null>(null);
+  const [open, setOpen] = useState(false);
   const resolve = useRef<((value: boolean) => void) | null>(null);
   const confirm: Confirm = (next) =>
     new Promise<boolean>((done) => {
       resolve.current?.(false);
       resolve.current = done;
       setOptions(next);
+      setOpen(true);
     });
   function finish(value: boolean) {
     resolve.current?.(value);
     resolve.current = null;
-    setOptions(null);
+    setOpen(false);
   }
   return (
     <Context value={confirm}>
       {children}
       <Dialog
-        open={options !== null}
+        open={open}
+        onOpenChangeComplete={(next) => {
+          if (!next) setOptions(null);
+        }}
         onOpenChange={(open) => {
           if (!open) finish(false);
         }}

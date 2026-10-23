@@ -188,7 +188,37 @@ export async function exerciseOperations(
     "mobile form heading stays inside the viewport",
   );
   await capture("operations-incoming-mobile");
-  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  let releaseSave!: () => void;
+  const heldSave = new Promise<void>((resolve) => {
+    releaseSave = resolve;
+  });
+  let saveRequests = 0;
+  await page.route("**/api/operations/save_incoming_results", async (route) => {
+    saveRequests++;
+    await heldSave;
+    await route.continue();
+  });
+  try {
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    await dialog.locator('form[aria-busy="true"]').waitFor();
+    assert.equal(
+      await dialog.getByLabel("Purity", { exact: false }).isDisabled(),
+      true,
+      "results cannot change while saving",
+    );
+    await page.keyboard.press("Escape");
+    assert.equal(
+      await dialog.isVisible(),
+      true,
+      "Escape must not discard an in-flight save",
+    );
+    assert.equal(saveRequests, 1);
+    releaseSave();
+    await page.getByRole("dialog", { name: "Enter inspection results", exact: true }).waitFor({ state: "hidden" });
+  } finally {
+    releaseSave();
+    await page.unroute("**/api/operations/save_incoming_results");
+  }
   await page.locator(".work-detail-identity").waitFor();
   const pdf = await page.request.get(
     origin +

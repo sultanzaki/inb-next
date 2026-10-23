@@ -7,6 +7,7 @@ import {
   type WorkField,
   type WorkRow,
 } from "@/lib/operations/catalog";
+import { clearDependentReferences } from "@/lib/operations/form-state";
 import { commandSchema } from "@/lib/operations/validation";
 import { businessDate } from "@/lib/domain/validation";
 import { validationFields, humanLabel, displayNumber } from "@/lib/erp/ux";
@@ -122,7 +123,10 @@ export function CommandForm({
   };
   function update(key: string, value: unknown, selected?: WorkRow) {
     setValues((current) => {
-      const next = { ...current, [key]: value };
+      const next = {
+        ...clearDependentReferences(command.fields, current, key),
+        [key]: value,
+      };
       if (selected && key === "destination_pallet")
         next.destination_version = Number(selected.version);
       if (selected && key === "product_id" && selected.unit_id)
@@ -313,7 +317,14 @@ export function CommandForm({
                     `${path}.${index}.${child.key}`,
                     line,
                     (key, value, selected) => {
-                      const next = { ...line, [key]: value };
+                      const next = {
+                        ...clearDependentReferences(
+                          field.fields || [],
+                          line,
+                          key,
+                        ),
+                        [key]: value,
+                      };
                       if (key === "kind") next.lot_id = "";
                       if (selected && key === "lot_id" && selected.location_id)
                         next.location_id = selected.location_id;
@@ -345,6 +356,9 @@ export function CommandForm({
               const parameter = ((
                 row?.spec_snapshot as { parameters?: WorkRow[] }
               )?.parameters || [])[index];
+              const resultError = errors.find(
+                (e) => e.path === `${path}.${index}.value`,
+              );
               return (
                 <label className="work-result" key={result.name}>
                   <span>
@@ -352,14 +366,19 @@ export function CommandForm({
                     <small>
                       {parameter?.kind === "text"
                         ? "Expected: " + parameter.expected
-                        : `${parameter?.minimum || "No minimum"} – ${parameter?.maximum || "No maximum"} ${parameter?.unit || ""}`}
+                        : `${parameter?.minimum ?? "No minimum"} – ${parameter?.maximum ?? "No maximum"} ${parameter?.unit || ""}`}
                     </small>
                   </span>
                   <Input
+                    disabled={busy}
                     numberFormat="raw"
                     suffix={String(parameter?.unit || "")}
                     value={result.value}
                     aria-label={result.name + " result"}
+                    aria-invalid={Boolean(resultError) || undefined}
+                    aria-describedby={
+                      resultError ? `${id}-${index}-error` : undefined
+                    }
                     onChange={(e) =>
                       set(
                         field.key,
@@ -370,6 +389,15 @@ export function CommandForm({
                       )
                     }
                   />
+                  {resultError && (
+                    <small
+                      id={`${id}-${index}-error`}
+                      className="work-field-error"
+                      role="alert"
+                    >
+                      {resultError.message}
+                    </small>
+                  )}
                 </label>
               );
             },
@@ -427,6 +455,9 @@ export function CommandForm({
             aria-invalid={Boolean(error) || undefined}
             onChange={(e) => set(field.key, e.target.value)}
           >
+            <option value="" disabled={field.required}>
+              Choose {field.label.toLowerCase()}…
+            </option>
             {field.options?.map((value) => (
               <option value={value} key={value}>
                 {humanLabel(value)}
@@ -480,7 +511,7 @@ export function CommandForm({
           ? command.label.replace(/^New /, "Edit ")
           : command.label
       }
-      description={row?.label || "Create a linked operational record"}
+      description={row?.label || ""}
       onClose={onClose}
       dirty={dirty}
     >
@@ -493,10 +524,16 @@ export function CommandForm({
         noValidate
       >
         <div className="erp-form-body">
-          <div className="work-command-notice">
-            <Info className="size-4 shrink-0" />
+          <details
+            className="work-command-help"
+            open={command.confirm || undefined}
+          >
+            <summary>
+              <Info className="size-4 shrink-0" />
+              About this form
+            </summary>
             <p>{command.help}</p>
-          </div>
+          </details>
           <div className="work-field-grid">
             {command.fields.map((field) =>
               renderField(field, field.key, values, update),

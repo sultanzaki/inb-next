@@ -1,3 +1,4 @@
+import { exerciseInteractionStability } from "./interaction-stability-browser";
 import { exerciseOperations } from "./operations-browser";
 import { exerciseDownloads } from "./downloads-browser";
 import { exerciseRecordLoading } from "./record-loading-browser";
@@ -267,6 +268,11 @@ test(
       });
       const page = await context.newPage();
       page.setDefaultTimeout(20000);
+      // Test-directed hard navigation intentionally leaves disposable draft forms.
+      page.on("dialog", async (dialog) => {
+        if (dialog.type() === "beforeunload") await dialog.accept();
+        else await dialog.dismiss();
+      });
       const runtimeErrors: string[] = [];
       page.on("pageerror", (e) => runtimeErrors.push(e.message));
       const artifacts =
@@ -369,6 +375,11 @@ test(
         );
         assert.equal(scoped.status(), 503);
         assert.match((await scoped.json()).message, /database update/);
+        return;
+      }
+      if (process.env.TEST_INTERACTIONS_ONLY === "1") {
+        await exerciseInteractionStability(page, db, origin);
+        assert.deepEqual(runtimeErrors, []);
         return;
       }
       if (process.env.TEST_OPERATIONS_ONLY === "1") {
@@ -904,6 +915,7 @@ test(
       await exerciseNumericInput(page, db, origin);
       await exerciseDownloads(page, origin);
       await exerciseAdvancedTables(page, origin, capture, accessible);
+      await exerciseInteractionStability(page, db, origin);
       await exerciseOperations(page, db, origin, user.id, capture, accessible);
       await exerciseRecordLoading(page, db, origin, capture, accessible);
       await exerciseCoaProductionDates(page, db, origin, capture, accessible);
