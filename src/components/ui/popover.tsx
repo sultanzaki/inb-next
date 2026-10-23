@@ -1,6 +1,7 @@
 "use client";
 import { Popover as Base } from "@base-ui/react/popover";
 import type { ReactNode } from "react";
+import { cn } from "cn";
 export const Popover = Base.Root;
 export const PopoverTrigger = Base.Trigger;
 export function PopoverContent({
@@ -24,7 +25,14 @@ export function PopoverContent({
         collisionPadding={collisionPadding}
         className="z-[80]"
       >
-        <Base.Popup aria-label={label} className={className}>
+        <Base.Popup
+          data-slot="popover-content"
+          aria-label={label}
+          className={cn(
+            "rounded-lg border border-border bg-popover text-popover-foreground shadow-lg outline-none",
+            className,
+          )}
+        >
           {children}
         </Base.Popup>
       </Base.Positioner>

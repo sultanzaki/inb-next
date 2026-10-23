@@ -139,7 +139,7 @@ export function ReferencePicker({
         </span>
         <ChevronsUpDown className="size-3.5 shrink-0" />
       </PopoverTrigger>
-      <PopoverContent align="start" className="work-picker">
+      <PopoverContent align="start" className="work-picker" label={field.label}>
         <div className="work-picker-search">
           <Search className="size-4" />
           <Input
