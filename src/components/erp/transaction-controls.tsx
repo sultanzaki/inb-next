@@ -461,7 +461,7 @@ export function TransactionControls({
               ? "Approve remaining-quantity closure"
               : "Review supplier price variance"
           }
-          description="Review the current source quantities and financial consequences. This decision is recorded in document history."
+          description=""
           onClose={() => setMode(null)}
         >
           {mode === "close" && preview ? (

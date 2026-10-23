@@ -637,7 +637,7 @@ function Detail({
       {action && (
         <ERPModal
           title={human(action)}
-          description="Review the source, quantities and approval requirements before saving."
+          description=""
           onClose={() => setAction(null)}
         >
           <WorkflowForm action={action} row={actionRow} onDone={done} />
@@ -748,7 +748,7 @@ export function OperationalWorkspace({
           description={
             area === "finance"
               ? "Billing, verified payments, credit and dispatch clearance."
-              : "Claims, receipt evidence and accountable resolution across teams."
+              : "Claims, receipts and resolutions."
           }
         >
           {write && createAction && (
@@ -983,7 +983,7 @@ export function OperationalWorkspace({
         {action && (
           <ERPModal
             title={human(action)}
-            description="Drafts, approvals and physical execution are tracked separately."
+            description=""
             onClose={() => setAction(null)}
           >
             <WorkflowForm

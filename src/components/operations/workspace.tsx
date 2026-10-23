@@ -14,7 +14,6 @@ import {
   Clock3,
   Printer,
   Download,
-  ShieldCheck,
   Search,
 } from "lucide-react";
 import { useERP } from "@/components/erp/context";
@@ -430,13 +429,6 @@ export function OperationsWorkspace({ entity }: { entity: string }) {
             </Button>
           ) : undefined}
         </PageHeader>
-        <div className="work-context-strip">
-          <span>
-            <ShieldCheck className="size-3.5" />
-            Traceable operations
-          </span>
-          <span>Drafts preserve stock · Posted actions retain history</span>
-        </div>
         <div className="work-list-tools">
           <div className="work-search">
             <Search className="size-4" />
@@ -645,10 +637,6 @@ export function OperationsWorkspace({ entity }: { entity: string }) {
             onPageChange={setPage}
           />
         )}
-        <p className="work-workspace-footnote">
-          Quantities use the configured product or material unit. Dates follow
-          the Jakarta business calendar.
-        </p>
       </div>
       {selected && !action && (
         <ERPModal

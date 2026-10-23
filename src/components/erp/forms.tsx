@@ -282,8 +282,7 @@ export function MoveForm({
       )}
       {production && (
         <p className="erp-notice">
-          Each line is one batch. The server assigns its official lot number
-          when you post. Configure the product series in Master data first.
+          One batch per line. Configure the product series before posting.
         </p>
       )}
       {lines.map((line, i) => (
@@ -712,8 +711,8 @@ export function QuoteForm({ row, onDone }: { row?: ERPRow; onDone: Done }) {
         currency={value.currency}
       />
       <p className="erp-notice">
-        Final amounts are checked on the server. Discounts above 10% require
-        approval. Issued quotations cannot be edited; create a revision instead.
+        Discounts above 10% require approval. Revise issued quotations to make
+        changes.
       </p>
     </ERPForm>
   );
@@ -1169,10 +1168,7 @@ function QuoteTotals({
         Total:{" "}
         {money(decimalUnits(subtotal + taxAmount + units(freight)), currency)}
       </p>
-      <small>
-        Preview only. Final calculation and approval requirements are checked
-        when saving.
-      </small>
+      <small>Estimated amounts; confirmed on save.</small>
     </section>
   );
 }
@@ -1203,10 +1199,7 @@ function ProductionPreview({
         <>
           <strong>Expected batch: {preview?.number}</strong>
           <p>Expiry: {preview?.expiry_date}</p>
-          <small>
-            Preview only. The batch number is assigned at posting and may change
-            if another batch is posted first.
-          </small>
+          <small>Final batch number assigned at posting.</small>
         </>
       )}
     </div>

@@ -594,7 +594,7 @@ export function ERPActionButton({
       {open && (
         <ERPModal
           title={typeof children === "string" ? children : "Confirm action"}
-          description="This action is recorded in the audit log."
+          description=""
           onClose={() => setOpen(false)}
         >
           <ERPForm

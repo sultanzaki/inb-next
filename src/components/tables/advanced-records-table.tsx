@@ -581,10 +581,7 @@ export function AdvancedRecordsTable({
             ))}
         </div>
       )}
-      <div className="grid-footnote">
-        {rows.length} rows on this page · Shift-click a column to combine
-        sorting · Double-click a value to copy
-      </div>
+      <div className="grid-footnote">{rows.length} rows on this page</div>
       <Sheet
         open={panel !== null}
         onOpenChange={(v) => {

@@ -125,7 +125,7 @@ const approve = (
   states: string[],
 ): WorkCommand => ({
   label,
-  help: "Review the current record before confirming. This action is recorded in its history.",
+  help: "",
   module,
   verb: "approve",
   confirm: true,
@@ -874,7 +874,7 @@ export const workCollections: Record<string, WorkCollection> = {
     title: "Storage locations",
     singular: "Location",
     module: "warehouse",
-    description: "Keep every rack and bin linked to its warehouse.",
+    description: "Racks and bins by warehouse.",
     create: "save_warehouse_location",
     actions: ["save_warehouse_location"],
     columns: [
@@ -1095,8 +1095,7 @@ export const workCollections: Record<string, WorkCollection> = {
     title: "Pallet tracking",
     singular: "Pallet",
     module: "warehouse",
-    description:
-      "Identify every pallet, inspect its contents and follow physical movements.",
+    description: "Pallets, contents and locations.",
     create: "create_pallet",
     actions: [
       "pack_pallet",

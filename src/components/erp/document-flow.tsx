@@ -29,10 +29,6 @@ export function DocumentFlow({ entity, id }: { entity: string; id: string }) {
         <p className="text-xs text-muted">No linked documents yet.</p>
       ) : (
         <div className="document-journey">
-          <p className="document-journey-caption">
-            Linked records available to your account. Each stage can contain
-            multiple documents; its presence does not imply completion.
-          </p>
           <ol className="document-journey-stages">
             {(["purchases", "fin_purchases"].includes(entity) ||
             result.data.rows.some(

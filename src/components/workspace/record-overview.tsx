@@ -86,7 +86,7 @@ export function RecordOverview({ row, entity }: { row: Row; entity: string }) {
 }
 export function ContextSummary({
   values: input,
-  title = "Working summary",
+  title = "Summary",
 }: {
   values: unknown;
   title?: string;
@@ -122,7 +122,6 @@ export function ContextSummary({
     <details ref={panel} className="context-summary">
       <summary>
         <span>{title}</span>
-        <span className="context-summary-hint">Live preview</span>
       </summary>
       <dl>
         {lines && (
@@ -150,7 +149,6 @@ export function ContextSummary({
           </div>
         ))}
       </dl>
-      <p>Review before saving. This preview does not post a transaction.</p>
     </details>
   );
 }
@@ -172,8 +170,10 @@ export function WarehouseBoard({
           <span className="record-eyebrow">Warehouse overview</span>
           <h3>
             {entity === "pallets"
-              ? "Every pallet, in place."
-              : "Your storage network."}
+              ? "Pallets"
+              : entity === "warehouses"
+                ? "Warehouses"
+                : "Storage locations"}
           </h3>
         </div>
         <p>

@@ -567,16 +567,18 @@ function CommandFormContent({
                 Saving changes… Keep this form open.
               </p>
             )}
-            <details
-              className="work-command-help"
-              open={command.confirm || undefined}
-            >
-              <summary>
-                <Info className="size-4 shrink-0" />
-                About this form
-              </summary>
-              <p>{command.help}</p>
-            </details>
+            {command.help && (
+              <details
+                className="work-command-help"
+                open={command.confirm || undefined}
+              >
+                <summary>
+                  <Info className="size-4 shrink-0" />
+                  Requirements
+                </summary>
+                <p>{command.help}</p>
+              </details>
+            )}
             <FormJourney
               ref={journey}
               sections={(() => {
