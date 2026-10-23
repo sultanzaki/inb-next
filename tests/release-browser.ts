@@ -144,7 +144,7 @@ export async function exerciseRelease(
       .locator(".work-directory")
       .getByRole("link", { name: /Warehouse/ })
       .click();
-    await page.waitForURL("**/dashboard/warehouse?view=stock");
+    await page.waitForURL("**/dashboard/warehouse/inventory");
     await page.goto(origin + "/dashboard/warehouse?view=lots");
     await page
       .getByRole("button", { name: lot.number, exact: true })

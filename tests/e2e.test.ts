@@ -1,3 +1,4 @@
+import { exerciseOperations } from "./operations-browser";
 import { exerciseDownloads } from "./downloads-browser";
 import { exerciseRecordLoading } from "./record-loading-browser";
 import { exerciseAdvancedTables } from "./advanced-tables-browser";
@@ -363,6 +364,18 @@ test(
         );
         assert.equal(scoped.status(), 503);
         assert.match((await scoped.json()).message, /database update/);
+        return;
+      }
+      if (process.env.TEST_OPERATIONS_ONLY === "1") {
+        await exerciseOperations(
+          page,
+          db,
+          origin,
+          user.id,
+          capture,
+          accessible,
+        );
+        assert.deepEqual(runtimeErrors, []);
         return;
       }
       if (process.env.TEST_DOWNLOADS_ONLY === "1") {
@@ -886,6 +899,7 @@ test(
       await exerciseNumericInput(page, db, origin);
       await exerciseDownloads(page, origin);
       await exerciseAdvancedTables(page, origin, capture, accessible);
+      await exerciseOperations(page, db, origin, user.id, capture, accessible);
       await exerciseRecordLoading(page, db, origin, capture, accessible);
       await exerciseCoaProductionDates(page, db, origin, capture, accessible);
       await exerciseReleaseReadiness(page, db, origin, capture, accessible);
@@ -1730,6 +1744,29 @@ test(
           ),
       );
       assert.deepEqual(runtimeErrors, []);
+    } catch (error) {
+      if (browser) {
+        const pages = browser.contexts().flatMap((context) => context.pages());
+        const active = pages[0];
+        if (active) {
+          await active
+            .screenshot({
+              path: "/workspace/manufacturing-full-review/failure.png",
+              fullPage: true,
+            })
+            .catch(() => {});
+          console.error(
+            "Browser failure state",
+            (
+              await active
+                .locator("body")
+                .innerText()
+                .catch(() => "")
+            ).slice(-4000),
+          );
+        }
+      }
+      throw error;
     } finally {
       if (browser) await browser.close();
       app.kill();

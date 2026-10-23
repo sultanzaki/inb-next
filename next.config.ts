@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
+    "/api/operations-document/**": [
+      "./src/assets/fonts/**/*",
+      "./src/assets/coa/Fallback.ttf",
+      "./public/logo.png",
+    ],
     "/api/erp/**": [
       "./src/assets/fonts/**/*",
       "./src/assets/coa/**/*",

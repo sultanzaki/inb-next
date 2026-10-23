@@ -2,7 +2,7 @@ import { before, after, test } from "node:test";
 import assert from "node:assert/strict";
 import { Client } from "pg";
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { entityColumns } from "../src/lib/tables/schema";
 const db = new Client({
   connectionString:
@@ -19,6 +19,11 @@ before(async () => {
   );
   await db.query(sql);
   await db.query(sql);
+  const directory = new URL("../src/lib/db/migrations/", import.meta.url);
+  for (const file of (await readdir(directory))
+    .filter((file) => /^0(1[8-9]|2[0-7])_.*\.sql$/.test(file))
+    .sort())
+    await db.query(await readFile(new URL(file, directory), "utf8"));
 });
 after(() => db.end());
 async function fixture() {
