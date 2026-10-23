@@ -130,6 +130,7 @@ export function useTableState(entity: string, onQueryChange?: () => void) {
   }
   return {
     entity,
+    ready: stored?.key === key,
     columns,
     query: current.query,
     layout: current.layout,

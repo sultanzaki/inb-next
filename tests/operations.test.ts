@@ -224,3 +224,52 @@ test("changing a reference source clears scoped choices without changing quantit
   assert.equal(reservation.lot_id, "");
   assert.equal(reservation.quantity, "7");
 });
+
+test("save feedback distinguishes rejection from an unconfirmed outcome without retrying", async () => {
+  const { saveRequest, SaveRequestError } =
+    await import("../src/lib/save-request");
+  const original = globalThis.fetch;
+  let requests = 0;
+  try {
+    globalThis.fetch = async () => {
+      requests++;
+      return new Response(
+        JSON.stringify({
+          message: "Choose a location.",
+          fields: [{ path: "location_id", message: "Choose a location." }],
+        }),
+        { status: 400 },
+      );
+    };
+    await assert.rejects(
+      saveRequest("/test", {}),
+      (error: unknown) =>
+        error instanceof SaveRequestError &&
+        !error.uncertain &&
+        error.fields[0].path === "location_id",
+    );
+    assert.equal(requests, 1);
+    globalThis.fetch = async () => {
+      requests++;
+      throw new TypeError("network failed");
+    };
+    await assert.rejects(
+      saveRequest("/test", {}),
+      (error: unknown) => error instanceof SaveRequestError && error.uncertain,
+    );
+    assert.equal(requests, 2);
+    globalThis.fetch = async () => {
+      requests++;
+      return new Response(JSON.stringify({ message: "Gateway unavailable" }), {
+        status: 502,
+      });
+    };
+    await assert.rejects(
+      saveRequest("/test", {}),
+      (error: unknown) => error instanceof SaveRequestError && error.uncertain,
+    );
+    assert.equal(requests, 3);
+  } finally {
+    globalThis.fetch = original;
+  }
+});

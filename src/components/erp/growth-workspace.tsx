@@ -1,4 +1,6 @@
 "use client";
+import { useWorkPosition } from "@/components/workspace/use-work-position";
+import { useOperatorState } from "@/components/workspace/form-recovery";
 import { useTableState } from "@/components/tables/use-table-state";
 import { AdvancedRecordsTable } from "@/components/tables/advanced-records-table";
 import { money, units, decimalUnits } from "@/lib/erp/ux";
@@ -364,6 +366,15 @@ function GrowthView({ area }: { area: Area }) {
       row?: RecordRow;
       mode?: string;
     } | null>(null);
+  const positionReady = useWorkPosition(
+    tab.key,
+    { q, state, page },
+    (saved) => {
+      setQ(saved.q);
+      setState(saved.state);
+      setPage(saved.page);
+    },
+  );
   useSearchSeed((query) => {
     setQ(query);
     setPage(1);
@@ -383,7 +394,7 @@ function GrowthView({ area }: { area: Area }) {
     state,
     page,
     productFilter,
-    canRead,
+    canRead && table.ready && positionReady,
     undefined,
     table.query,
   );
@@ -1212,63 +1223,76 @@ function GrowthForm({
 }) {
   const { user } = useUser();
   const erp = useERP();
-  const [holdReceipt, setHoldReceipt] = useState(false);
-  const [requestKey] = useState(() => crypto.randomUUID());
-  const [value, setValue] = useState<Record<string, string>>(() => {
-    const defaults: Record<string, string> = {
-      date: todayISO(),
-      expected_date: todayISO(),
-      due_date: todayISO(),
-      effective_date: todayISO(),
-      expiry_date: "",
-      currency: "IDR",
-      minimum_stock: "0",
-      expected_value: "0",
-      probability: "10",
-      kind: entity === "product_documents" ? "SDS" : "call",
-      language: "en",
-      active: "active",
-      owner_id: user?.id || "",
-      assigned_to: user?.id || "",
-      stage: row?.state || "lead",
-      reason: "",
-      notes: "",
-      contact: "",
-      email: "",
-      phone: "",
-      source: "",
-      terms: "",
-      address: "",
-      tax_id: "",
-      payment_terms: "",
-      expected_close: "",
-    };
-    for (const [k, v] of Object.entries(row || {}))
-      if (v != null && typeof v !== "object") defaults[k] = String(v);
-    defaults.active = row?.active === false ? "inactive" : "active";
-    if (mode === "receive") defaults.date = todayISO();
-    return defaults;
-  });
-  const [picks, setPicks] = useState<Record<string, ERPRow | null>>(() => ({
-    supplier_id: row?.supplier_id
-      ? { id: row.supplier_id, label: row.supplier }
-      : null,
-    unit_id: row?.unit_id ? { id: row.unit_id, label: row.unit } : null,
-    owner_id: {
-      id: row?.owner_id || user?.id || "",
-      label: row?.owner || user?.nama_lengkap,
+  const [holdReceipt, setHoldReceipt] = useOperatorState(
+    `GrowthForm:${entity}:${mode}:holdReceipt`,
+    false,
+  );
+  const [requestKey] = useOperatorState(
+    `GrowthForm:${entity}:${mode}:requestKey`,
+    () => crypto.randomUUID(),
+  );
+  const [value, setValue] = useOperatorState<Record<string, string>>(
+    `GrowthForm:${entity}:${mode}:value`,
+    () => {
+      const defaults: Record<string, string> = {
+        date: todayISO(),
+        expected_date: todayISO(),
+        due_date: todayISO(),
+        effective_date: todayISO(),
+        expiry_date: "",
+        currency: "IDR",
+        minimum_stock: "0",
+        expected_value: "0",
+        probability: "10",
+        kind: entity === "product_documents" ? "SDS" : "call",
+        language: "en",
+        active: "active",
+        owner_id: user?.id || "",
+        assigned_to: user?.id || "",
+        stage: row?.state || "lead",
+        reason: "",
+        notes: "",
+        contact: "",
+        email: "",
+        phone: "",
+        source: "",
+        terms: "",
+        address: "",
+        tax_id: "",
+        payment_terms: "",
+        expected_close: "",
+      };
+      for (const [k, v] of Object.entries(row || {}))
+        if (v != null && typeof v !== "object") defaults[k] = String(v);
+      defaults.active = row?.active === false ? "inactive" : "active";
+      if (mode === "receive") defaults.date = todayISO();
+      return defaults;
     },
-    assigned_to: { id: user?.id || "", label: user?.nama_lengkap },
-    product_id: row?.product_id
-      ? { id: row.product_id, label: row.product }
-      : null,
-    opportunity_id: row?.opportunity_id
-      ? { id: row.opportunity_id, label: row.company }
-      : null,
-  }));
-  const [purchaseLines, setPurchaseLines] = useState<
+  );
+  const [picks, setPicks] = useOperatorState<Record<string, ERPRow | null>>(
+    `GrowthForm:${entity}:${mode}:picks`,
+    () => ({
+      supplier_id: row?.supplier_id
+        ? { id: row.supplier_id, label: row.supplier }
+        : null,
+      unit_id: row?.unit_id ? { id: row.unit_id, label: row.unit } : null,
+      owner_id: {
+        id: row?.owner_id || user?.id || "",
+        label: row?.owner || user?.nama_lengkap,
+      },
+      assigned_to: { id: user?.id || "", label: user?.nama_lengkap },
+      product_id: row?.product_id
+        ? { id: row.product_id, label: row.product }
+        : null,
+      opportunity_id: row?.opportunity_id
+        ? { id: row.opportunity_id, label: row.company }
+        : null,
+    }),
+  );
+  const [purchaseLines, setPurchaseLines] = useOperatorState<
     { key: string; material: ERPRow | null; quantity: string; price: string }[]
   >(
+    `GrowthForm:${entity}:${mode}:purchaseLines`,
     () =>
       row?.lines?.map((l) => ({
         key: l.id,
@@ -1283,7 +1307,8 @@ function GrowthForm({
         { key: crypto.randomUUID(), material: null, quantity: "", price: "" },
       ],
   );
-  const [receiptLines, setReceiptLines] = useState(
+  const [receiptLines, setReceiptLines] = useOperatorState(
+    `GrowthForm:${entity}:${mode}:receiptLines`,
     () =>
       row?.lines
         ?.filter((l) => l.outstanding !== "0.000000")

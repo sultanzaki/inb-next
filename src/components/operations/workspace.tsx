@@ -1,4 +1,5 @@
 "use client";
+import { useWorkPosition } from "@/components/workspace/use-work-position";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -306,25 +307,35 @@ export function OperationsWorkspace({ entity }: { entity: string }) {
     [page, setPage] = useState(1),
     [action, setAction] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(params.get("record"));
+  const positionReady = useWorkPosition(entity, { q, state, page }, (saved) => {
+    setQ(saved.q);
+    setSearch(saved.q);
+    setState(saved.state);
+    setPage(saved.page);
+  });
   const files = useFileDownload();
   const table = useTableState("work_" + entity, () => setPage(1));
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearch(q);
-      setPage(1);
+      if (q !== search) setPage(1);
     }, 250);
     return () => clearTimeout(timer);
-  }, [q]);
+  }, [q, search]);
   useEffect(() => {
     const timer = setTimeout(() => setSelected(params.get("record")), 0);
     return () => clearTimeout(timer);
   }, [params]);
-  const list = useWorkRecords(entity, {
-    q: search,
-    state,
-    page,
-    grid: table.query,
-  });
+  const list = useWorkRecords(
+    entity,
+    {
+      q: search,
+      state,
+      page,
+      grid: table.query,
+    },
+    table.ready && positionReady,
+  );
   const detail = useWorkRecords(entity, { id: selected }, Boolean(selected));
   const row = detail.data.rows[0];
   function select(id: string | null) {
