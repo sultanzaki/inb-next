@@ -1,4 +1,5 @@
 "use client";
+import { RecordOverview } from "@/components/workspace/record-overview";
 import { useWorkPosition } from "@/components/workspace/use-work-position";
 import { useFileDownload } from "@/components/workspace/use-file-download";
 import { useTableState } from "@/components/tables/use-table-state";
@@ -717,8 +718,10 @@ function RecordDetail({
         <p>Record not found.</p>
       ) : (
         <>
+          <RecordOverview row={row} entity={entity} />
           {(order || quote || movement) && (
             <>
+              <DocumentFlow entity={entity} id={id} />
               <TransactionControls
                 entity={entity}
                 id={id}
@@ -728,7 +731,6 @@ function RecordDetail({
                   onDone(id, entity);
                 }}
               />
-              <DocumentFlow entity={entity} id={id} />
             </>
           )}
           {movement &&

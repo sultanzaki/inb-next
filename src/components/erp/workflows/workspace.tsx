@@ -1,4 +1,5 @@
 "use client";
+import { RecordOverview } from "@/components/workspace/record-overview";
 import { useWorkPosition } from "@/components/workspace/use-work-position";
 import { CaseGuide } from "@/components/operations/case-guide";
 import { useTableState } from "@/components/tables/use-table-state";
@@ -176,6 +177,7 @@ function Detail({
           <p>Record not found.</p>
         ) : (
           <>
+            <RecordOverview row={r} entity={entity} />
             <div className="workflow-record-meta">
               <Badge variant="secondary">{human(value(r, "state"))}</Badge>
               {Boolean(r.kind) && (

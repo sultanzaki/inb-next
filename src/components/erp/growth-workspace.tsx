@@ -1,4 +1,5 @@
 "use client";
+import { RecordOverview } from "@/components/workspace/record-overview";
 import { useWorkPosition } from "@/components/workspace/use-work-position";
 import { useOperatorState } from "@/components/workspace/form-recovery";
 import { useTableState } from "@/components/tables/use-table-state";
@@ -677,16 +678,17 @@ function GrowthView({ area }: { area: Area }) {
             onClose={() => setSelected(null)}
           >
             <div className="growth-detail">
+              <RecordOverview row={selected} entity={tab.key} />
               <>
                 {tab.key === "purchases" && (
                   <>
+                    <DocumentFlow entity="purchases" id={selected.id} />
                     <TransactionControls
                       entity="purchases"
                       id={selected.id}
                       currency={text(selected.currency) || "IDR"}
                       onDone={done}
                     />
-                    <DocumentFlow entity="purchases" id={selected.id} />
                   </>
                 )}
                 <RecordDetail row={selected} entity={tab.key} />

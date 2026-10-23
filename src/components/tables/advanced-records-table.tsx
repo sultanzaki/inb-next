@@ -88,10 +88,12 @@ export function AdvancedRecordsTable({
   summary,
   context,
   onContext,
+  visualization,
 }: {
   state: TableState;
   rows: Record<string, unknown>[];
   children: ReactNode;
+  visualization?: ReactNode;
   search?: string;
   status?: string;
   onRestore?: (search: string, state: string) => void;
@@ -322,236 +324,250 @@ export function AdvancedRecordsTable({
           ))}
         </div>
       )}
-      <Table
-        data-actions="true"
-        style={{
-          minWidth: `calc(${visible.reduce((sum, c) => sum + (layout.widths[c.key] || 160), 0)}px + var(--table-actions-width))`,
-        }}
-      >
-        <TableHeader>
-          <TableRow>
-            {visible.map((col, i) => {
-              const sorting = query.sorts.find((s) => s.field === col.key);
-              return (
-                <TableHead
-                  key={col.key}
-                  style={{
-                    width: layout.widths[col.key] || 160,
-                    minWidth: layout.widths[col.key] || 160,
-                  }}
-                  data-pinned={layout.pinned.includes(col.key) || undefined}
-                  aria-sort={
-                    sorting
-                      ? sorting.direction === "asc"
-                        ? "ascending"
-                        : "descending"
-                      : undefined
-                  }
-                >
-                  <button
-                    className="grid-header-sort"
-                    onClick={(e) => sort(col.key, e.shiftKey)}
-                    title="Sort column. Shift-click to add another sort."
-                  >
-                    <span className="grid-column-title">{col.label}</span>
-                    {sorting?.direction === "asc" ? (
-                      <ArrowUp className="size-3" />
-                    ) : sorting ? (
-                      <ArrowDown className="size-3" />
-                    ) : null}
-                    {query.sorts.length > 1 && sorting && (
-                      <sup>{query.sorts.indexOf(sorting) + 1}</sup>
-                    )}
-                  </button>
-                  <ColumnMenu
-                    column={col}
-                    state={state}
-                    onFilter={() => {
-                      if (query.filters.length >= 12) {
-                        toast.error(
-                          "Remove a condition before adding another.",
-                        );
-                        return;
-                      }
-                      setDraft({
-                        ...query,
-                        filters: [
-                          ...query.filters,
-                          {
-                            field: col.key,
-                            op: col.type === "text" ? "contains" : "eq",
-                            value: "",
-                          },
-                        ].slice(-12) as TableQuery["filters"],
-                      });
-                      setPanel("filters");
-                    }}
-                  />
-                  <ColumnResize
-                    label={col.label}
-                    width={layout.widths[col.key] || 160}
-                    onResize={(width) =>
-                      state.setLayout((layout) => ({
-                        ...layout,
-                        widths: { ...layout.widths, [col.key]: width },
-                      }))
-                    }
-                  />
-                  {i === 0 && layout.pinned.length > 0 && (
-                    <Pin className="size-3" />
-                  )}
-                </TableHead>
-              );
-            })}
-            <TableHead style={{ width: "var(--table-actions-width)" }}>
-              Actions
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.length === 0
-            ? originalRows
-            : displayRows.map((row, index) => {
-                const old =
-                  originalRows.find((r) =>
-                    String(r.key).endsWith(String(row.id)),
-                  ) || originalRows[rows.indexOf(row)];
-                const cells = elements(old?.props.children);
-                const rowProps = old?.props as
-                  | {
-                      onClick?: MouseEventHandler<HTMLTableRowElement>;
-                      className?: string;
-                    }
-                  | undefined;
-                const group = display(fieldValue(row, layout.group));
-                const startGroup =
-                  layout.group &&
-                  (index === 0 ||
-                    group !==
-                      display(
-                        fieldValue(displayRows[index - 1], layout.group),
-                      ));
+      {visualization ?? (
+        <Table
+          data-actions="true"
+          style={{
+            minWidth: `calc(${visible.reduce((sum, c) => sum + (layout.widths[c.key] || 160), 0)}px + var(--table-actions-width))`,
+          }}
+        >
+          <TableHeader>
+            <TableRow>
+              {visible.map((col, i) => {
+                const sorting = query.sorts.find((s) => s.field === col.key);
                 return (
-                  <Fragment key={String(row.id || index)}>
-                    {startGroup && (
-                      <TableRow className="grid-group-row">
-                        <TableCell colSpan={visible.length + 1}>
-                          <button
-                            aria-expanded={!collapsed.includes(group)}
-                            onClick={() =>
-                              setCollapsed(
-                                collapsed.includes(group)
-                                  ? collapsed.filter((g) => g !== group)
-                                  : [...collapsed, group],
-                              )
-                            }
-                          >
-                            {collapsed.includes(group) ? "▸" : "▾"}{" "}
-                            {columns.find((c) => c.key === layout.group)?.label}
-                            : {group} · {grouped?.get(group)} rows on this page
-                          </button>
-                        </TableCell>
-                      </TableRow>
+                  <TableHead
+                    key={col.key}
+                    style={{
+                      width: layout.widths[col.key] || 160,
+                      minWidth: layout.widths[col.key] || 160,
+                    }}
+                    data-pinned={layout.pinned.includes(col.key) || undefined}
+                    aria-sort={
+                      sorting
+                        ? sorting.direction === "asc"
+                          ? "ascending"
+                          : "descending"
+                        : undefined
+                    }
+                  >
+                    <button
+                      className="grid-header-sort"
+                      onClick={(e) => sort(col.key, e.shiftKey)}
+                      title="Sort column. Shift-click to add another sort."
+                    >
+                      <span className="grid-column-title">{col.label}</span>
+                      {sorting?.direction === "asc" ? (
+                        <ArrowUp className="size-3" />
+                      ) : sorting ? (
+                        <ArrowDown className="size-3" />
+                      ) : null}
+                      {query.sorts.length > 1 && sorting && (
+                        <sup>{query.sorts.indexOf(sorting) + 1}</sup>
+                      )}
+                    </button>
+                    <ColumnMenu
+                      column={col}
+                      state={state}
+                      onFilter={() => {
+                        if (query.filters.length >= 12) {
+                          toast.error(
+                            "Remove a condition before adding another.",
+                          );
+                          return;
+                        }
+                        setDraft({
+                          ...query,
+                          filters: [
+                            ...query.filters,
+                            {
+                              field: col.key,
+                              op: col.type === "text" ? "contains" : "eq",
+                              value: "",
+                            },
+                          ].slice(-12) as TableQuery["filters"],
+                        });
+                        setPanel("filters");
+                      }}
+                    />
+                    <ColumnResize
+                      label={col.label}
+                      width={layout.widths[col.key] || 160}
+                      onResize={(width) =>
+                        state.setLayout((layout) => ({
+                          ...layout,
+                          widths: { ...layout.widths, [col.key]: width },
+                        }))
+                      }
+                    />
+                    {i === 0 && layout.pinned.length > 0 && (
+                      <Pin className="size-3" />
                     )}
-                    {(!layout.group || !collapsed.includes(group)) && (
-                      <TableRow
-                        onClick={rowProps?.onClick}
-                        className={rowProps?.className}
-                      >
-                        {visible.map((col) => (
-                          <TableCell
-                            key={col.key}
-                            title={String(fieldValue(row, col.key) ?? "")}
-                            data-pinned={
-                              layout.pinned.includes(col.key) || undefined
-                            }
-                            style={{ minWidth: layout.widths[col.key] || 160 }}
-                          >
-                            {col.key === columns[0]?.key && cells[0] ? (
-                              cells[0].props.children
-                            ) : (
-                              <span
-                                className={
-                                  col.type === "number"
-                                    ? "font-data tabular-nums"
-                                    : ""
-                                }
-                                onDoubleClick={() =>
-                                  void copy(
-                                    String(fieldValue(row, col.key) ?? ""),
-                                  )
-                                }
-                                onClick={(e) => e.stopPropagation()}
-                                title="Double-click to copy"
-                              >
-                                {[
-                                  "state",
-                                  "status",
-                                  "display_state",
-                                  "terms.state",
-                                ].includes(col.key) &&
-                                fieldValue(row, col.key) != null ? (
-                                  <Badge
-                                    variant={
-                                      [
-                                        "FAIL",
-                                        "rejected",
-                                        "overdue",
-                                        "void",
-                                        "expired",
-                                        "hold",
-                                        "withdrawn",
-                                      ].includes(
-                                        String(fieldValue(row, col.key)),
-                                      )
-                                        ? "destructive"
-                                        : [
-                                              "PASS",
-                                              "released",
-                                              "posted",
-                                              "confirmed",
-                                              "paid",
-                                              "verified",
-                                              "active",
-                                              "approved",
-                                              "accepted",
-                                              "valid",
-                                              "published",
-                                            ].includes(
-                                              String(fieldValue(row, col.key)),
-                                            )
-                                          ? "default"
-                                          : "secondary"
-                                    }
-                                  >
-                                    {display(
-                                      fieldValue(row, col.key),
-                                      col.type,
-                                    )}
-                                  </Badge>
-                                ) : (
-                                  display(fieldValue(row, col.key), col.type)
-                                )}
-                                {col.key === "status" &&
-                                  row.superseded === true && (
-                                    <Badge variant="secondary">
-                                      Superseded
-                                    </Badge>
-                                  )}
-                              </span>
-                            )}
-                          </TableCell>
-                        ))}
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          {cells.at(-1)?.props.children}
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </Fragment>
+                  </TableHead>
                 );
               })}
-        </TableBody>
-      </Table>
+              <TableHead style={{ width: "var(--table-actions-width)" }}>
+                Actions
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.length === 0
+              ? originalRows
+              : displayRows.map((row, index) => {
+                  const old =
+                    originalRows.find((r) =>
+                      String(r.key).endsWith(String(row.id)),
+                    ) || originalRows[rows.indexOf(row)];
+                  const cells = elements(old?.props.children);
+                  const rowProps = old?.props as
+                    | {
+                        onClick?: MouseEventHandler<HTMLTableRowElement>;
+                        className?: string;
+                      }
+                    | undefined;
+                  const group = display(fieldValue(row, layout.group));
+                  const startGroup =
+                    layout.group &&
+                    (index === 0 ||
+                      group !==
+                        display(
+                          fieldValue(displayRows[index - 1], layout.group),
+                        ));
+                  return (
+                    <Fragment key={String(row.id || index)}>
+                      {startGroup && (
+                        <TableRow className="grid-group-row">
+                          <TableCell colSpan={visible.length + 1}>
+                            <button
+                              aria-expanded={!collapsed.includes(group)}
+                              onClick={() =>
+                                setCollapsed(
+                                  collapsed.includes(group)
+                                    ? collapsed.filter((g) => g !== group)
+                                    : [...collapsed, group],
+                                )
+                              }
+                            >
+                              {collapsed.includes(group) ? "▸" : "▾"}{" "}
+                              {
+                                columns.find((c) => c.key === layout.group)
+                                  ?.label
+                              }
+                              : {group} · {grouped?.get(group)} rows on this
+                              page
+                            </button>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {(!layout.group || !collapsed.includes(group)) && (
+                        <TableRow
+                          onClick={rowProps?.onClick}
+                          className={rowProps?.className}
+                        >
+                          {visible.map((col) => (
+                            <TableCell
+                              key={col.key}
+                              data-value-type={col.type}
+                              data-identity={
+                                col.key === columns[0]?.key || undefined
+                              }
+                              title={String(fieldValue(row, col.key) ?? "")}
+                              data-pinned={
+                                layout.pinned.includes(col.key) || undefined
+                              }
+                              style={{
+                                minWidth: layout.widths[col.key] || 160,
+                              }}
+                            >
+                              {col.key === columns[0]?.key && cells[0] ? (
+                                cells[0].props.children
+                              ) : (
+                                <span
+                                  className={
+                                    col.type === "number"
+                                      ? "font-data tabular-nums"
+                                      : ""
+                                  }
+                                  onDoubleClick={() =>
+                                    void copy(
+                                      String(fieldValue(row, col.key) ?? ""),
+                                    )
+                                  }
+                                  onClick={(e) => e.stopPropagation()}
+                                  title="Double-click to copy"
+                                >
+                                  {[
+                                    "state",
+                                    "status",
+                                    "display_state",
+                                    "terms.state",
+                                  ].includes(col.key) &&
+                                  fieldValue(row, col.key) != null ? (
+                                    <Badge
+                                      variant={
+                                        [
+                                          "FAIL",
+                                          "rejected",
+                                          "overdue",
+                                          "void",
+                                          "expired",
+                                          "hold",
+                                          "withdrawn",
+                                        ].includes(
+                                          String(fieldValue(row, col.key)),
+                                        )
+                                          ? "destructive"
+                                          : [
+                                                "PASS",
+                                                "released",
+                                                "posted",
+                                                "confirmed",
+                                                "paid",
+                                                "verified",
+                                                "active",
+                                                "approved",
+                                                "accepted",
+                                                "valid",
+                                                "published",
+                                              ].includes(
+                                                String(
+                                                  fieldValue(row, col.key),
+                                                ),
+                                              )
+                                            ? "default"
+                                            : "secondary"
+                                      }
+                                    >
+                                      {display(
+                                        fieldValue(row, col.key),
+                                        col.type,
+                                      )}
+                                    </Badge>
+                                  ) : (
+                                    display(fieldValue(row, col.key), col.type)
+                                  )}
+                                  {col.key === "status" &&
+                                    row.superseded === true && (
+                                      <Badge variant="secondary">
+                                        Superseded
+                                      </Badge>
+                                    )}
+                                </span>
+                              )}
+                            </TableCell>
+                          ))}
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            {cells.at(-1)?.props.children}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
+                  );
+                })}
+          </TableBody>
+        </Table>
+      )}
       {summary && summary.length > 0 && (
         <div className="grid-group-summary" aria-label="Filtered totals">
           <span>Filtered totals · all matching records</span>

@@ -1,3 +1,4 @@
+import { exerciseTransactionDesign } from "./transaction-design-browser";
 import { exerciseOperatorWorkflow } from "./operator-workflow-browser";
 import { exerciseInteractionStability } from "./interaction-stability-browser";
 import { exerciseOperations } from "./operations-browser";
@@ -383,6 +384,11 @@ test(
         );
         assert.equal(scoped.status(), 503);
         assert.match((await scoped.json()).message, /database update/);
+        return;
+      }
+      if (process.env.TEST_DESIGN_ONLY === "1") {
+        await exerciseTransactionDesign(page, db, origin, user.id, capture);
+        assert.deepEqual(runtimeErrors, []);
         return;
       }
       if (process.env.TEST_OPERATOR_ONLY === "1") {
