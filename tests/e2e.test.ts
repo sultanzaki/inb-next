@@ -1,3 +1,4 @@
+import { exerciseOperatorWorkflow } from "./operator-workflow-browser";
 import { exerciseInteractionStability } from "./interaction-stability-browser";
 import { exerciseOperations } from "./operations-browser";
 import { exerciseDownloads } from "./downloads-browser";
@@ -266,6 +267,13 @@ test(
         timezoneId: "Asia/Jakarta",
         viewport: { width: 1440, height: 1000 },
       });
+      await context.addInitScript(() => {
+        try {
+          localStorage.setItem("inb:form-layout", "all");
+        } catch {
+          // Storage can be unavailable in the privacy-mode regression tests.
+        }
+      });
       const page = await context.newPage();
       page.setDefaultTimeout(20000);
       // Test-directed hard navigation intentionally leaves disposable draft forms.
@@ -375,6 +383,11 @@ test(
         );
         assert.equal(scoped.status(), 503);
         assert.match((await scoped.json()).message, /database update/);
+        return;
+      }
+      if (process.env.TEST_OPERATOR_ONLY === "1") {
+        await exerciseOperatorWorkflow(page, db, origin);
+        assert.deepEqual(runtimeErrors, []);
         return;
       }
       if (process.env.TEST_INTERACTIONS_ONLY === "1") {
@@ -915,6 +928,7 @@ test(
       await exerciseNumericInput(page, db, origin);
       await exerciseDownloads(page, origin);
       await exerciseAdvancedTables(page, origin, capture, accessible);
+      await exerciseOperatorWorkflow(page, db, origin);
       await exerciseInteractionStability(page, db, origin);
       await exerciseOperations(page, db, origin, user.id, capture, accessible);
       await exerciseRecordLoading(page, db, origin, capture, accessible);

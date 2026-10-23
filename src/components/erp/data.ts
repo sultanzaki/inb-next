@@ -1,4 +1,5 @@
 "use client";
+import { saveRequest, SaveRequestError } from "@/lib/save-request";
 import { invalidateERPReads, readERPPage } from "@/lib/erp/read-request";
 import { useEffect, useRef, useState } from "react";
 import { entityColumns, type TableQuery } from "@/lib/tables/schema";
@@ -88,27 +89,15 @@ export function useERPPage(
     refresh: () => setVersion((v) => v + 1),
   };
 }
-export class ERPRequestError extends Error {
-  constructor(
-    message: string,
-    public fields: { path: string; message: string }[] = [],
-  ) {
-    super(message);
-  }
-}
+export { SaveRequestError as ERPRequestError };
 export async function erpAction(action: ERPAction, payload: unknown) {
   invalidateERPReads();
-  const r = await fetch("/api/erp/" + action, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const data = await r.json();
-  invalidateERPReads();
-  if (!r.ok)
-    throw new ERPRequestError(
-      data.message || "Could not save changes.",
-      data.fields || [],
+  try {
+    return await saveRequest<{ id?: string; entity?: string }>(
+      "/api/erp/" + action,
+      payload,
     );
-  return data as { id?: string; entity?: string };
+  } finally {
+    invalidateERPReads();
+  }
 }

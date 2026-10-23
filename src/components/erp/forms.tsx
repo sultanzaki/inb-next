@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useOperatorState } from "@/components/workspace/form-recovery";
 import { useSearchParams } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -68,7 +68,7 @@ function UnitInput({
   );
 }
 export function CustomerForm({ row, onDone }: { row?: ERPRow; onDone: Done }) {
-  const [value, setValue] = useState({
+  const [value, setValue] = useOperatorState("CustomerForm:value", {
     id: row?.id,
     name: row?.name || "",
     contact: row?.contact || "",
@@ -156,18 +156,28 @@ export function MoveForm({
   row?: ERPRow;
   onDone: Done;
 }) {
-  const [kind, setKind] = useState(
+  const [kind, setKind] = useOperatorState(
+      "MoveForm:kind",
       row?.kind || (production ? "production" : "receipt"),
     ),
-    [date, setDate] = useState(row?.date || businessDate()),
-    [reason, setReason] = useState(row?.reason || "");
-  const [from, setFrom] = useState<ERPRow | null>(
+    [date, setDate] = useOperatorState(
+      "MoveForm:date",
+      row?.date || businessDate(),
+    ),
+    [reason, setReason] = useOperatorState(
+      "MoveForm:reason",
+      row?.reason || "",
+    );
+  const [from, setFrom] = useOperatorState<ERPRow | null>(
+      "MoveForm:from",
       row?.from_location ? { id: row.from_location, label: row.source } : null,
     ),
-    [to, setTo] = useState<ERPRow | null>(
+    [to, setTo] = useOperatorState<ERPRow | null>(
+      "MoveForm:to",
       row?.to_location ? { id: row.to_location, label: row.destination } : null,
     );
-  const [lines, setLines] = useState<MoveLine[]>(
+  const [lines, setLines] = useOperatorState<MoveLine[]>(
+    "MoveForm:lines",
     row?.lines?.map((l) => ({
       product: {
         id: l.product_id,
@@ -449,17 +459,19 @@ type QuoteEditLine = {
 };
 export function QuoteForm({ row, onDone }: { row?: ERPRow; onDone: Done }) {
   const params = useSearchParams();
-  const [opportunity, setOpportunity] = useState(
+  const [opportunity, setOpportunity] = useOperatorState(
+    "QuoteForm:opportunity",
     row?.opportunity_id || (!row ? params.get("opportunity") : "") || "",
   );
-  const [customer, setCustomer] = useState<ERPRow | null>(
+  const [customer, setCustomer] = useOperatorState<ERPRow | null>(
+    "QuoteForm:customer",
     row?.customer_id
       ? { id: row.customer_id, label: row.customer }
       : !row && params.get("customer")
         ? { id: params.get("customer")!, label: "Customer linked from CRM" }
         : null,
   );
-  const [value, setValue] = useState({
+  const [value, setValue] = useOperatorState("QuoteForm:value", {
     id: row?.id,
     version: row?.version,
     date: row?.date || businessDate(),
@@ -471,7 +483,8 @@ export function QuoteForm({ row, onDone }: { row?: ERPRow; onDone: Done }) {
     tax_rate: String(row?.tax_rate ?? "0"),
     freight: String(row?.freight ?? "0"),
   });
-  const [lines, setLines] = useState<QuoteEditLine[]>(
+  const [lines, setLines] = useOperatorState<QuoteEditLine[]>(
+    "QuoteForm:lines",
     row?.lines?.map((l) => ({
       product: {
         id: l.product_id,
@@ -706,10 +719,10 @@ export function QuoteForm({ row, onDone }: { row?: ERPRow; onDone: Done }) {
   );
 }
 export function CountForm({ onDone }: { onDone: Done }) {
-  const [loc, setLoc] = useState<ERPRow | null>(null),
-    [date, setDate] = useState(businessDate()),
-    [blind, setBlind] = useState(true),
-    [reason, setReason] = useState("");
+  const [loc, setLoc] = useOperatorState<ERPRow | null>("CountForm:loc", null),
+    [date, setDate] = useOperatorState("CountForm:date", businessDate()),
+    [blind, setBlind] = useOperatorState("CountForm:blind", true),
+    [reason, setReason] = useOperatorState("CountForm:reason", "");
   return (
     <ERPForm
       action="create_count"
@@ -768,7 +781,10 @@ export function CountEntryForm({
   };
   onDone: Done;
 }) {
-  const [qty, setQty] = useState(line.counted || "");
+  const [qty, setQty] = useOperatorState(
+    "CountEntryForm:qty",
+    line.counted || "",
+  );
   return (
     <ERPForm
       action="count_line"
@@ -791,9 +807,9 @@ export function CountEntryForm({
   );
 }
 export function CountAddForm({ id, onDone }: { id: string; onDone: Done }) {
-  const [p, setP] = useState<ERPRow | null>(null),
-    [lot, setLot] = useState(""),
-    [mfg, setMfg] = useState("");
+  const [p, setP] = useOperatorState<ERPRow | null>("CountAddForm:p", null),
+    [lot, setLot] = useOperatorState("CountAddForm:lot", ""),
+    [mfg, setMfg] = useOperatorState("CountAddForm:mfg", "");
   return (
     <ERPForm
       action="count_add_lot"
@@ -830,8 +846,14 @@ export function ReserveForm({
   line: OrderLine;
   onDone: Done;
 }) {
-  const [stock, setStock] = useState<ERPRow | null>(null),
-    [quantity, setQuantity] = useState(line.unreserved || "");
+  const [stock, setStock] = useOperatorState<ERPRow | null>(
+      "ReserveForm:stock",
+      null,
+    ),
+    [quantity, setQuantity] = useOperatorState(
+      "ReserveForm:quantity",
+      line.unreserved || "",
+    );
   return (
     <ERPForm
       action="reserve"
@@ -876,11 +898,15 @@ export function DeliveryForm({ row, onDone }: { row: ERPRow; onDone: Done }) {
     (r) =>
       r.state === "active" && r.remaining !== "0" && r.remaining !== "0.000000",
   );
-  const [location, setLocation] = useState(active[0]?.location_id || ""),
-    [selected, setSelected] = useState<Record<string, string>>(
+  const [location, setLocation] = useOperatorState(
+      "DeliveryForm:location",
+      active[0]?.location_id || "",
+    ),
+    [selected, setSelected] = useOperatorState<Record<string, string>>(
+      "DeliveryForm:selected",
       Object.fromEntries(active.map((r) => [r.id, r.remaining])),
     ),
-    [reason, setReason] = useState("");
+    [reason, setReason] = useOperatorState("DeliveryForm:reason", "");
   const lines = active
     .filter((r) => r.location_id === location && selected[r.id])
     .map((r) => ({ reservation_id: r.id, quantity: selected[r.id] }));
@@ -945,7 +971,7 @@ export function ConfigurationForm({
   action: ERPAction;
   onDone: Done;
 }) {
-  const [value, setValue] = useState({
+  const [value, setValue] = useOperatorState("ConfigurationForm:value", {
       code: "",
       name: "",
       factor: "1",
@@ -955,9 +981,18 @@ export function ConfigurationForm({
       write: false,
       approve: false,
     }),
-    [product, setProduct] = useState<ERPRow | null>(null),
-    [unit, setUnit] = useState<ERPRow | null>(null),
-    [user, setUser] = useState<ERPRow | null>(null);
+    [product, setProduct] = useOperatorState<ERPRow | null>(
+      "ConfigurationForm:product",
+      null,
+    ),
+    [unit, setUnit] = useOperatorState<ERPRow | null>(
+      "ConfigurationForm:unit",
+      null,
+    ),
+    [user, setUser] = useOperatorState<ERPRow | null>(
+      "ConfigurationForm:user",
+      null,
+    );
   const payload =
     action === "save_conversion"
       ? {
@@ -1077,7 +1112,10 @@ export function ConfigurationForm({
 }
 
 export function AssignCountForm({ id, onDone }: { id: string; onDone: Done }) {
-  const [user, setUser] = useState<ERPRow | null>(null);
+  const [user, setUser] = useOperatorState<ERPRow | null>(
+    "AssignCountForm:user",
+    null,
+  );
   return (
     <ERPForm
       action="assign_count"

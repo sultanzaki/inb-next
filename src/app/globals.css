@@ -7030,3 +7030,26 @@ html.dark {
   color: var(--color-muted);
   line-height: 1.7;
 }
+
+/* Controls remain in the viewport; only the data grid scrolls horizontally. */
+.data-card, .advanced-table, .erp-workspace, .work-workspace, .operational-workspace { min-width: 0; max-width: 100%; }
+.grid-tools, .erp-toolbar, .workflow-toolbar, .data-toolbar { min-width: 0; max-width: 100%; flex-wrap: wrap; height: auto; overflow: visible; }
+.grid-tools > *, .erp-toolbar > *, .workflow-toolbar > * { max-width: 100%; min-width: 0; }
+.grid-tools button { white-space: normal; height: auto; min-height: 36px; padding-block: 7px; overflow-wrap: anywhere; }
+.grid-settings-sheet > [data-slot="sheet-header"] { flex-shrink: 0; padding-right: 54px; }
+.grid-settings-body { flex: 1; overscroll-behavior: contain; overflow-x: hidden; padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+.grid-settings-body fieldset, .grid-settings-body label { min-width: 0; }
+.draft-recovery, .save-uncertain { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; border: 1px solid var(--color-border); background: var(--color-surface-alt); padding: 12px; border-radius: 8px; font-size: 12px; }
+.draft-recovery > div { flex: 1 1 220px; }
+.draft-recovery p, .save-uncertain p { line-height: 1.6; margin-top: 5px; }
+.draft-status, .save-status { font-size: 12px; color: var(--color-muted); line-height: 1.6; }
+.form-journey, .form-step-content { display: flex; flex-direction: column; min-width: 0; gap: 16px; }
+.form-step-content[hidden] { display: none !important; }
+.form-journey-heading, .form-step-actions { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.form-journey-heading strong, .form-step-content h3 { font-size: 13px; font-weight: 600; }
+.form-step-nav { display: flex; flex-wrap: wrap; gap: 6px; }
+.form-step-nav button { flex: 1 1 100px; text-align: left; border: 1px solid var(--color-border); border-radius: 7px; padding: 9px 12px; font-size: 12px; }
+.form-step-nav button[aria-current="step"] { color: var(--color-primary); border-color: var(--color-primary); background: var(--color-surface-alt); }
+.erp-form:has(.form-journey[data-review="false"]) > :is([data-slot="dialog-footer"], .erp-form-actions) :is(button[type="submit"], .slide-confirm-wrap) { display: none; }
+@media (max-width: 767px) { .form-step-nav button { flex-basis: 90px; } .draft-recovery > button { flex: 1; } }
+.grid-settings-sheet { height: 100dvh !important; max-height: 100dvh; }

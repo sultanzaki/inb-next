@@ -1,4 +1,5 @@
 "use client";
+import { useWorkPosition } from "@/components/workspace/use-work-position";
 import { useFileDownload } from "@/components/workspace/use-file-download";
 import { useTableState } from "@/components/tables/use-table-state";
 import { AdvancedRecordsTable } from "@/components/tables/advanced-records-table";
@@ -219,6 +220,15 @@ export function ERPWorkspace({ area }: { area: Area }) {
       return () => clearTimeout(t);
     }
   }, [params, tabs]);
+  const positionReady = useWorkPosition(
+    tab,
+    { q: search, state, page },
+    (saved) => {
+      setSearch(saved.q);
+      setState(saved.state);
+      setPage(saved.page);
+    },
+  );
   function listURL(q = search, s = state, p = page) {
     const next = new URLSearchParams({ view: tab });
     if (q) next.set("q", q);
@@ -236,7 +246,7 @@ export function ERPWorkspace({ area }: { area: Area }) {
       state,
       page,
       undefined,
-      true,
+      table.ready && positionReady,
       undefined,
       table.query,
     );

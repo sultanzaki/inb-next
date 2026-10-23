@@ -1,4 +1,5 @@
 "use client";
+import { useWorkPosition } from "@/components/workspace/use-work-position";
 import { CaseGuide } from "@/components/operations/case-guide";
 import { useTableState } from "@/components/tables/use-table-state";
 import { AdvancedRecordsTable } from "@/components/tables/advanced-records-table";
@@ -667,6 +668,15 @@ export function OperationalWorkspace({
     tab === "material_stock"
       ? tab
       : (area === "finance" ? "fin_" : "ops_") + tab;
+  const positionReady = useWorkPosition(
+    entity,
+    { q: search, state, page },
+    (saved) => {
+      setSearch(saved.q);
+      setState(saved.state);
+      setPage(saved.page);
+    },
+  );
   const table = useTableState(entity, () => setPage(1));
   const result = useERPPage(
     entity,
@@ -674,7 +684,7 @@ export function OperationalWorkspace({
     state,
     page,
     undefined,
-    erp.can(area),
+    erp.can(area) && table.ready && positionReady,
     undefined,
     table.query,
   );

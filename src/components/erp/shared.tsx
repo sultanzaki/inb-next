@@ -13,6 +13,17 @@ import {
   type ReactNode,
   type FormEvent,
 } from "react";
+import { SaveStatus } from "@/components/workspace/save-status";
+import { useOperatorState } from "@/components/workspace/form-recovery";
+import {
+  FormJourney,
+  type JourneyHandle,
+} from "@/components/workspace/form-journey";
+import {
+  FormRecovery,
+  RecoveryNotice,
+  useFormRecovery,
+} from "@/components/workspace/form-recovery";
 import { RecordLoadingBoundary } from "@/components/workspace/record-loading";
 import { toast } from "sonner";
 import { SlideConfirm } from "@/components/ui/slide-confirm";
@@ -171,7 +182,14 @@ export function ERPField({
     </div>
   );
 }
-export function ERPModal({
+export function ERPModal(props: Parameters<typeof ERPModalContent>[0]) {
+  return (
+    <FormRecovery scope={props.title}>
+      <ERPModalContent {...props} />
+    </FormRecovery>
+  );
+}
+function ERPModalContent({
   title,
   description,
   children,
@@ -189,6 +207,7 @@ export function ERPModal({
   loading?: boolean;
 }) {
   const confirm = useConfirm();
+  const recovery = useFormRecovery();
   const [open, setOpen] = useState(true);
   const popup = useRef<HTMLDivElement>(null);
   const closing = useRef(false);
@@ -226,6 +245,8 @@ export function ERPModal({
         }))
       )
         return;
+      if (dirty || popup.current?.querySelector('form[data-dirty="true"]'))
+        recovery?.clear();
       setOpen(false);
     } finally {
       closing.current = false;
@@ -306,6 +327,12 @@ export function ERPForm({
       target?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     });
   }
+  const recovery = useFormRecovery();
+  const journey = useRef<JourneyHandle>(null);
+  const [uncertain, setUncertain] = useOperatorState(
+    "save-uncertain:" + action,
+    false,
+  );
   const pending = useRef(false);
   const slidePermit = useRef(false);
   const requiresSlide =
@@ -313,7 +340,8 @@ export function ERPForm({
   const [initial] = useState(() => JSON.stringify(payload));
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (pending.current) return;
+    if (pending.current || uncertain) return;
+    if (!journey.current?.beforeSubmit()) return;
     if (requiresSlide && !slidePermit.current) return;
     slidePermit.current = false;
     const parsed = actionSchemas[action].safeParse(payload);
@@ -342,6 +370,7 @@ export function ERPForm({
       ).values(),
     );
     if (issues.length) {
+      journey.current?.reveal();
       setFields(issues);
       setError("Review the fields below before saving.");
       focusField(issues[0].path);
@@ -371,10 +400,15 @@ export function ERPForm({
           duration: 2000,
         },
       );
+      recovery?.clear();
       onDone(data.id, data.entity);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save changes.");
-      if (e instanceof ERPRequestError) setFields(e.fields);
+      journey.current?.reveal();
+      if (e instanceof ERPRequestError) {
+        setFields(e.fields);
+        setUncertain(e.uncertain);
+      }
       focusField(e instanceof ERPRequestError ? e.fields[0]?.path : undefined);
     } finally {
       pending.current = false;
@@ -388,7 +422,10 @@ export function ERPForm({
         noValidate
         className="erp-form"
         aria-busy={busy}
-        data-dirty={initial !== JSON.stringify(payload)}
+        data-dirty={
+          initial !== JSON.stringify(payload) ||
+          Boolean(Object.keys(recovery?.restored || {}).length)
+        }
         onSubmit={submit}
         onChange={(event) => {
           const target = event.target;
@@ -406,6 +443,16 @@ export function ERPForm({
         }}
       >
         <div className="erp-form-body">
+          <RecoveryNotice />
+          <SaveStatus
+            uncertain={uncertain}
+            onChecked={() => setUncertain(false)}
+          />
+          {busy && (
+            <p role="status" className="save-status">
+              Saving changes… Keep this form open.
+            </p>
+          )}
           {error && (
             <div role="alert" tabIndex={-1} className="erp-error">
               <p>{error}</p>
@@ -432,14 +479,64 @@ export function ERPForm({
               )}
             </div>
           )}
-          {children}
+          <FormJourney
+            ref={journey}
+            sections={(() => {
+              const items = Children.toArray(children);
+              if (
+                items.length === 1 &&
+                isValidElement<{ className?: string; children?: ReactNode }>(
+                  items[0],
+                ) &&
+                items[0].props.className?.includes("erp-form-grid")
+              ) {
+                const fields = Children.toArray(items[0].props.children);
+                if (fields.length > 6)
+                  return [
+                    {
+                      title: "Primary details",
+                      content: (
+                        <div className="erp-form-grid">
+                          {fields.slice(0, 4)}
+                        </div>
+                      ),
+                    },
+                    {
+                      title: "Additional information",
+                      content: (
+                        <div className="erp-form-grid">{fields.slice(4)}</div>
+                      ),
+                    },
+                  ];
+              }
+
+              const line = items.findIndex(
+                (item) =>
+                  isValidElement<{ className?: string }>(item) &&
+                  item.props.className?.includes("erp-line-editor"),
+              );
+              const cut = line > 0 ? line : Math.ceil(items.length / 2);
+              return items.length >= 5
+                ? [
+                    { title: "Details", content: items.slice(0, cut) },
+                    {
+                      title:
+                        line >= 0
+                          ? "Items and terms"
+                          : "Additional information",
+                      content: items.slice(cut),
+                    },
+                  ]
+                : [{ title: "Details", content: children }];
+            })()}
+          />
         </div>
         <DialogFooter>
           {requiresSlide ? (
             <SlideConfirm
               label={label}
               busy={busy}
-              disabled={disabled}
+              disabled={disabled || uncertain}
               destructive={destructive}
               resetKey={JSON.stringify(payload)}
               onConfirm={() => {
@@ -448,7 +545,11 @@ export function ERPForm({
               }}
             />
           ) : (
-            <Button type="submit" loading={busy} disabled={disabled || busy}>
+            <Button
+              type="submit"
+              loading={busy}
+              disabled={disabled || busy || uncertain}
+            >
               {label}
             </Button>
           )}

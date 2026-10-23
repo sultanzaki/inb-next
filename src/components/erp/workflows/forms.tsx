@@ -1,4 +1,5 @@
 "use client";
+import { useOperatorState } from "@/components/workspace/form-recovery";
 import {
   humanLabel,
   displayNumber,
@@ -7,7 +8,6 @@ import {
   requestSuggestion,
   allocationSuggestion,
 } from "@/lib/erp/ux";
-import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { ERPField, ERPForm } from "../shared";
 import { ERPPicker } from "../picker";
@@ -57,112 +57,148 @@ export function WorkflowForm({
 }) {
   const erp = useERP(),
     terms = object(row, "terms");
-  const [purpose, setPurpose] = useState("auto");
-  const [amountEdited, setAmountEdited] = useState(false);
-  const [requestKey] = useState(() => crypto.randomUUID());
-  const [form, setForm] = useState<Record<string, unknown>>(() => ({
-    id: row?.id,
-    version: row?.version,
-    request_key: requestKey,
-    reason: "",
-    notes: "",
-    date: businessDate(),
-    due_date: action === "fin_create_document" ? "" : businessDate(),
-    kind:
-      action === "fin_record_payment"
-        ? "receipt"
-        : action === "fin_create_document"
-          ? value(row, "_kind", "invoice")
-          : action === "fin_collection"
-            ? "follow_up"
-            : "customer_claim",
-    source_type: "delivery",
-    title: "",
-    description: "",
-    evidence: action === "ops_create_case" ? [] : "",
-    quantity: "",
-    state:
-      (
-        {
-          open: "under_review",
-          under_review: "awaiting_approval",
-          awaiting_approval: "approved",
-          approved: "in_progress",
-          in_progress: "resolved",
-          resolved: "closed",
-          rejected: "closed",
-        } as Record<string, string>
-      )[value(row, "state")] || "under_review",
-    resolution: "no_action",
-    cost_payer: "company",
-    currency: value(row, "currency", "IDR"),
-    settlement_amount: "0",
-    estimated_cost: "0",
-    actual_cost: "0",
-    mode: value(terms, "mode", "prepaid"),
-    deposit_percent: value(terms, "deposit_percent", "0"),
-    due_days: Number(terms.due_days ?? 30),
-    billing_event: value(terms, "billing_event", "dispatch"),
-    order_id:
-      action === "fin_terms" || action === "fin_dispatch_override"
-        ? row?.id
-        : undefined,
-    ...(action === "fin_terms" ? { version: terms.version } : {}),
-    amount:
-      action === "fin_allocate"
-        ? ""
-        : value(row, "outstanding", value(row, "available", "")),
-    external_reference: "",
-    lines: [],
-    direction:
-      value(row, "kind") === "credit_note"
-        ? "refund"
-        : value(row, "kind") === "supplier_credit"
-          ? "supplier_refund"
-          : value(row, "party_type") === "supplier"
-            ? "payment"
-            : "receipt",
-    party_type: value(row, "party_type", "customer"),
-    bank_account: "",
-    bank_reference: "",
-    document_id:
-      action === "fin_allocate" || action === "fin_collection"
-        ? row?.id
-        : undefined,
-    payment_id: undefined,
-    credit_id: action === "fin_apply_credit" ? row?.id : undefined,
-    customer_id: row?.customer_id,
-    credit_limit: value(row, "credit_limit", "0"),
-    on_hold: Boolean(row?.on_hold),
-    hold_overdue: row?.hold_overdue !== false,
-    promised_date: "",
-    promised_amount: "",
-    expires_on: businessDate(),
-    recipient: "",
-    received_date: businessDate(),
-    status: "received",
-    hold: true,
-    assigned_to: "",
-    locked_through: value(row, "locked_through"),
-    backdate_days: Number(row?.backdate_days ?? 30),
-    dual_approval: Boolean(row?.dual_approval),
-  }));
-  const [source, setSource] = useState<ERPRow | null>(
+  const [purpose, setPurpose] = useOperatorState(
+    `WorkflowForm:${action}:purpose`,
+    "auto",
+  );
+  const [amountEdited, setAmountEdited] = useOperatorState(
+    `WorkflowForm:${action}:amountEdited`,
+    false,
+  );
+  const [requestKey] = useOperatorState(
+    `WorkflowForm:${action}:requestKey`,
+    () => crypto.randomUUID(),
+  );
+  const [form, setForm] = useOperatorState<Record<string, unknown>>(
+    `WorkflowForm:${action}:form`,
+    () => ({
+      id: row?.id,
+      version: row?.version,
+      request_key: requestKey,
+      reason: "",
+      notes: "",
+      date: businessDate(),
+      due_date: action === "fin_create_document" ? "" : businessDate(),
+      kind:
+        action === "fin_record_payment"
+          ? "receipt"
+          : action === "fin_create_document"
+            ? value(row, "_kind", "invoice")
+            : action === "fin_collection"
+              ? "follow_up"
+              : "customer_claim",
+      source_type: "delivery",
+      title: "",
+      description: "",
+      evidence: action === "ops_create_case" ? [] : "",
+      quantity: "",
+      state:
+        (
+          {
+            open: "under_review",
+            under_review: "awaiting_approval",
+            awaiting_approval: "approved",
+            approved: "in_progress",
+            in_progress: "resolved",
+            resolved: "closed",
+            rejected: "closed",
+          } as Record<string, string>
+        )[value(row, "state")] || "under_review",
+      resolution: "no_action",
+      cost_payer: "company",
+      currency: value(row, "currency", "IDR"),
+      settlement_amount: "0",
+      estimated_cost: "0",
+      actual_cost: "0",
+      mode: value(terms, "mode", "prepaid"),
+      deposit_percent: value(terms, "deposit_percent", "0"),
+      due_days: Number(terms.due_days ?? 30),
+      billing_event: value(terms, "billing_event", "dispatch"),
+      order_id:
+        action === "fin_terms" || action === "fin_dispatch_override"
+          ? row?.id
+          : undefined,
+      ...(action === "fin_terms" ? { version: terms.version } : {}),
+      amount:
+        action === "fin_allocate"
+          ? ""
+          : value(row, "outstanding", value(row, "available", "")),
+      external_reference: "",
+      lines: [],
+      direction:
+        value(row, "kind") === "credit_note"
+          ? "refund"
+          : value(row, "kind") === "supplier_credit"
+            ? "supplier_refund"
+            : value(row, "party_type") === "supplier"
+              ? "payment"
+              : "receipt",
+      party_type: value(row, "party_type", "customer"),
+      bank_account: "",
+      bank_reference: "",
+      document_id:
+        action === "fin_allocate" || action === "fin_collection"
+          ? row?.id
+          : undefined,
+      payment_id: undefined,
+      credit_id: action === "fin_apply_credit" ? row?.id : undefined,
+      customer_id: row?.customer_id,
+      credit_limit: value(row, "credit_limit", "0"),
+      on_hold: Boolean(row?.on_hold),
+      hold_overdue: row?.hold_overdue !== false,
+      promised_date: "",
+      promised_amount: "",
+      expires_on: businessDate(),
+      recipient: "",
+      received_date: businessDate(),
+      status: "received",
+      hold: true,
+      assigned_to: "",
+      locked_through: value(row, "locked_through"),
+      backdate_days: Number(row?.backdate_days ?? 30),
+      dual_approval: Boolean(row?.dual_approval),
+    }),
+  );
+  const [source, setSource] = useOperatorState<ERPRow | null>(
+      `WorkflowForm:${action}:source`,
       (row?._source as ERPRow) || null,
     ),
-    [related, setRelated] = useState<ERPRow | null>(null),
-    [party, setParty] = useState<ERPRow | null>(
+    [related, setRelated] = useOperatorState<ERPRow | null>(
+      `WorkflowForm:${action}:related`,
+      null,
+    ),
+    [party, setParty] = useOperatorState<ERPRow | null>(
+      `WorkflowForm:${action}:party`,
       (row?._party as ERPRow) || null,
     ),
-    [payment, setPayment] = useState<ERPRow | null>(
+    [payment, setPayment] = useOperatorState<ERPRow | null>(
+      `WorkflowForm:${action}:payment`,
       (row?._payment as ERPRow) || null,
     ),
-    [lot, setLot] = useState<ERPRow | null>(null),
-    [location, setLocation] = useState<ERPRow | null>(null),
-    [owner, setOwner] = useState<ERPRow | null>(null),
-    [delivery, setDelivery] = useState<ERPRow | null>(null),
-    [certificate, setCertificate] = useState<ERPRow | null>(null),
-    [claim, setClaim] = useState<ERPRow | null>(null);
+    [lot, setLot] = useOperatorState<ERPRow | null>(
+      `WorkflowForm:${action}:lot`,
+      null,
+    ),
+    [location, setLocation] = useOperatorState<ERPRow | null>(
+      `WorkflowForm:${action}:location`,
+      null,
+    ),
+    [owner, setOwner] = useOperatorState<ERPRow | null>(
+      `WorkflowForm:${action}:owner`,
+      null,
+    ),
+    [delivery, setDelivery] = useOperatorState<ERPRow | null>(
+      `WorkflowForm:${action}:delivery`,
+      null,
+    ),
+    [certificate, setCertificate] = useOperatorState<ERPRow | null>(
+      `WorkflowForm:${action}:certificate`,
+      null,
+    ),
+    [claim, setClaim] = useOperatorState<ERPRow | null>(
+      `WorkflowForm:${action}:claim`,
+      null,
+    );
   const set = (key: string, val: unknown) => {
     if (key === "amount") setAmountEdited(false);
     setForm((f) => ({ ...f, [key]: val }));

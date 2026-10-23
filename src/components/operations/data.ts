@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { requestTimeout } from "@/lib/request-timeout";
+import { readERPPage } from "@/lib/erp/read-request";
 import type { WorkRow } from "@/lib/operations/catalog";
 export function useWorkRecords(
   entity: string,
@@ -23,7 +23,6 @@ export function useWorkRecords(
   useEffect(() => {
     if (!enabled) return;
     const abort = new AbortController();
-    const timeout = requestTimeout(abort.signal);
     const params = new URLSearchParams();
     for (const [fieldKey, value] of Object.entries(JSON.parse(key)[1]))
       if (value != null)
@@ -31,14 +30,11 @@ export function useWorkRecords(
           fieldKey,
           typeof value === "object" ? JSON.stringify(value) : String(value),
         );
-    void fetch("/api/operations/" + entity + "?" + params, {
-      signal: timeout.signal,
-      cache: "no-store",
-    })
-      .then(async (r) => {
-        const data = await r.json();
-        if (!r.ok)
-          throw Error(data.message || "Could not load this workspace.");
+    void readERPPage<NonNullable<NonNullable<typeof response>["data"]>>(
+      "/api/operations/" + entity + "?" + params,
+      abort.signal,
+    )
+      .then((data) => {
         if (!abort.signal.aborted) setResponse({ key, data });
       })
       .catch((error) => {
@@ -50,11 +46,9 @@ export function useWorkRecords(
                 ? error.message
                 : "Could not load records.",
           });
-      })
-      .finally(timeout.dispose);
+      });
     return () => {
       abort.abort();
-      timeout.dispose();
     };
   }, [key, entity, enabled]);
   const current = response?.key === key ? response : null;

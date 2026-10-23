@@ -1,4 +1,17 @@
 "use client";
+import { SaveStatus } from "@/components/workspace/save-status";
+import { saveRequest, SaveRequestError } from "@/lib/save-request";
+import { invalidateERPReads } from "@/lib/erp/read-request";
+import {
+  FormJourney,
+  type JourneyHandle,
+} from "@/components/workspace/form-journey";
+import {
+  FormRecovery,
+  RecoveryNotice,
+  useFormRecovery,
+  useOperatorState,
+} from "@/components/workspace/form-recovery";
 import { useRef, useState, useId, type FormEvent } from "react";
 import { Plus, Trash2, ArrowRight, Info } from "lucide-react";
 import { toast } from "sonner";
@@ -11,7 +24,6 @@ import { clearDependentReferences } from "@/lib/operations/form-state";
 import { commandSchema } from "@/lib/operations/validation";
 import { businessDate } from "@/lib/domain/validation";
 import { validationFields, humanLabel, displayNumber } from "@/lib/erp/ux";
-import { requestTimeout } from "@/lib/request-timeout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,7 +50,14 @@ function initial(field: WorkField, row?: WorkRow): unknown {
   if (field.kind === "boolean") return field.default ?? false;
   return field.default ?? "";
 }
-export function CommandForm({
+export function CommandForm(props: Parameters<typeof CommandFormContent>[0]) {
+  return (
+    <FormRecovery scope={props.action} recordId={props.row?.id || "new"}>
+      <CommandFormContent {...props} />
+    </FormRecovery>
+  );
+}
+function CommandFormContent({
   action,
   row,
   onClose,
@@ -49,66 +68,78 @@ export function CommandForm({
   onClose: () => void;
   onDone: (result: { id: string; entity: string }) => void;
 }) {
+  const journey = useRef<JourneyHandle>(null);
+  const [uncertain, setUncertain] = useOperatorState("save-uncertain", false);
   const command = workCommands[action];
+  const recovery = useFormRecovery();
   const [unitLabels, setUnitLabels] = useState<Record<string, string>>({});
   const formId = useId();
   const confirm = useConfirm();
-  const [values, setValues] = useState<Record<string, unknown>>(() => {
-    const value = Object.fromEntries(
-      command.fields.map((f) => [f.key, initial(f, row)]),
-    );
-    if (row && action === "set_warehouse_access") {
-      value.user_id = row.id;
-      value.warehouses = ((row.warehouses as WorkRow[]) || []).map((w) => ({
-        warehouse_id: w.warehouse_id,
-        read: w.can_read,
-        write: w.can_write,
-        approve: w.can_approve,
-      }));
-    }
-    if (row && command.fields.some((f) => f.kind === "results")) {
-      const results = (row.results as { name: string; value: string }[]) || [];
-      value.results = (
-        (row.spec_snapshot as { parameters?: { name: string }[] })
-          ?.parameters || []
-      ).map((p) => ({
-        name: p.name,
-        value: results.find((x) => x.name === p.name)?.value || "",
-      }));
-    }
-    if (row && action === "receive_warehouse_transfer")
-      value.lines = ((row.lines as WorkRow[]) || [])
-        .filter((l) => Number(l.outstanding) > 0)
-        .map((l) => ({
-          line_id: l.id,
-          quantity: String(l.outstanding),
-          lost_quantity: "0",
+  const [values, setValues] = useOperatorState<Record<string, unknown>>(
+    "values",
+    () => {
+      const value = Object.fromEntries(
+        command.fields.map((f) => [f.key, initial(f, row)]),
+      );
+      if (row && action === "set_warehouse_access") {
+        value.user_id = row.id;
+        value.warehouses = ((row.warehouses as WorkRow[]) || []).map((w) => ({
+          warehouse_id: w.warehouse_id,
+          read: w.can_read,
+          write: w.can_write,
+          approve: w.can_approve,
         }));
-    if (row && action === "reserve_manufacturing_material") {
-      const requirements =
-        (row.formula_snapshot as { requirements?: WorkRow[] })?.requirements ||
-        [];
-      if (requirements.length === 1) {
-        value.material_id = requirements[0].material_id;
-        value.quantity = requirements[0].required_quantity;
       }
-    }
-    return {
-      ...value,
-      ...(action === "repack_pallet" ? { location_id: row?.location_id } : {}),
-      id: row?.id,
-      version: row?.version,
-    };
-  });
+      if (row && command.fields.some((f) => f.kind === "results")) {
+        const results =
+          (row.results as { name: string; value: string }[]) || [];
+        value.results = (
+          (row.spec_snapshot as { parameters?: { name: string }[] })
+            ?.parameters || []
+        ).map((p) => ({
+          name: p.name,
+          value: results.find((x) => x.name === p.name)?.value || "",
+        }));
+      }
+      if (row && action === "receive_warehouse_transfer")
+        value.lines = ((row.lines as WorkRow[]) || [])
+          .filter((l) => Number(l.outstanding) > 0)
+          .map((l) => ({
+            line_id: l.id,
+            quantity: String(l.outstanding),
+            lost_quantity: "0",
+          }));
+      if (row && action === "reserve_manufacturing_material") {
+        const requirements =
+          (row.formula_snapshot as { requirements?: WorkRow[] })
+            ?.requirements || [];
+        if (requirements.length === 1) {
+          value.material_id = requirements[0].material_id;
+          value.quantity = requirements[0].required_quantity;
+        }
+      }
+      return {
+        ...value,
+        ...(action === "repack_pallet"
+          ? { location_id: row?.location_id }
+          : {}),
+        id: row?.id,
+        version: row?.version,
+      };
+    },
+  );
   const [baseline] = useState(() => JSON.stringify(values));
-  const request = useRef(crypto.randomUUID()),
-    locked = useRef(false),
+  const [requestKey, setRequestKey] = useOperatorState("requestKey", () =>
+    crypto.randomUUID(),
+  );
+  const locked = useRef(false),
     confirmed = useRef(false),
     form = useRef<HTMLFormElement>(null);
   const [busy, setBusy] = useState(false),
     [errors, setErrors] = useState<{ path: string; message: string }[]>([]),
     [failure, setFailure] = useState("");
-  const dirty = JSON.stringify(values) !== baseline;
+  const dirty =
+    JSON.stringify(values) !== baseline || Boolean(recovery?.restored.values);
   const context: WorkRow = {
     id: row?.id || "",
     ...row,
@@ -143,7 +174,7 @@ export function CommandForm({
         next.sample_id = "";
       }
       if (key === "kind") next.lot_id = "";
-      request.current = crypto.randomUUID();
+      setRequestKey(crypto.randomUUID());
       return next;
     });
     setErrors((current) => current.filter((e) => !e.path.startsWith(key)));
@@ -151,14 +182,16 @@ export function CommandForm({
   }
   async function submit(event?: FormEvent) {
     event?.preventDefault();
-    if (locked.current) return;
+    if (locked.current || uncertain) return;
+    if (!journey.current?.beforeSubmit()) return;
     if (command.confirm && !confirmed.current) return;
     confirmed.current = false;
     const parsed = commandSchema(action).safeParse({
       ...values,
-      request_key: request.current,
+      request_key: requestKey,
     });
     if (!parsed.success) {
+      journey.current?.reveal();
       setErrors(validationFields(parsed.error.issues));
       setFailure("Review the highlighted fields before continuing.");
       requestAnimationFrame(() =>
@@ -171,26 +204,24 @@ export function CommandForm({
     locked.current = true;
     setBusy(true);
     setFailure("");
-    const controller = new AbortController(),
-      timeout = requestTimeout(controller.signal, 60_000);
     try {
-      const response = await fetch("/api/operations/" + action, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(parsed.data),
-        signal: timeout.signal,
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        setErrors(data.fields || []);
-        throw Error(data.message || "Could not save changes. Retry.");
-      }
+      const data = await saveRequest<{ id: string; entity: string }>(
+        "/api/operations/" + action,
+        parsed.data,
+      );
+      invalidateERPReads();
       toast.success(
         "Saved. " +
           (command.confirm ? "The operation is recorded in history." : ""),
       );
+      recovery?.clear();
       onDone(data);
     } catch (error) {
+      if (error instanceof SaveRequestError) {
+        setErrors(error.fields);
+        setUncertain(error.uncertain);
+      }
+      journey.current?.reveal();
       const message =
         error instanceof Error
           ? error.message
@@ -198,7 +229,6 @@ export function CommandForm({
       setFailure(message);
       toast.error(message);
     } finally {
-      timeout.dispose();
       locked.current = false;
       setBusy(false);
     }
@@ -524,6 +554,16 @@ export function CommandForm({
         noValidate
       >
         <div className="erp-form-body">
+          <RecoveryNotice />
+          <SaveStatus
+            uncertain={uncertain}
+            onChecked={() => setUncertain(false)}
+          />
+          {busy && (
+            <p role="status" className="save-status">
+              Saving changes… Keep this form open.
+            </p>
+          )}
           <details
             className="work-command-help"
             open={command.confirm || undefined}
@@ -534,11 +574,44 @@ export function CommandForm({
             </summary>
             <p>{command.help}</p>
           </details>
-          <div className="work-field-grid">
-            {command.fields.map((field) =>
-              renderField(field, field.key, values, update),
-            )}
-          </div>
+          <FormJourney
+            ref={journey}
+            sections={(() => {
+              const long =
+                command.fields.length > 6 ||
+                command.fields.some((f) => f.kind === "lines");
+              const details = command.fields.filter(
+                (f) =>
+                  !long ||
+                  (f.kind !== "lines" &&
+                    f.kind !== "results" &&
+                    f.kind !== "textarea"),
+              );
+              const extra = command.fields.filter((f) => !details.includes(f));
+              return [
+                { title: "Details", fields: details },
+                ...(extra.length
+                  ? [
+                      {
+                        title: extra.some((f) => f.kind === "lines")
+                          ? "Items and notes"
+                          : "Measurements and notes",
+                        fields: extra,
+                      },
+                    ]
+                  : []),
+              ].map((group) => ({
+                title: group.title,
+                content: (
+                  <div className="work-field-grid">
+                    {group.fields.map((field) =>
+                      renderField(field, field.key, values, update),
+                    )}
+                  </div>
+                ),
+              }));
+            })()}
+          />
           {failure && (
             <div className="work-form-error" role="alert">
               {failure}
@@ -557,8 +630,10 @@ export function CommandForm({
                   description: "Your unsaved changes will be lost.",
                   confirmLabel: "Discard changes",
                 }))
-              )
+              ) {
+                if (dirty) recovery?.clear();
                 onClose();
+              }
             }}
           >
             Cancel
@@ -567,6 +642,7 @@ export function CommandForm({
             <SlideConfirm
               label={command.label}
               busy={busy}
+              disabled={uncertain}
               resetKey={JSON.stringify(values)}
               onConfirm={() => {
                 confirmed.current = true;
@@ -574,7 +650,7 @@ export function CommandForm({
               }}
             />
           ) : (
-            <Button type="submit" loading={busy}>
+            <Button type="submit" loading={busy} disabled={uncertain}>
               {busy ? "Saving…" : "Save"}
               <ArrowRight className="size-3.5" />
             </Button>

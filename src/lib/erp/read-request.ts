@@ -2,7 +2,7 @@ import { requestTimeout } from "../request-timeout";
 import type { ERPPage } from "./schema";
 
 type Pending = {
-  promise: Promise<ERPPage>;
+  promise: Promise<unknown>;
   controller: AbortController;
   readers: number;
 };
@@ -13,10 +13,10 @@ export function invalidateERPReads() {
 }
 
 /** Share only concurrent reads, never fulfilled financial data or permissions. */
-export function readERPPage(
+export function readERPPage<T = ERPPage>(
   url: string,
   signal: AbortSignal,
-): Promise<ERPPage> {
+): Promise<T> {
   if (signal.aborted) return Promise.reject(signal.reason);
   let entry = pending.get(url);
   if (!entry || entry.controller.signal.aborted) {
@@ -66,7 +66,7 @@ export function readERPPage(
       (data) => {
         if (!finished) {
           release();
-          resolve(data);
+          resolve(data as T);
         }
       },
       (error) => {
