@@ -51,7 +51,7 @@ export function RecordOverview({ row, entity }: { row: Row; entity: string }) {
       </div>
       <div className="record-overview-heading">
         <span className="record-eyebrow">{humanLabel(entity)}</span>
-        <h3>{title || "Record details"}</h3>
+        <p className="record-overview-title">{title || "Record details"}</p>
         {party && party !== title && <p>{party}</p>}
       </div>
       {state && <Badge variant="secondary">{humanLabel(state)}</Badge>}
